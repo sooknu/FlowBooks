@@ -181,15 +181,27 @@ if ! command -v ufw &>/dev/null; then
   apt install -y -qq ufw
 fi
 
+# Pre-configure UFW rules before touching iptables (prevents SSH lockout)
+ufw allow OpenSSH
+ufw allow 'Nginx Full'
+
 # Flush pre-existing iptables rules (Oracle Cloud, etc. ship restrictive defaults that block UFW)
 if iptables -L -n 2>/dev/null | grep -q 'REJECT\|DROP'; then
   info_msg "Clearing pre-existing iptables rules"
-  iptables -F
+  # Set ACCEPT policies first, then flush — prevents any gap where SSH is blocked
   iptables -P INPUT ACCEPT
   iptables -P FORWARD ACCEPT
   iptables -P OUTPUT ACCEPT
-  if command -v netfilter-persistent &>/dev/null; then
-    netfilter-persistent save 2>/dev/null || true
+  iptables -F
+  # Same for ip6tables (Oracle Cloud uses both)
+  ip6tables -P INPUT ACCEPT 2>/dev/null || true
+  ip6tables -P FORWARD ACCEPT 2>/dev/null || true
+  ip6tables -P OUTPUT ACCEPT 2>/dev/null || true
+  ip6tables -F 2>/dev/null || true
+  # Disable netfilter-persistent so old rules don't reload on reboot
+  if systemctl is-active --quiet netfilter-persistent 2>/dev/null; then
+    systemctl stop netfilter-persistent
+    systemctl disable netfilter-persistent
   fi
   done_msg "iptables rules cleared"
 fi
@@ -198,8 +210,6 @@ if ufw status 2>/dev/null | grep -q 'Status: active'; then
   done_msg "UFW already active"
 else
   info_msg "UFW firewall rules"
-  ufw allow OpenSSH
-  ufw allow 'Nginx Full'
   ufw --force enable
   done_msg "UFW enabled (OpenSSH + Nginx Full)"
 fi
