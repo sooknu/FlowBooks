@@ -23,6 +23,7 @@ A self-hosted business management app for photography studios. Handles quoting, 
 - **Notifications** — In-app notification bell with browser push support.
 - **Calendar** — Project calendar view.
 - **Reports** — Dashboard with stats, revenue tracking, and expense breakdowns.
+- **Backup & Restore** — Automated database backups to AWS S3, Backblaze B2, or Google Drive with configurable schedules (daily/weekly/manual) and retention policies.
 
 ## Prerequisites
 
@@ -63,6 +64,19 @@ npm run dev
 | `npm run db:generate` | Generate migration files |
 | `npm run db:studio` | Open Drizzle Studio GUI |
 
+## Fresh VPS Deployment
+
+Deploy to a bare Ubuntu VPS in three steps:
+
+```bash
+git clone git@github.com:sooknu/madrid-photo.git && cd madrid-photo
+sudo bash scripts/deploy.sh       # Install Node.js, PostgreSQL, Docker, Nginx, pm2, Certbot, UFW
+bash scripts/install.sh            # Create DB, Redis, .env, Nginx config, SSL, start app
+# Open https://your-domain.com/setup in browser to create admin account
+```
+
+`deploy.sh` is idempotent — safe to re-run. `install.sh` auto-generates all credentials and only asks for the domain name.
+
 ## Production Deployment
 
 Uses pm2 to run both the server and background worker:
@@ -74,7 +88,7 @@ pm2 start ecosystem.config.cjs
 
 This starts two processes:
 - `madrid-quotes` — Fastify server (serves API + built frontend)
-- `madrid-worker` — BullMQ worker (email sending, invoice reminders, recurring expenses, cleanup)
+- `madrid-worker` — BullMQ worker (email sending, invoice reminders, recurring expenses, backup jobs, cleanup)
 
 ## Project Structure
 
@@ -98,6 +112,9 @@ This starts two processes:
 │   ├── hooks/            # Custom React hooks
 │   ├── lib/              # API client, utils, constants
 │   └── index.css         # Tailwind + custom styles
+├── scripts/
+│   ├── deploy.sh         # VPS provisioning (Node, PG, Docker, Nginx)
+│   └── install.sh        # App installation (DB, Redis, .env, SSL)
 ├── ecosystem.config.cjs  # pm2 config
 ├── drizzle.config.ts     # Drizzle ORM config
 └── vite.config.js        # Vite + proxy config
