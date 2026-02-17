@@ -44,6 +44,7 @@ export default async function settingRoutes(fastify: any) {
       'paypal_test_mode',
       'paypal_test_client_id',
       'unsplash_enabled',
+      'setup_complete',
     ];
     const settings = await db
       .select()

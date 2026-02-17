@@ -38,6 +38,7 @@ const FinanceManager = React.lazy(() => import('@/components/FinanceManager'));
 const SalaryManager = React.lazy(() => import('@/components/SalaryManager'));
 const PermissionsManager = React.lazy(() => import('@/components/PermissionsManager'));
 const BackupManager = React.lazy(() => import('@/components/BackupManager'));
+const SetupWizard = React.lazy(() => import('@/components/SetupWizard'));
 
 const LazyFallback = () => (
   <div className="flex items-center justify-center py-20">
@@ -51,6 +52,7 @@ function App() {
   return (
     <Routes>
       {/* Public routes — no sidebar, no auth */}
+      <Route path="/setup" element={<Lazy><SetupWizard /></Lazy>} />
       <Route path="/approve/:token" element={<Lazy><QuoteApprovalPage /></Lazy>} />
       <Route path="/pay/:token" element={<Lazy><PayOnlinePage /></Lazy>} />
       <Route path="/verified" element={<AccountVerified />} />

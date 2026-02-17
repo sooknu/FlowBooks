@@ -28,6 +28,8 @@ Thumbs.db
 # Migration scripts (one-time, contain data dumps)
 scripts/*
 !scripts/restore.js
+!scripts/deploy.sh
+!scripts/install.sh
 
 # Hostinger dev plugins
 plugins/

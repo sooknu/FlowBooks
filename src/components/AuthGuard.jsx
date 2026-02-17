@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useApprovalStatus, usePublicSettings } from '@/hooks/useAppData';
 import { queryClient } from '@/lib/queryClient';
@@ -23,6 +23,10 @@ const AuthGuard = () => {
   if (loading) return <Spinner />;
 
   if (!session) {
+    // Fresh install: setup_complete explicitly set to 'false' → redirect to setup wizard
+    if (publicSettings && publicSettings.setup_complete === 'false') {
+      return <Navigate to="/setup" replace />;
+    }
     return (
       <Suspense fallback={<Spinner />}>
         <LoginPage appSettings={publicSettings || {}} />
