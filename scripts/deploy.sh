@@ -86,6 +86,14 @@ https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
   done_msg "Docker installed ($(docker --version))"
 fi
 
+# Add all non-root users with login shells to docker group
+for u in $(awk -F: '$7 ~ /(bash|zsh|sh)$/ && $3 >= 1000 { print $1 }' /etc/passwd); do
+  if ! id -nG "$u" 2>/dev/null | grep -qw docker; then
+    usermod -aG docker "$u"
+    done_msg "Added ${u} to docker group"
+  fi
+done
+
 # =============================================================================
 # 5. pm2 (global via npm)
 # =============================================================================
@@ -123,6 +131,10 @@ fi
 # =============================================================================
 # 8. UFW firewall
 # =============================================================================
+if ! command -v ufw &>/dev/null; then
+  apt install -y -qq ufw
+fi
+
 if ufw status 2>/dev/null | grep -q 'Status: active'; then
   done_msg "UFW already active"
 else
