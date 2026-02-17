@@ -61,7 +61,22 @@ apt install -y -qq curl ca-certificates gnupg lsb-release
 done_msg "System packages up to date"
 
 # =============================================================================
-# 2. Node.js 24 LTS via NodeSource
+# 2. Swap (2GB if none exists — prevents OOM on low-memory VPS)
+# =============================================================================
+if swapon --show | grep -q '/'; then
+  done_msg "Swap already active ($(swapon --show --noheadings --bytes | awk '{s+=$3} END {printf "%.0fMB", s/1024/1024}'))"
+else
+  info_msg "Creating 2GB swap file"
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  done_msg "2GB swap enabled"
+fi
+
+# =============================================================================
+# 3. Node.js 24 LTS
 # =============================================================================
 if node --version 2>/dev/null | grep -q 'v24'; then
   done_msg "Node.js 24 already installed ($(node --version))"
@@ -77,7 +92,7 @@ npm install -g npm@latest &>/dev/null
 done_msg "npm $(npm --version)"
 
 # =============================================================================
-# 3. PostgreSQL (official pgdg repo)
+# 4. PostgreSQL (official pgdg repo)
 # =============================================================================
 if command -v psql &>/dev/null; then
   done_msg "PostgreSQL already installed ($(psql --version))"
@@ -95,7 +110,7 @@ https://apt.postgresql.org/pub/repos/apt ${CODENAME}-pgdg main" \
 fi
 
 # =============================================================================
-# 4. Docker CE (official Docker repo)
+# 5. Docker CE (official Docker repo)
 # =============================================================================
 if command -v docker &>/dev/null; then
   done_msg "Docker already installed ($(docker --version))"
@@ -122,7 +137,7 @@ for u in $(awk -F: '$7 ~ /(bash|zsh|sh)$/ && $3 >= 1000 { print $1 }' /etc/passw
 done
 
 # =============================================================================
-# 5. pm2 (global via npm)
+# 6. pm2 (global via npm)
 # =============================================================================
 if command -v pm2 &>/dev/null; then
   done_msg "pm2 already installed ($(pm2 --version))"
@@ -133,7 +148,7 @@ else
 fi
 
 # =============================================================================
-# 6. Nginx
+# 7. Nginx
 # =============================================================================
 if command -v nginx &>/dev/null; then
   done_msg "Nginx already installed ($(nginx -v 2>&1))"
@@ -144,7 +159,7 @@ else
 fi
 
 # =============================================================================
-# 7. Certbot
+# 8. Certbot
 # =============================================================================
 if command -v certbot &>/dev/null; then
   done_msg "Certbot already installed ($(certbot --version 2>&1))"
@@ -160,7 +175,7 @@ else
 fi
 
 # =============================================================================
-# 8. UFW firewall
+# 9. UFW firewall
 # =============================================================================
 if ! command -v ufw &>/dev/null; then
   apt install -y -qq ufw
