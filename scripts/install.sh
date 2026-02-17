@@ -64,33 +64,21 @@ ok "Domain: ${BOLD}${DOMAIN_NAME}${NC}"
 echo ""
 echo "  SSL options:"
 echo "    1) Certbot (Let's Encrypt) — direct server, no proxy"
-echo "    2) Cloudflare proxy — Origin Certificate for Full (Strict) mode"
+echo "    2) Cloudflare proxy — auto-generates cert, set SSL to Full"
 echo "    3) Skip — configure SSL later"
 echo ""
 read -rp "  Choose [1/2/3]: " SSL_CHOICE
 SSL_CHOICE="${SSL_CHOICE:-1}"
 
 if [[ "$SSL_CHOICE" == "2" ]]; then
-  echo ""
-  echo "  Create an Origin Certificate in Cloudflare:"
-  echo "    SSL/TLS → Origin Server → Create Certificate"
-  echo "    Keep defaults (RSA, 15 years) → Create"
-  echo ""
-  echo "  Paste the ${BOLD}Origin Certificate${NC} below, then press Enter and Ctrl+D:"
-  CF_CERT=$(cat)
-  echo ""
-  echo "  Paste the ${BOLD}Private Key${NC} below, then press Enter and Ctrl+D:"
-  CF_KEY=$(cat)
-
-  if [[ -z "$CF_CERT" || -z "$CF_KEY" ]]; then
-    warn "Certificate or key is empty. Falling back to skip."
-    SSL_CHOICE="3"
-  else
-    sudo tee /etc/ssl/cloudflare-cert.pem > /dev/null <<< "$CF_CERT"
-    sudo tee /etc/ssl/cloudflare-key.pem > /dev/null <<< "$CF_KEY"
-    sudo chmod 600 /etc/ssl/cloudflare-key.pem
-    ok "Cloudflare Origin Certificate saved"
-  fi
+  info "Generating self-signed certificate for Cloudflare Full mode..."
+  sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+    -keyout /etc/ssl/cloudflare-key.pem \
+    -out /etc/ssl/cloudflare-cert.pem \
+    -subj "/CN=${DOMAIN_NAME}" \
+    2>/dev/null
+  sudo chmod 600 /etc/ssl/cloudflare-key.pem
+  ok "Self-signed certificate generated (10 years)"
 fi
 
 # ─── Auto-detect available ports ─────────────────────────────────────────────
@@ -290,7 +278,7 @@ if [[ "$SSL_CHOICE" == "1" ]]; then
     warn "Fix DNS and re-run: ${BOLD}sudo certbot --nginx -d ${DOMAIN_NAME}${NC}"
   fi
 elif [[ "$SSL_CHOICE" == "2" ]]; then
-  ok "Cloudflare Origin Certificate configured — set SSL/TLS to ${BOLD}Full (Strict)${NC}"
+  ok "Self-signed SSL configured — set Cloudflare SSL/TLS to ${BOLD}Full${NC}"
 elif [[ "$SSL_CHOICE" == "3" ]]; then
   ok "Skipping SSL — configure manually later"
 fi
