@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, text, boolean, timestamp, doublePrecision, integer, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, text, boolean, timestamp, doublePrecision, integer, uniqueIndex, index, jsonb } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // ── Enums (matching existing PG enum names created by Prisma) ──
@@ -14,7 +14,8 @@ export const teamRoleEnum = pgEnum('TeamRole', ['owner', 'manager', 'lead', 'lea
 export const teamPaymentStatusEnum = pgEnum('TeamPaymentStatus', ['pending', 'paid']);
 export const recurringFrequencyEnum = pgEnum('RecurringFrequency', ['weekly', 'monthly', 'yearly']);
 export const expenseTypeEnum = pgEnum('ExpenseType', ['expense', 'credit']);
-export const backupStatusEnum = pgEnum('BackupStatus', ['pending', 'running', 'completed', 'failed']);
+export const backupStatusEnum = pgEnum('BackupStatus', ['pending', 'running', 'completed', 'partial', 'failed']);
+export const backupUploadStatusEnum = pgEnum('BackupUploadStatus', ['pending', 'uploading', 'completed', 'failed']);
 
 // ── Better Auth managed tables ──
 
@@ -654,6 +655,31 @@ export const backups = pgTable('backups', {
   index('backups_created_at_idx').on(table.createdAt),
 ]);
 
+export const backupDestinations = pgTable('backup_destinations', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  provider: text('provider').notNull(),
+  credentials: jsonb('credentials').notNull(),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+}, (table) => [
+  index('backup_destinations_is_active_idx').on(table.isActive),
+]);
+
+export const backupUploads = pgTable('backup_uploads', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  backupId: text('backup_id').notNull().references(() => backups.id, { onDelete: 'cascade' }),
+  destinationId: text('destination_id').notNull().references(() => backupDestinations.id, { onDelete: 'cascade' }),
+  status: backupUploadStatusEnum('status').notNull().default('pending'),
+  errorMessage: text('error_message'),
+  startedAt: timestamp('started_at', { mode: 'date' }),
+  completedAt: timestamp('completed_at', { mode: 'date' }),
+}, (table) => [
+  index('backup_uploads_backup_id_idx').on(table.backupId),
+  index('backup_uploads_destination_id_idx').on(table.destinationId),
+]);
+
 // ── Relations ──
 
 export const userRelations = relations(user, ({ many, one }) => ({
@@ -812,6 +838,12 @@ export const userPermissionOverrideRelations = relations(userPermissionOverrides
   user: one(user, { fields: [userPermissionOverrides.userId], references: [user.id] }),
 }));
 
-export const backupRelations = relations(backups, ({ one }) => ({
+export const backupRelations = relations(backups, ({ one, many }) => ({
   user: one(user, { fields: [backups.userId], references: [user.id] }),
+  uploads: many(backupUploads),
+}));
+
+export const backupUploadRelations = relations(backupUploads, ({ one }) => ({
+  backup: one(backups, { fields: [backupUploads.backupId], references: [backups.id] }),
+  destination: one(backupDestinations, { fields: [backupUploads.destinationId], references: [backupDestinations.id] }),
 }));

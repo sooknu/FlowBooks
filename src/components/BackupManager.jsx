@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/apiClient';
 import { toast } from '@/components/ui/use-toast';
@@ -10,8 +10,8 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  HardDrive, Trash2, Download, CheckCircle, XCircle, Loader2, Clock, Wifi, Play,
-  Eye, EyeOff,
+  HardDrive, Trash2, CheckCircle, XCircle, Loader2, Clock, Wifi, Play,
+  Plus, Pencil, Pause, Cloud, AlertTriangle, X, Link2, Unlink,
 } from 'lucide-react';
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
@@ -33,14 +33,15 @@ function formatDate(dateStr) {
   });
 }
 
-/* ─── Provider definitions ───────────────────────────────────────────────── */
+/* ─── Constants ──────────────────────────────────────────────────────────── */
 
 const PROVIDERS = [
-  { id: 'none', label: 'None', description: 'Backups disabled' },
   { id: 's3', label: 'AWS S3', description: 'Amazon S3 or compatible' },
-  { id: 'b2', label: 'Backblaze B2', description: 'Backblaze B2 Cloud Storage' },
-  { id: 'gdrive', label: 'Google Drive', description: 'Google Drive via service account' },
+  { id: 'b2', label: 'Backblaze B2', description: 'B2 Cloud Storage' },
+  { id: 'gdrive', label: 'Google Drive', description: 'Link your account' },
 ];
+
+const PROVIDER_LABELS = { s3: 'S3', b2: 'B2', gdrive: 'GDrive' };
 
 const SCHEDULES = [
   { value: 'manual', label: 'Manual only' },
@@ -54,29 +55,407 @@ const STATUS_STYLES = {
   pending:   'bg-amber-50 text-amber-600 ring-1 ring-amber-200',
   running:   'bg-blue-50 text-blue-600 ring-1 ring-blue-200 animate-pulse',
   completed: 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200',
+  partial:   'bg-amber-50 text-amber-600 ring-1 ring-amber-200',
   failed:    'bg-red-50 text-red-600 ring-1 ring-red-200',
 };
 
-const StatusBadge = ({ status }) => (
-  <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_STYLES[status] || STATUS_STYLES.pending}`}>
-    {status === 'completed' && <CheckCircle className="w-3 h-3" />}
-    {status === 'failed' && <XCircle className="w-3 h-3" />}
-    {status === 'running' && <Loader2 className="w-3 h-3 animate-spin" />}
-    {status === 'pending' && <Clock className="w-3 h-3" />}
-    {status}
+const STATUS_ICONS = {
+  completed: CheckCircle,
+  failed: XCircle,
+  running: Loader2,
+  pending: Clock,
+  partial: AlertTriangle,
+  uploading: Loader2,
+};
+
+const StatusBadge = ({ status }) => {
+  const Icon = STATUS_ICONS[status] || Clock;
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_STYLES[status] || STATUS_STYLES.pending}`}>
+      <Icon className={`w-3 h-3 ${status === 'running' || status === 'uploading' ? 'animate-spin' : ''}`} />
+      {status}
+    </span>
+  );
+};
+
+/* ─── Provider badge (small pill) ───────────────────────────────────────── */
+
+const PROVIDER_PILL_STYLES = {
+  s3: 'bg-orange-50 text-orange-600 ring-1 ring-orange-200',
+  b2: 'bg-red-50 text-red-600 ring-1 ring-red-200',
+  gdrive: 'bg-blue-50 text-blue-600 ring-1 ring-blue-200',
+};
+
+const ProviderBadge = ({ provider }) => (
+  <span className={`inline-flex text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${PROVIDER_PILL_STYLES[provider] || 'bg-surface-100 text-surface-500'}`}>
+    {PROVIDER_LABELS[provider] || provider}
   </span>
 );
+
+/* ─── Upload status mini pills (for history) ───────────────────────────── */
+
+const UPLOAD_PILL_STYLES = {
+  completed: 'bg-emerald-50 text-emerald-600',
+  failed: 'bg-red-50 text-red-600',
+  uploading: 'bg-blue-50 text-blue-600',
+  pending: 'bg-surface-100 text-surface-500',
+};
+
+const UploadPill = ({ upload }) => {
+  const destName = upload.destination?.name || 'Unknown';
+  const Icon = STATUS_ICONS[upload.status] || Clock;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded ${UPLOAD_PILL_STYLES[upload.status] || UPLOAD_PILL_STYLES.pending}`}
+      title={upload.status === 'failed' ? `${destName}: ${upload.errorMessage}` : destName}
+    >
+      <Icon className={`w-2.5 h-2.5 ${upload.status === 'uploading' ? 'animate-spin' : ''}`} />
+      {destName}
+    </span>
+  );
+};
+
+/* ─── Destination Dialog ─────────────────────────────────────────────────── */
+
+const EMPTY_CREDS = {
+  s3: { accessKeyId: '', secretAccessKey: '', bucket: '', region: 'us-east-1', endpoint: '' },
+  b2: { keyId: '', appKey: '', bucket: '', endpoint: '' },
+  gdrive: { folderId: '' },
+};
+
+function DestinationDialog({ dest, onClose }) {
+  const queryClient = useQueryClient();
+  const isEdit = !!dest;
+
+  const [name, setName] = useState(dest?.name || '');
+  const [provider, setProvider] = useState(dest?.provider || 's3');
+  const [credentials, setCredentials] = useState(dest?.credentials || { ...EMPTY_CREDS.s3 });
+  const [isActive, setIsActive] = useState(dest?.isActive !== false);
+  const [testResult, setTestResult] = useState(null);
+
+  // Reset credentials when provider changes (only for new destinations)
+  const handleProviderChange = (p) => {
+    setProvider(p);
+    if (!isEdit) {
+      setCredentials({ ...EMPTY_CREDS[p] });
+    }
+    setTestResult(null);
+  };
+
+  const setCred = (key, value) => {
+    setCredentials((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // Listen for Google Drive OAuth popup result via localStorage
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key !== 'gdrive-auth-result' || !e.newValue) return;
+      try {
+        const data = JSON.parse(e.newValue);
+        if (data.type === 'gdrive-linked') {
+          setCredentials((prev) => ({
+            ...prev,
+            refreshToken: data.refreshToken,
+            email: data.email,
+          }));
+          toast({ title: `Linked as ${data.email}` });
+        }
+        if (data.type === 'gdrive-error') {
+          toast({ title: 'Google Drive link failed', description: data.message, variant: 'destructive' });
+        }
+      } catch { /* ignore parse errors */ }
+      localStorage.removeItem('gdrive-auth-result');
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, []);
+
+  const handleLinkGoogle = () => {
+    window.open(
+      '/api/backup/gdrive/authorize',
+      'gdrive-auth',
+      'popup,width=500,height=650'
+    );
+  };
+
+  const handleUnlinkGoogle = () => {
+    setCredentials((prev) => {
+      const next = { ...prev };
+      delete next.refreshToken;
+      delete next.email;
+      return next;
+    });
+  };
+
+  // Save
+  const saveMutation = useMutation({
+    mutationFn: (body) =>
+      isEdit
+        ? api.put(`/backup/destinations/${dest.id}`, body)
+        : api.post('/backup/destinations', body),
+    onSuccess: () => {
+      toast({ title: isEdit ? 'Destination updated' : 'Destination created' });
+      queryClient.invalidateQueries({ queryKey: ['backup', 'config'] });
+      onClose();
+    },
+    onError: (error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const handleSave = () => {
+    if (!name.trim()) {
+      toast({ title: 'Name is required', variant: 'destructive' });
+      return;
+    }
+    saveMutation.mutate({ name: name.trim(), provider, credentials, isActive });
+  };
+
+  // Test connection
+  const testMutation = useMutation({
+    mutationFn: () => {
+      if (isEdit) {
+        // For saved destinations, test via the ID endpoint (has real creds in DB)
+        return api.post(`/backup/destinations/${dest.id}/test`);
+      }
+      // For unsaved destinations, send raw credentials
+      return api.post('/backup/destinations/test-unsaved', { provider, credentials });
+    },
+    onSuccess: (res) => {
+      const result = res.data || {};
+      setTestResult({ ok: result.success, message: result.message || (result.success ? 'Connected' : 'Failed') });
+    },
+    onError: (error) => {
+      setTestResult({ ok: false, message: error.message });
+    },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black/30" onClick={onClose} />
+
+      {/* Dialog */}
+      <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-3.5 border-b border-surface-100 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+          <h3 className="text-base font-semibold text-surface-800">
+            {isEdit ? 'Edit Destination' : 'Add Destination'}
+          </h3>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-surface-400 hover:text-surface-600 hover:bg-surface-100 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+          {/* Name */}
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1">Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="glass-input w-full"
+              placeholder="e.g. Primary S3, Offsite B2"
+            />
+          </div>
+
+          {/* Provider */}
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-2">Provider</label>
+            <div className="grid grid-cols-3 gap-2">
+              {PROVIDERS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => handleProviderChange(p.id)}
+                  className={`flex flex-col items-center gap-0.5 rounded-lg border px-3 py-2.5 text-center transition-all ${
+                    provider === p.id
+                      ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
+                      : 'border-surface-200 bg-white hover:border-surface-300 hover:bg-surface-50'
+                  }`}
+                >
+                  <span className={`text-sm font-medium ${provider === p.id ? 'text-blue-700' : 'text-surface-700'}`}>{p.label}</span>
+                  <span className={`text-[10px] ${provider === p.id ? 'text-blue-500' : 'text-surface-400'}`}>{p.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* S3 credentials */}
+          {provider === 's3' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-surface-700 mb-1">Access Key ID</label>
+                  <input type="text" value={credentials.accessKeyId || ''} onChange={(e) => setCred('accessKeyId', e.target.value)} className="glass-input w-full" placeholder="AKIAIOSFODNN7EXAMPLE" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-surface-700 mb-1">Secret Access Key</label>
+                  <PasswordInput value={credentials.secretAccessKey || ''} onChange={(e) => setCred('secretAccessKey', e.target.value)} className="glass-input w-full pr-9" placeholder="wJalrXUtnFEMI/K7MDENG/..." />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-surface-700 mb-1">Bucket</label>
+                  <input type="text" value={credentials.bucket || ''} onChange={(e) => setCred('bucket', e.target.value)} className="glass-input w-full" placeholder="my-backups" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-surface-700 mb-1">Region</label>
+                  <input type="text" value={credentials.region || ''} onChange={(e) => setCred('region', e.target.value)} className="glass-input w-full" placeholder="us-east-1" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-surface-700 mb-1">Endpoint <span className="text-surface-400 font-normal">(optional)</span></label>
+                <input type="text" value={credentials.endpoint || ''} onChange={(e) => setCred('endpoint', e.target.value)} className="glass-input w-full" placeholder="https://s3.example.com" />
+              </div>
+            </div>
+          )}
+
+          {/* B2 credentials */}
+          {provider === 'b2' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-surface-700 mb-1">Key ID</label>
+                <input type="text" value={credentials.keyId || ''} onChange={(e) => setCred('keyId', e.target.value)} className="glass-input w-full" placeholder="0012345678abcdef..." />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-surface-700 mb-1">Application Key</label>
+                <PasswordInput value={credentials.appKey || ''} onChange={(e) => setCred('appKey', e.target.value)} className="glass-input w-full pr-9" placeholder="K001..." />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-surface-700 mb-1">Bucket</label>
+                <input type="text" value={credentials.bucket || ''} onChange={(e) => setCred('bucket', e.target.value)} className="glass-input w-full" placeholder="my-backups" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-surface-700 mb-1">Endpoint</label>
+                <input type="text" value={credentials.endpoint || ''} onChange={(e) => setCred('endpoint', e.target.value)} className="glass-input w-full" placeholder="https://s3.us-west-004.backblazeb2.com" />
+              </div>
+            </div>
+          )}
+
+          {/* Google Drive credentials */}
+          {provider === 'gdrive' && (
+            <div className="space-y-3">
+              {/* Setup instructions */}
+              <div className="px-3 py-2.5 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-700 space-y-1">
+                <p className="font-medium">Google Cloud Console setup required:</p>
+                <ol className="list-decimal list-inside space-y-0.5 text-blue-600">
+                  <li>Enable the <strong>Google Drive API</strong> in your GCP project</li>
+                  <li>Add <strong>{window.location.origin}/api/backup/gdrive/callback</strong> as an Authorized redirect URI in your OAuth credentials</li>
+                  <li>Create a folder in Google Drive for backups and copy its ID</li>
+                </ol>
+              </div>
+
+              {/* OAuth link status */}
+              {credentials.refreshToken ? (
+                <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-emerald-700">Linked</span>
+                    {credentials.email && (
+                      <span className="text-sm text-emerald-600 ml-1.5">as {credentials.email}</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleUnlinkGoogle}
+                    className="flex items-center gap-1 text-xs font-medium text-surface-500 hover:text-red-500 transition-colors"
+                  >
+                    <Unlink className="w-3.5 h-3.5" /> Unlink
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-surface-700 mb-2">Google Account</label>
+                  <button
+                    type="button"
+                    onClick={handleLinkGoogle}
+                    className="action-btn action-btn--secondary"
+                  >
+                    <Link2 className="w-4 h-4 mr-1.5" /> Link Google Account
+                  </button>
+                  <p className="text-xs text-surface-500 mt-1.5">
+                    Sign in with any Google account to store backups in its Drive. Does not need to be the same account you log in with.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-surface-700 mb-1">Folder ID</label>
+                <input type="text" value={credentials.folderId || ''} onChange={(e) => setCred('folderId', e.target.value)} className="glass-input w-full" placeholder="1AbC-dEfGhIjKlMnOpQrStUvWxYz" />
+                <p className="text-xs text-surface-500 mt-1">
+                  Open your backup folder in Google Drive — the Folder ID is the last part of the URL after <strong>/folders/</strong>
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Active toggle */}
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+              className="w-4 h-4 rounded border-surface-300 text-blue-500 focus:ring-blue-500"
+            />
+            <span className="text-sm text-surface-700">Active (include in backup runs)</span>
+          </label>
+
+          {/* Test connection */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={() => { setTestResult(null); testMutation.mutate(); }}
+              disabled={testMutation.isPending}
+              className="action-btn action-btn--secondary whitespace-nowrap"
+            >
+              {testMutation.isPending
+                ? <><Loader2 className="w-4 h-4 animate-spin mr-1.5" /> Testing...</>
+                : <><Wifi className="w-4 h-4 mr-1.5" /> Test Connection</>
+              }
+            </button>
+            {testResult && (
+              <span className={`flex items-center gap-1.5 text-sm font-medium ${testResult.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+                {testResult.ok ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                {testResult.message}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 px-5 py-3.5 border-t border-surface-100 bg-white shadow-[0_-1px_3px_rgba(0,0,0,0.04)]">
+          <button type="button" onClick={onClose} className="glass-button-secondary px-4 py-2">Cancel</button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saveMutation.isPending}
+            className="glass-button px-4 py-2"
+          >
+            {saveMutation.isPending
+              ? <><Loader2 className="w-4 h-4 animate-spin mr-1.5" /> Saving...</>
+              : isEdit ? 'Save Changes' : 'Add Destination'
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ─── BackupManager ──────────────────────────────────────────────────────── */
 
 const BackupManager = () => {
   const queryClient = useQueryClient();
 
-  /* ── Config query ── */
-  const { data: config, isLoading: configLoading } = useQuery({
+  /* ── Config + destinations query ── */
+  const { data: configData, isLoading: configLoading } = useQuery({
     queryKey: ['backup', 'config'],
     queryFn: () => api.get('/backup').then(r => r.data || {}),
   });
+
+  const destinations = configData?.destinations || [];
+  const globalSettings = configData?.settings || {};
 
   /* ── History query (polls every 10s) ── */
   const { data: history = [] } = useQuery({
@@ -85,74 +464,23 @@ const BackupManager = () => {
     refetchInterval: 10000,
   });
 
-  /* ── Form state ── */
-  const [provider, setProvider] = useState('none');
-
-  // S3
-  const [s3AccessKey, setS3AccessKey] = useState('');
-  const [s3SecretKey, setS3SecretKey] = useState('');
-  const [s3Bucket, setS3Bucket] = useState('');
-  const [s3Region, setS3Region] = useState('');
-  const [s3Endpoint, setS3Endpoint] = useState('');
-
-  // Backblaze B2
-  const [b2KeyId, setB2KeyId] = useState('');
-  const [b2AppKey, setB2AppKey] = useState('');
-  const [b2Bucket, setB2Bucket] = useState('');
-  const [b2Endpoint, setB2Endpoint] = useState('');
-
-  // Google Drive
-  const [gdriveCredentials, setGdriveCredentials] = useState('');
-  const [gdriveFolderId, setGdriveFolderId] = useState('');
-
-  // Google Drive visibility toggle
-  const [gdriveVisible, setGdriveVisible] = useState(false);
-
-  // Schedule & retention
+  /* ── Global settings form state ── */
   const [schedule, setSchedule] = useState('manual');
   const [retentionDays, setRetentionDays] = useState('30');
 
-  /* ── Populate from server ── */
   useEffect(() => {
-    if (!config) return;
-    const c = config;
-    setProvider(c.backup_provider || 'none');
-    setS3AccessKey(c.backup_s3_access_key || '');
-    setS3SecretKey(c.backup_s3_secret_key || '');
-    setS3Bucket(c.backup_s3_bucket || '');
-    setS3Region(c.backup_s3_region || '');
-    setS3Endpoint(c.backup_s3_endpoint || '');
-    setB2KeyId(c.backup_b2_key_id || '');
-    setB2AppKey(c.backup_b2_app_key || '');
-    setB2Bucket(c.backup_b2_bucket || '');
-    setB2Endpoint(c.backup_b2_endpoint || '');
-    setGdriveCredentials(c.backup_gdrive_credentials || '');
-    setGdriveFolderId(c.backup_gdrive_folder_id || '');
-    setSchedule(c.backup_schedule || 'manual');
-    setRetentionDays(c.backup_retention_days || '30');
-  }, [config]);
+    if (!globalSettings) return;
+    setSchedule(globalSettings.backup_schedule || 'manual');
+    setRetentionDays(globalSettings.backup_retention_days || '30');
+  }, [globalSettings]);
 
-  /* ── isDirty ── */
   const isDirty = useMemo(() => {
-    if (!config) return false;
-    const c = config;
-    return provider !== (c.backup_provider || 'none') ||
-      s3AccessKey !== (c.backup_s3_access_key || '') ||
-      s3SecretKey !== (c.backup_s3_secret_key || '') ||
-      s3Bucket !== (c.backup_s3_bucket || '') ||
-      s3Region !== (c.backup_s3_region || '') ||
-      s3Endpoint !== (c.backup_s3_endpoint || '') ||
-      b2KeyId !== (c.backup_b2_key_id || '') ||
-      b2AppKey !== (c.backup_b2_app_key || '') ||
-      b2Bucket !== (c.backup_b2_bucket || '') ||
-      b2Endpoint !== (c.backup_b2_endpoint || '') ||
-      gdriveCredentials !== (c.backup_gdrive_credentials || '') ||
-      gdriveFolderId !== (c.backup_gdrive_folder_id || '') ||
-      schedule !== (c.backup_schedule || 'manual') ||
-      retentionDays !== (c.backup_retention_days || '30');
-  }, [provider, s3AccessKey, s3SecretKey, s3Bucket, s3Region, s3Endpoint, b2KeyId, b2AppKey, b2Bucket, b2Endpoint, gdriveCredentials, gdriveFolderId, schedule, retentionDays, config]);
+    if (!globalSettings) return false;
+    return schedule !== (globalSettings.backup_schedule || 'manual') ||
+      retentionDays !== (globalSettings.backup_retention_days || '30');
+  }, [schedule, retentionDays, globalSettings]);
 
-  /* ── Save mutation ── */
+  /* ── Save global settings ── */
   const saveMutation = useMutation({
     mutationFn: (settings) => api.put('/backup', { settings }),
     onSuccess: () => {
@@ -165,45 +493,28 @@ const BackupManager = () => {
   });
 
   const handleSave = () => {
-    const settings = [
-      { key: 'backup_provider', value: provider },
-      { key: 'backup_s3_access_key', value: s3AccessKey },
-      { key: 'backup_s3_secret_key', value: s3SecretKey },
-      { key: 'backup_s3_bucket', value: s3Bucket },
-      { key: 'backup_s3_region', value: s3Region },
-      { key: 'backup_s3_endpoint', value: s3Endpoint },
-      { key: 'backup_b2_key_id', value: b2KeyId },
-      { key: 'backup_b2_app_key', value: b2AppKey },
-      { key: 'backup_b2_bucket', value: b2Bucket },
-      { key: 'backup_b2_endpoint', value: b2Endpoint },
-      { key: 'backup_gdrive_credentials', value: gdriveCredentials },
-      { key: 'backup_gdrive_folder_id', value: gdriveFolderId },
+    saveMutation.mutate([
       { key: 'backup_schedule', value: schedule },
       { key: 'backup_retention_days', value: retentionDays },
-    ];
-    saveMutation.mutate(settings);
+    ]);
   };
 
-  /* ── Test connection ── */
-  const [testResult, setTestResult] = useState(null); // { ok, message }
-  const testMutation = useMutation({
-    mutationFn: () => {
-      const payload = { provider };
-      if (provider === 's3') Object.assign(payload, { accessKey: s3AccessKey, secretKey: s3SecretKey, bucket: s3Bucket, region: s3Region, endpoint: s3Endpoint });
-      if (provider === 'b2') Object.assign(payload, { keyId: b2KeyId, appKey: b2AppKey, bucket: b2Bucket, endpoint: b2Endpoint });
-      if (provider === 'gdrive') Object.assign(payload, { credentials: gdriveCredentials, folderId: gdriveFolderId });
-      return api.post('/backup/test-connection', payload);
-    },
-    onSuccess: (res) => {
-      const result = res.data || {};
-      if (result.success) {
-        setTestResult({ ok: true, message: result.message || 'Connection successful' });
-      } else {
-        setTestResult({ ok: false, message: result.message || 'Connection failed' });
-      }
-    },
-    onError: (error) => {
-      setTestResult({ ok: false, message: error.message || 'Connection failed' });
+  /* ── Destination dialog state ── */
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingDest, setEditingDest] = useState(null);
+
+  /* ── Toggle destination active/paused ── */
+  const toggleMutation = useMutation({
+    mutationFn: (id) => api.put(`/backup/destinations/${id}/toggle`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['backup', 'config'] }),
+  });
+
+  /* ── Delete destination ── */
+  const deleteDestMutation = useMutation({
+    mutationFn: (id) => api.delete(`/backup/destinations/${id}`),
+    onSuccess: () => {
+      toast({ title: 'Destination deleted' });
+      queryClient.invalidateQueries({ queryKey: ['backup', 'config'] });
     },
   });
 
@@ -231,16 +542,35 @@ const BackupManager = () => {
     },
   });
 
-  /* ── Loading state ── */
+  /* ── Test saved destination ── */
+  const [testingId, setTestingId] = useState(null);
+  const [testResults, setTestResults] = useState({}); // { [destId]: { ok, message } }
+
+  const testDestMutation = useMutation({
+    mutationFn: (id) => {
+      setTestingId(id);
+      return api.post(`/backup/destinations/${id}/test`);
+    },
+    onSuccess: (res) => {
+      const result = res.data || {};
+      setTestResults((prev) => ({ ...prev, [testingId]: { ok: result.success, message: result.message } }));
+      setTestingId(null);
+    },
+    onError: (error) => {
+      setTestResults((prev) => ({ ...prev, [testingId]: { ok: false, message: error.message } }));
+      setTestingId(null);
+    },
+  });
+
+  const hasActiveDests = destinations.some((d) => d.isActive);
+
+  /* ── Loading ── */
   if (configLoading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 animate-spin text-surface-400" /></div>;
   }
 
-  const providerConfigured = provider !== 'none';
-
   return (
     <div className="space-y-5">
-
       {/* ── Header ── */}
       <div className="flex items-center gap-3 mb-1">
         <div className="bg-surface-100 rounded-xl p-2.5">
@@ -248,150 +578,116 @@ const BackupManager = () => {
         </div>
         <div>
           <h2 className="text-lg font-semibold text-surface-800">Backup & Restore</h2>
-          <p className="text-sm text-surface-500">Configure automatic database backups to cloud storage.</p>
+          <p className="text-sm text-surface-500">Configure backup destinations and schedule.</p>
         </div>
       </div>
 
-      {/* ── Provider Selection ── */}
+      {/* ── Destinations ── */}
       <div className="glass-card p-6">
-        <h3 className="text-sm font-medium text-surface-700 mb-3">Storage Provider</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {PROVIDERS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => { setProvider(p.id); setTestResult(null); }}
-              className={`flex flex-col items-center gap-1 rounded-lg border px-3 py-3 text-center transition-all ${
-                provider === p.id
-                  ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
-                  : 'border-surface-200 bg-white hover:border-surface-300 hover:bg-surface-50'
-              }`}
-            >
-              <span className={`text-sm font-medium ${provider === p.id ? 'text-blue-700' : 'text-surface-700'}`}>{p.label}</span>
-              <span className={`text-xs ${provider === p.id ? 'text-blue-500' : 'text-surface-400'}`}>{p.description}</span>
-            </button>
-          ))}
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-medium text-surface-700">Destinations</h3>
+          <button
+            type="button"
+            onClick={() => { setEditingDest(null); setDialogOpen(true); }}
+            className="action-btn action-btn--secondary text-xs"
+          >
+            <Plus className="w-3.5 h-3.5 mr-1" /> Add Destination
+          </button>
         </div>
-      </div>
 
-      {/* ── Credential Fields (conditional) ── */}
-      {provider === 's3' && (
-        <div className="glass-card p-6 space-y-4">
-          <h3 className="text-sm font-medium text-surface-700">AWS S3 Credentials</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">Access Key ID</label>
-              <input type="text" value={s3AccessKey} onChange={(e) => setS3AccessKey(e.target.value)} className="glass-input w-full" placeholder="AKIAIOSFODNN7EXAMPLE" />
+        {destinations.length === 0 ? (
+          <div className="text-center py-8">
+            <div className="bg-surface-100 rounded-xl p-3 inline-block mb-3">
+              <Cloud className="w-6 h-6 text-surface-400" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">Secret Access Key</label>
-              <PasswordInput value={s3SecretKey} onChange={(e) => setS3SecretKey(e.target.value)} className="glass-input w-full pr-9" placeholder="wJalrXUtnFEMI/K7MDENG/..." />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">Bucket</label>
-              <input type="text" value={s3Bucket} onChange={(e) => setS3Bucket(e.target.value)} className="glass-input w-full" placeholder="my-backups" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">Region</label>
-              <input type="text" value={s3Region} onChange={(e) => setS3Region(e.target.value)} className="glass-input w-full" placeholder="us-east-1" />
-            </div>
+            <p className="text-sm text-surface-500">No destinations configured</p>
+            <p className="text-xs text-surface-400 mt-1">Add a cloud storage destination to start backing up.</p>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-surface-700 mb-1">Endpoint <span className="text-surface-400 font-normal">(optional, for S3-compatible)</span></label>
-            <input type="text" value={s3Endpoint} onChange={(e) => setS3Endpoint(e.target.value)} className="glass-input w-full" placeholder="https://s3.example.com" />
-          </div>
-        </div>
-      )}
-
-      {provider === 'b2' && (
-        <div className="glass-card p-6 space-y-4">
-          <h3 className="text-sm font-medium text-surface-700">Backblaze B2 Credentials</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">Key ID</label>
-              <input type="text" value={b2KeyId} onChange={(e) => setB2KeyId(e.target.value)} className="glass-input w-full" placeholder="0012345678abcdef0000000001" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">Application Key</label>
-              <PasswordInput value={b2AppKey} onChange={(e) => setB2AppKey(e.target.value)} className="glass-input w-full pr-9" placeholder="K001..." />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">Bucket</label>
-              <input type="text" value={b2Bucket} onChange={(e) => setB2Bucket(e.target.value)} className="glass-input w-full" placeholder="my-backups" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">Endpoint</label>
-              <input type="text" value={b2Endpoint} onChange={(e) => setB2Endpoint(e.target.value)} className="glass-input w-full" placeholder="https://s3.us-west-004.backblazeb2.com" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {provider === 'gdrive' && (
-        <div className="glass-card p-6 space-y-4">
-          <h3 className="text-sm font-medium text-surface-700">Google Drive Credentials</h3>
-          <div>
-            <label className="block text-sm font-medium text-surface-700 mb-1">Service Account JSON</label>
-            <div className="relative">
-              <textarea
-                value={gdriveCredentials}
-                onChange={(e) => setGdriveCredentials(e.target.value)}
-                className="glass-input w-full font-mono text-xs pr-9"
-                rows={6}
-                placeholder='{"type": "service_account", "project_id": "...", ...}'
-                style={{ WebkitTextSecurity: !gdriveVisible && gdriveCredentials ? 'disc' : 'none' }}
-              />
-              <button
-                type="button"
-                tabIndex={-1}
-                onClick={() => setGdriveVisible(!gdriveVisible)}
-                className="absolute right-2.5 top-3 text-surface-400 hover:text-surface-600 transition-colors"
+        ) : (
+          <div className="space-y-2">
+            {destinations.map((dest) => (
+              <div
+                key={dest.id}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-surface-100 hover:bg-surface-50 transition-colors"
               >
-                {gdriveVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            <p className="text-xs text-surface-500 mt-1">
-              Paste the full JSON key file contents from your Google Cloud service account.
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-surface-700 mb-1">Folder ID</label>
-            <input type="text" value={gdriveFolderId} onChange={(e) => setGdriveFolderId(e.target.value)} className="glass-input w-full" placeholder="1AbC-dEfGhIjKlMnOpQrStUvWxYz" />
-            <p className="text-xs text-surface-500 mt-1">
-              The ID from the Google Drive folder URL. Share this folder with the service account email.
-            </p>
-          </div>
-        </div>
-      )}
+                {/* Name + badges */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-surface-800 truncate">{dest.name}</span>
+                    <ProviderBadge provider={dest.provider} />
+                    {!dest.isActive && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-surface-100 text-surface-500">Paused</span>
+                    )}
+                  </div>
+                  {/* Test result inline */}
+                  {testResults[dest.id] && (
+                    <span className={`flex items-center gap-1 text-xs mt-1 ${testResults[dest.id].ok ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {testResults[dest.id].ok ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                      {testResults[dest.id].message}
+                    </span>
+                  )}
+                </div>
 
-      {/* ── Test Connection ── */}
-      {providerConfigured && (
-        <div className="glass-card p-6">
-          <div className="flex items-center gap-3 flex-wrap">
-            <button
-              type="button"
-              onClick={() => { setTestResult(null); testMutation.mutate(); }}
-              disabled={testMutation.isPending}
-              className="action-btn action-btn--secondary whitespace-nowrap"
-            >
-              {testMutation.isPending
-                ? <><Loader2 className="w-4 h-4 animate-spin mr-1.5" /> Testing...</>
-                : <><Wifi className="w-4 h-4 mr-1.5" /> Test Connection</>
-              }
-            </button>
-            {testResult && (
-              <span className={`flex items-center gap-1.5 text-sm font-medium ${testResult.ok ? 'text-emerald-600' : 'text-red-600'}`}>
-                {testResult.ok
-                  ? <CheckCircle className="w-4 h-4" />
-                  : <XCircle className="w-4 h-4" />
-                }
-                {testResult.message}
-              </span>
-            )}
+                {/* Actions */}
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* Test */}
+                  <button
+                    type="button"
+                    onClick={() => testDestMutation.mutate(dest.id)}
+                    disabled={testingId === dest.id}
+                    className="p-1.5 rounded-lg text-surface-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                    title="Test connection"
+                  >
+                    {testingId === dest.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wifi className="w-3.5 h-3.5" />}
+                  </button>
+                  {/* Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => toggleMutation.mutate(dest.id)}
+                    className="p-1.5 rounded-lg text-surface-400 hover:text-amber-500 hover:bg-amber-50 transition-colors"
+                    title={dest.isActive ? 'Pause' : 'Activate'}
+                  >
+                    {dest.isActive ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                  </button>
+                  {/* Edit */}
+                  <button
+                    type="button"
+                    onClick={() => { setEditingDest(dest); setDialogOpen(true); }}
+                    className="p-1.5 rounded-lg text-surface-400 hover:text-surface-600 hover:bg-surface-100 transition-colors"
+                    title="Edit"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  {/* Delete */}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <button
+                        type="button"
+                        className="p-1.5 rounded-lg text-surface-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete "{dest.name}"?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will remove the destination. Existing backups stored there will not be deleted from cloud storage.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => deleteDestMutation.mutate(dest.id)}>Delete</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            ))}
           </div>
-          <p className="text-xs text-surface-500 mt-2">Tests connectivity using the credentials above (unsaved changes are used).</p>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ── Schedule & Retention ── */}
       <div className="glass-card p-6 space-y-4">
@@ -399,11 +695,7 @@ const BackupManager = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-surface-700 mb-1">Backup Schedule</label>
-            <select
-              value={schedule}
-              onChange={(e) => setSchedule(e.target.value)}
-              className="glass-input w-full"
-            >
+            <select value={schedule} onChange={(e) => setSchedule(e.target.value)} className="glass-input w-full">
               {SCHEDULES.map((s) => (
                 <option key={s.value} value={s.value}>{s.label}</option>
               ))}
@@ -432,7 +724,7 @@ const BackupManager = () => {
         <button
           type="button"
           onClick={() => backupNowMutation.mutate()}
-          disabled={!providerConfigured || backupNowMutation.isPending || isDirty}
+          disabled={!hasActiveDests || backupNowMutation.isPending || isDirty}
           className="glass-button"
         >
           {backupNowMutation.isPending
@@ -440,10 +732,10 @@ const BackupManager = () => {
             : <><Play className="w-4 h-4 mr-1.5" /> Backup Now</>
           }
         </button>
-        {!providerConfigured && (
-          <p className="text-xs text-surface-500 mt-2">Select a storage provider and save settings to enable backups.</p>
+        {!hasActiveDests && (
+          <p className="text-xs text-surface-500 mt-2">Add and activate at least one destination to enable backups.</p>
         )}
-        {isDirty && providerConfigured && (
+        {isDirty && hasActiveDests && (
           <p className="text-xs text-amber-600 mt-2">Save your settings before creating a backup.</p>
         )}
       </div>
@@ -463,18 +755,18 @@ const BackupManager = () => {
         ) : (
           <div className="space-y-2">
             {/* Desktop header */}
-            <div className="hidden sm:grid grid-cols-[1fr_100px_80px_100px_40px] gap-3 px-3 py-1.5 text-xs font-medium text-surface-500 uppercase tracking-wide">
+            <div className="hidden sm:grid grid-cols-[1fr_100px_80px_1fr_40px] gap-3 px-3 py-1.5 text-xs font-medium text-surface-500 uppercase tracking-wide">
               <span>Date</span>
               <span>Status</span>
               <span>Size</span>
-              <span>Triggered by</span>
+              <span>Destinations</span>
               <span />
             </div>
 
             {history.map((backup) => (
               <div
                 key={backup.id}
-                className="sm:grid sm:grid-cols-[1fr_100px_80px_100px_40px] sm:items-center gap-3 px-3 py-2.5 rounded-lg border border-surface-100 hover:bg-surface-50 transition-colors"
+                className="sm:grid sm:grid-cols-[1fr_100px_80px_1fr_40px] sm:items-center gap-3 px-3 py-2.5 rounded-lg border border-surface-100 hover:bg-surface-50 transition-colors"
               >
                 {/* Date */}
                 <div className="flex items-center gap-2">
@@ -489,13 +781,18 @@ const BackupManager = () => {
 
                 {/* Size */}
                 <span className="text-sm text-surface-600 mt-1 sm:mt-0 block">
-                  {backup.status === 'completed' ? formatBytes(backup.fileSize) : '—'}
+                  {['completed', 'partial'].includes(backup.status) ? formatBytes(backup.fileSize) : '—'}
                 </span>
 
-                {/* Triggered by */}
-                <span className="text-xs text-surface-500 mt-1 sm:mt-0 block truncate">
-                  {backup.triggeredBy || 'system'}
-                </span>
+                {/* Destinations */}
+                <div className="flex flex-wrap gap-1 mt-1 sm:mt-0">
+                  {(backup.uploads && backup.uploads.length > 0)
+                    ? backup.uploads.map((upload) => (
+                        <UploadPill key={upload.id} upload={upload} />
+                      ))
+                    : <span className="text-xs text-surface-400">{backup.provider}</span>
+                  }
+                </div>
 
                 {/* Delete */}
                 <div className="mt-2 sm:mt-0 flex justify-end">
@@ -518,9 +815,7 @@ const BackupManager = () => {
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => deleteMutation.mutate(backup.id)}>
-                          Delete
-                        </AlertDialogAction>
+                        <AlertDialogAction onClick={() => deleteMutation.mutate(backup.id)}>Delete</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
@@ -533,6 +828,14 @@ const BackupManager = () => {
 
       <div className="pb-16" />
       <StickySettingsBar isDirty={isDirty} onSave={handleSave} isPending={saveMutation.isPending} />
+
+      {/* ── Destination Dialog ── */}
+      {dialogOpen && (
+        <DestinationDialog
+          dest={editingDest}
+          onClose={() => { setDialogOpen(false); setEditingDest(null); }}
+        />
+      )}
     </div>
   );
 };

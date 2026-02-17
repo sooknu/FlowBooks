@@ -126,8 +126,13 @@ export class S3Provider implements BackupStorageProvider {
 // ── Google Drive Provider ──
 
 interface GoogleDriveProviderConfig {
-  credentialsJson: string;
   folderId: string;
+  // Service account (legacy / restore script)
+  credentialsJson?: string;
+  // OAuth2 (user-linked)
+  refreshToken?: string;
+  clientId?: string;
+  clientSecret?: string;
 }
 
 export class GoogleDriveProvider implements BackupStorageProvider {
@@ -137,12 +142,22 @@ export class GoogleDriveProvider implements BackupStorageProvider {
   constructor(config: GoogleDriveProviderConfig) {
     this.folderId = config.folderId;
 
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(config.credentialsJson),
-      scopes: ['https://www.googleapis.com/auth/drive.file'],
-    });
+    let authClient;
+    if (config.refreshToken) {
+      // OAuth2 flow — user linked their Google account
+      authClient = new google.auth.OAuth2(config.clientId, config.clientSecret);
+      authClient.setCredentials({ refresh_token: config.refreshToken });
+    } else if (config.credentialsJson) {
+      // Service account flow (legacy / restore script)
+      authClient = new google.auth.GoogleAuth({
+        credentials: JSON.parse(config.credentialsJson),
+        scopes: ['https://www.googleapis.com/auth/drive.file'],
+      });
+    } else {
+      throw new Error('Google Drive provider requires either a refresh token or service account credentials');
+    }
 
-    this.drive = google.drive({ version: 'v3', auth });
+    this.drive = google.drive({ version: 'v3', auth: authClient });
   }
 
   async upload(key: string, filePath: string): Promise<void> {
@@ -258,6 +273,41 @@ export async function getStorageProvider(): Promise<BackupStorageProvider> {
   return createProviderFromCredentials(provider, settings);
 }
 
+// ── Helper: read Google OAuth client credentials from app_settings ──
+
+export async function getGoogleClientSettings(): Promise<{ clientId: string; clientSecret: string } | null> {
+  const keys = ['google_client_id', 'google_client_secret'];
+  const rows = await db
+    .select()
+    .from(appSettings)
+    .where(inArray(appSettings.key, keys));
+
+  const map: Record<string, string> = {};
+  for (const r of rows) map[r.key] = r.value;
+
+  if (!map.google_client_id || !map.google_client_secret) return null;
+  return { clientId: map.google_client_id, clientSecret: map.google_client_secret };
+}
+
+// ── Factory: create from backup_destinations row ──
+
+export async function createProviderForDestination(
+  dest: { provider: string; credentials: Record<string, any> }
+): Promise<BackupStorageProvider> {
+  // OAuth2 Google Drive — needs client ID/secret from app_settings
+  if (dest.provider === 'gdrive' && dest.credentials.refreshToken) {
+    const googleCreds = await getGoogleClientSettings();
+    if (!googleCreds) throw new Error('Google OAuth not configured — cannot use linked Google Drive');
+    return new GoogleDriveProvider({
+      refreshToken: dest.credentials.refreshToken,
+      clientId: googleCreds.clientId,
+      clientSecret: googleCreds.clientSecret,
+      folderId: dest.credentials.folderId,
+    });
+  }
+  return createProviderFromCredentials(dest.provider, dest.credentials as Record<string, string>);
+}
+
 // ── Factory: create from directly passed credentials (for test-connection) ──
 
 export function createProviderFromCredentials(
@@ -267,8 +317,8 @@ export function createProviderFromCredentials(
   switch (provider) {
     case 's3':
       return new S3Provider({
-        accessKeyId: credentials.backup_s3_access_key || credentials.accessKey,
-        secretAccessKey: credentials.backup_s3_secret_key || credentials.secretKey,
+        accessKeyId: credentials.accessKeyId || credentials.backup_s3_access_key || credentials.accessKey,
+        secretAccessKey: credentials.secretAccessKey || credentials.backup_s3_secret_key || credentials.secretKey,
         bucket: credentials.backup_s3_bucket || credentials.bucket,
         region: credentials.backup_s3_region || credentials.region || 'us-east-1',
         endpoint: credentials.backup_s3_endpoint || credentials.endpoint || undefined,
@@ -276,17 +326,27 @@ export function createProviderFromCredentials(
 
     case 'b2':
       return new S3Provider({
-        accessKeyId: credentials.backup_b2_key_id || credentials.keyId,
-        secretAccessKey: credentials.backup_b2_app_key || credentials.appKey,
+        accessKeyId: credentials.keyId || credentials.backup_b2_key_id,
+        secretAccessKey: credentials.appKey || credentials.backup_b2_app_key,
         bucket: credentials.backup_b2_bucket || credentials.bucket,
         region: 'auto',
         endpoint: credentials.backup_b2_endpoint || credentials.endpoint,
       });
 
     case 'gdrive':
+      // OAuth2 path (setup wizard passes clientId + clientSecret + refreshToken directly)
+      if (credentials.refreshToken) {
+        return new GoogleDriveProvider({
+          refreshToken: credentials.refreshToken,
+          clientId: credentials.clientId,
+          clientSecret: credentials.clientSecret,
+          folderId: credentials.folderId || credentials.backup_gdrive_folder_id,
+        });
+      }
+      // Service account path (legacy / restore script)
       return new GoogleDriveProvider({
-        credentialsJson: credentials.backup_gdrive_credentials || credentials.credentials,
-        folderId: credentials.backup_gdrive_folder_id || credentials.folderId,
+        credentialsJson: credentials.credentialsJson || credentials.backup_gdrive_credentials || credentials.credentials,
+        folderId: credentials.folderId || credentials.backup_gdrive_folder_id,
       });
 
     default:

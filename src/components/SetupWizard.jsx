@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Sparkles, HardDrive, Cloud, Database, Loader2, CheckCircle,
-  ArrowLeft, AlertTriangle, RefreshCw,
+  ArrowLeft, AlertTriangle, RefreshCw, Link2, Unlink,
 } from 'lucide-react';
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
@@ -28,7 +28,7 @@ function formatDate(dateStr) {
 const PROVIDERS = [
   { id: 's3', label: 'AWS S3', description: 'Amazon S3 or compatible', icon: Cloud },
   { id: 'b2', label: 'Backblaze B2', description: 'Backblaze B2 Cloud Storage', icon: Database },
-  { id: 'gdrive', label: 'Google Drive', description: 'Google Drive via service account', icon: HardDrive },
+  { id: 'gdrive', label: 'Google Drive', description: 'Link your Google account', icon: HardDrive },
 ];
 
 /* ─── Credential field definitions per provider ──────────────────────────── */
@@ -47,7 +47,8 @@ const CREDENTIAL_FIELDS = {
     { key: 'bucket', label: 'Bucket', type: 'text', placeholder: 'my-backups' },
   ],
   gdrive: [
-    { key: 'credentials', label: 'Service Account Credentials', type: 'textarea', placeholder: '{"type": "service_account", "project_id": "...", ...}' },
+    { key: 'clientId', label: 'Google Client ID', type: 'text', placeholder: '123456789.apps.googleusercontent.com' },
+    { key: 'clientSecret', label: 'Google Client Secret', type: 'password', placeholder: 'GOCSPX-...' },
     { key: 'folderId', label: 'Folder ID', type: 'text', placeholder: '1AbC-dEfGhIjKlMnOpQrStUvWxYz' },
   ],
 };
@@ -202,6 +203,63 @@ const SetupWizard = () => {
     setCredentials(prev => ({ ...prev, [key]: value }));
     setTestResult(null);
   };
+
+  /* ── Google Drive OAuth link (setup mode) ── */
+  const handleLinkGoogleSetup = async () => {
+    try {
+      const res = await fetch('/api/backup/gdrive/authorize-setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: credentials.clientId,
+          clientSecret: credentials.clientSecret,
+        }),
+      });
+      const json = await res.json();
+      const url = json.data?.url;
+      if (!url) {
+        setTestResult({ ok: false, message: json.error || 'Failed to start OAuth' });
+        return;
+      }
+      window.open(url, 'gdrive-auth', 'popup,width=500,height=650');
+    } catch (err) {
+      setTestResult({ ok: false, message: err.message || 'Failed to start OAuth' });
+    }
+  };
+
+  const handleUnlinkGoogleSetup = () => {
+    setCredentials(prev => {
+      const next = { ...prev };
+      delete next.refreshToken;
+      delete next.email;
+      return next;
+    });
+    setTestResult(null);
+  };
+
+  // Listen for OAuth popup result via localStorage
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key !== 'gdrive-auth-result' || !e.newValue) return;
+      try {
+        const data = JSON.parse(e.newValue);
+        if (data.type === 'gdrive-linked') {
+          setCredentials(prev => ({
+            ...prev,
+            refreshToken: data.refreshToken,
+            email: data.email,
+          }));
+          setTestResult(null);
+        }
+        if (data.type === 'gdrive-error') {
+          setTestResult({ ok: false, message: data.message });
+        }
+      } catch { /* ignore */ }
+      localStorage.removeItem('gdrive-auth-result');
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, []);
 
   /* ── Render helpers ── */
 
@@ -422,31 +480,101 @@ const SetupWizard = () => {
           </p>
 
           <div className="space-y-4">
-            {fields.map((field) => (
-              <div key={field.key}>
-                <label className="block text-sm font-medium text-surface-700 mb-1">
-                  {field.label}
-                  {field.optional && <span className="text-surface-400 font-normal"> (optional)</span>}
-                </label>
-                {field.type === 'textarea' ? (
-                  <textarea
-                    value={credentials[field.key] || ''}
-                    onChange={(e) => updateCredential(field.key, e.target.value)}
-                    className="glass-input w-full font-mono text-xs"
-                    rows={6}
-                    placeholder={field.placeholder}
-                  />
-                ) : (
+            {provider === 'gdrive' ? (
+              <>
+                {/* Client ID */}
+                <div>
+                  <label className="block text-sm font-medium text-surface-700 mb-1">Google Client ID</label>
                   <input
-                    type={field.type}
-                    value={credentials[field.key] || ''}
-                    onChange={(e) => updateCredential(field.key, e.target.value)}
+                    type="text"
+                    value={credentials.clientId || ''}
+                    onChange={(e) => updateCredential('clientId', e.target.value)}
                     className="glass-input w-full"
-                    placeholder={field.placeholder}
+                    placeholder="123456789.apps.googleusercontent.com"
                   />
+                </div>
+                {/* Client Secret */}
+                <div>
+                  <label className="block text-sm font-medium text-surface-700 mb-1">Google Client Secret</label>
+                  <input
+                    type="password"
+                    value={credentials.clientSecret || ''}
+                    onChange={(e) => updateCredential('clientSecret', e.target.value)}
+                    className="glass-input w-full"
+                    placeholder="GOCSPX-..."
+                  />
+                </div>
+
+                {/* OAuth Link Section */}
+                {credentials.refreshToken ? (
+                  <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
+                    <div className="flex items-center gap-2 text-sm text-emerald-700">
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Linked{credentials.email ? ` as ${credentials.email}` : ''}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleUnlinkGoogleSetup}
+                      className="text-xs text-surface-500 hover:text-red-600 inline-flex items-center gap-1 transition-colors"
+                    >
+                      <Unlink className="w-3.5 h-3.5" />
+                      Unlink
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleLinkGoogleSetup}
+                    disabled={!credentials.clientId || !credentials.clientSecret}
+                    className="glass-button-secondary w-full inline-flex items-center justify-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Link2 className="w-4 h-4" />
+                    Link Google Account
+                  </button>
                 )}
-              </div>
-            ))}
+
+                {/* Folder ID */}
+                <div>
+                  <label className="block text-sm font-medium text-surface-700 mb-1">Folder ID</label>
+                  <input
+                    type="text"
+                    value={credentials.folderId || ''}
+                    onChange={(e) => updateCredential('folderId', e.target.value)}
+                    className="glass-input w-full"
+                    placeholder="1AbC-dEfGhIjKlMnOpQrStUvWxYz"
+                  />
+                  <p className="text-xs text-surface-400 mt-1">
+                    From the Google Drive folder URL: drive.google.com/drive/folders/<strong>THIS_PART</strong>
+                  </p>
+                </div>
+              </>
+            ) : (
+              fields.map((field) => (
+                <div key={field.key}>
+                  <label className="block text-sm font-medium text-surface-700 mb-1">
+                    {field.label}
+                    {field.optional && <span className="text-surface-400 font-normal"> (optional)</span>}
+                  </label>
+                  {field.type === 'textarea' ? (
+                    <textarea
+                      value={credentials[field.key] || ''}
+                      onChange={(e) => updateCredential(field.key, e.target.value)}
+                      className="glass-input w-full font-mono text-xs"
+                      rows={6}
+                      placeholder={field.placeholder}
+                    />
+                  ) : (
+                    <input
+                      type={field.type}
+                      value={credentials[field.key] || ''}
+                      onChange={(e) => updateCredential(field.key, e.target.value)}
+                      className="glass-input w-full"
+                      placeholder={field.placeholder}
+                    />
+                  )}
+                </div>
+              ))
+            )}
           </div>
 
           {/* Test Connection */}
@@ -454,8 +582,8 @@ const SetupWizard = () => {
             <button
               type="button"
               onClick={handleTestConnection}
-              disabled={testPending}
-              className="glass-button-secondary inline-flex items-center gap-1.5 text-sm"
+              disabled={testPending || (provider === 'gdrive' && (!credentials.refreshToken || !credentials.folderId))}
+              className="glass-button-secondary inline-flex items-center gap-1.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {testPending
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> Testing...</>
