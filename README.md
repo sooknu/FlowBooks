@@ -27,7 +27,7 @@ A self-hosted business management app for photography studios. Handles quoting, 
 
 ## Prerequisites
 
-- Node.js 20.x (see `.nvmrc`)
+- Node.js 24.x LTS (see `.nvmrc`)
 - PostgreSQL 14+
 - Redis (for BullMQ background jobs)
 

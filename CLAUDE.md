@@ -21,7 +21,7 @@ KreAction Quotes is a business quoting, invoicing, and client management web app
 - **DB generate:** `npm run db:generate` — generate Drizzle migration files
 - **Start worker:** `npm run start:worker` — runs BullMQ worker process
 - **Dev worker:** `npm run dev:worker` — runs worker in tsx watch mode
-- **Node version:** 20.19.1 (see `.nvmrc`)
+- **Node version:** 24.x LTS (see `.nvmrc`)
 
 No test framework is configured.
 
