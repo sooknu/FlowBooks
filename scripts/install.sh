@@ -14,7 +14,14 @@ info() { echo -e "${BLUE}→${NC} $1"; }
 err()  { echo -e "${RED}✗${NC} $1"; }
 warn() { echo -e "${YELLOW}⚠${NC} $1"; }
 
-# ─── Already-installed check ──────────────────────────────────────────────────
+# ─── Must run from app root (where package.json lives) ──────────────────────
+if [[ ! -f "package.json" ]]; then
+  err "package.json not found in current directory."
+  err "Run this script from the app root: ${BOLD}cd ~/YourApp && bash scripts/install.sh${NC}"
+  exit 1
+fi
+
+# ─── Already-installed check ────────────────────────────────────────────────
 FORCE=false
 for arg in "$@"; do
   [[ "$arg" == "--force" ]] && FORCE=true
@@ -26,18 +33,24 @@ if [[ -f ".env" && "$FORCE" == false ]]; then
   exit 1
 fi
 
-# ─── Derive names from directory ──────────────────────────────────────────────
+# ─── Derive names from directory ─────────────────────────────────────────────
 APP_NAME="$(basename "$PWD")"
-DB_NAME="${APP_NAME//-/_}"
+# Lowercase, replace hyphens with underscores, strip anything not alphanumeric/underscore
+DB_NAME="$(echo "${APP_NAME}" | tr '[:upper:]' '[:lower:]' | tr '-' '_' | sed 's/[^a-z0-9_]//g')"
 DB_USER="${DB_NAME}"
 DB_PASSWORD="$(openssl rand -hex 16)"
 AUTH_SECRET="$(openssl rand -hex 32)"
+
+if [[ -z "$DB_NAME" ]]; then
+  err "Could not derive a valid database name from directory: ${APP_NAME}"
+  exit 1
+fi
 
 info "App name:  ${BOLD}${APP_NAME}${NC}"
 info "DB name:   ${BOLD}${DB_NAME}${NC}"
 info "DB user:   ${BOLD}${DB_USER}${NC}"
 
-# ─── Ask for domain name ─────────────────────────────────────────────────────
+# ─── Ask for domain name ────────────────────────────────────────────────────
 echo ""
 read -rp "Domain name: " DOMAIN_NAME
 
@@ -64,7 +77,14 @@ APP_PORT=$(find_available_port 3001)
 ok "Redis port: ${BOLD}${REDIS_PORT}${NC}"
 ok "App port:   ${BOLD}${APP_PORT}${NC}"
 
-# ─── Create PostgreSQL user + database ────────────────────────────────────────
+# ─── Auto-detect PostgreSQL port ─────────────────────────────────────────────
+PG_PORT=$(sudo -u postgres psql -tc "SHOW port;" 2>/dev/null | tr -d ' ' || echo "5432")
+if [[ -z "$PG_PORT" ]]; then
+  PG_PORT="5432"
+fi
+ok "PG port:    ${BOLD}${PG_PORT}${NC}"
+
+# ─── Create PostgreSQL user + database ──────────────────────────────────────
 echo ""
 info "Creating PostgreSQL user and database..."
 
@@ -82,25 +102,26 @@ else
   ok "Created PostgreSQL database ${BOLD}${DB_NAME}${NC}"
 fi
 
-# ─── Create Docker Redis ─────────────────────────────────────────────────────
+# ─── Create Docker Redis ────────────────────────────────────────────────────
 info "Creating Docker Redis container..."
 
-if docker ps -a --format '{{.Names}}' | grep -q "^${APP_NAME}-redis$"; then
-  warn "Docker container ${BOLD}${APP_NAME}-redis${NC} already exists, skipping."
+REDIS_CONTAINER="${APP_NAME}-redis"
+if docker ps -a --format '{{.Names}}' | grep -q "^${REDIS_CONTAINER}$"; then
+  warn "Docker container ${BOLD}${REDIS_CONTAINER}${NC} already exists, skipping."
 else
   docker run -d \
-    --name "${APP_NAME}-redis" \
+    --name "${REDIS_CONTAINER}" \
     --restart unless-stopped \
     -p "${REDIS_PORT}:6379" \
     redis:8-alpine
-  ok "Created Redis container ${BOLD}${APP_NAME}-redis${NC} on port ${REDIS_PORT}"
+  ok "Created Redis container ${BOLD}${REDIS_CONTAINER}${NC} on port ${REDIS_PORT}"
 fi
 
-# ─── Generate .env ────────────────────────────────────────────────────────────
+# ─── Generate .env ───────────────────────────────────────────────────────────
 info "Generating .env file..."
 
 cat > .env <<EOF
-DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}
+DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@localhost:${PG_PORT}/${DB_NAME}
 BETTER_AUTH_SECRET=${AUTH_SECRET}
 BETTER_AUTH_URL=https://${DOMAIN_NAME}
 API_PORT=${APP_PORT}
@@ -112,7 +133,7 @@ EOF
 
 ok "Generated .env"
 
-# ─── Generate ecosystem.config.cjs ───────────────────────────────────────────
+# ─── Generate ecosystem.config.cjs ──────────────────────────────────────────
 info "Generating ecosystem.config.cjs..."
 
 cat > ecosystem.config.cjs <<EOF
@@ -136,21 +157,27 @@ EOF
 
 ok "Generated ecosystem.config.cjs"
 
-# ─── npm install, db push, build ─────────────────────────────────────────────
+# ─── npm install, db push, build ────────────────────────────────────────────
 echo ""
 info "Running npm install..."
 npm install
 ok "npm install complete"
 
 info "Pushing database schema..."
-npm run db:push
+if ! npm run db:push; then
+  err "Database schema push failed. Check DATABASE_URL in .env"
+  exit 1
+fi
 ok "Database schema pushed"
 
 info "Building application..."
-npm run build
+if ! npm run build; then
+  err "Build failed."
+  exit 1
+fi
 ok "Build complete"
 
-# ─── Generate Nginx config ───────────────────────────────────────────────────
+# ─── Generate Nginx config ──────────────────────────────────────────────────
 echo ""
 info "Generating Nginx config..."
 
@@ -184,10 +211,15 @@ info "Requesting SSL certificate..."
 sudo certbot --nginx -d "${DOMAIN_NAME}" --non-interactive --agree-tos --register-unsafely-without-email
 ok "SSL certificate installed"
 
-# ─── Start pm2 ───────────────────────────────────────────────────────────────
+# ─── Start pm2 + auto-start on reboot ───────────────────────────────────────
 info "Starting pm2 processes..."
 pm2 start ecosystem.config.cjs
 pm2 save
+
+# Set up pm2 to start on boot — run the startup command directly instead of parsing output
+sudo env PATH="$PATH" "$(which pm2)" startup systemd -u "$(whoami)" --hp "$HOME"
+ok "pm2 configured to start on boot"
+
 ok "pm2 processes started and saved"
 
 # ─── Completion banner ───────────────────────────────────────────────────────
@@ -199,7 +231,7 @@ echo ""
 echo -e "  ${BOLD}App URL:${NC}       https://${DOMAIN_NAME}"
 echo -e "  ${BOLD}Setup URL:${NC}     https://${DOMAIN_NAME}/setup"
 echo ""
-echo -e "  ${BOLD}Database:${NC}      ${DB_NAME}"
+echo -e "  ${BOLD}Database:${NC}      ${DB_NAME} (port ${PG_PORT})"
 echo -e "  ${BOLD}Redis port:${NC}    ${REDIS_PORT}"
 echo -e "  ${BOLD}App port:${NC}      ${APP_PORT}"
 echo -e "  ${BOLD}pm2 server:${NC}    ${APP_NAME}-server"

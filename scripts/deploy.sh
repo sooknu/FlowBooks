@@ -2,19 +2,22 @@
 set -euo pipefail
 
 # =============================================================================
-# VPS Provisioning Script for Ubuntu 22.04 / 24.04
-# Installs: Node.js 20, PostgreSQL, Docker CE, pm2, Nginx, Certbot, UFW
+# VPS Provisioning Script
+# Supports: Ubuntu 22.04+, Debian 11+
+# Installs: Node.js 24, PostgreSQL, Docker CE, pm2, Nginx, Certbot, UFW
 # Each section is idempotent — safe to re-run.
 # =============================================================================
 
 # -- Colors -------------------------------------------------------------------
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+RED='\033[0;31m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
 done_msg()  { echo -e "${GREEN}${BOLD} done${RESET}  $1"; }
 info_msg()  { echo -e "${BLUE}${BOLD} installing${RESET}  $1"; }
+err_msg()   { echo -e "${RED}${BOLD} error${RESET}  $1"; }
 
 # -- Root check ---------------------------------------------------------------
 if [[ "$(id -u)" -ne 0 ]]; then
@@ -22,17 +25,39 @@ if [[ "$(id -u)" -ne 0 ]]; then
   exit 1
 fi
 
+# -- Suppress interactive prompts during apt ----------------------------------
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+
 echo ""
 echo -e "${BOLD}VPS Provisioning Script${RESET}"
 echo "========================================"
 echo ""
 
+# -- Detect distro ------------------------------------------------------------
+if [[ -f /etc/os-release ]]; then
+  . /etc/os-release
+  DISTRO="${ID}"
+  CODENAME="${VERSION_CODENAME:-}"
+else
+  err_msg "Cannot detect OS. /etc/os-release not found."
+  exit 1
+fi
+
+if [[ "$DISTRO" != "ubuntu" && "$DISTRO" != "debian" ]]; then
+  err_msg "Unsupported distro: ${DISTRO}. Only Ubuntu and Debian are supported."
+  exit 1
+fi
+
+done_msg "Detected ${BOLD}${DISTRO} ${CODENAME}${RESET}"
+
 # =============================================================================
-# 1. System update
+# 1. System update + essentials
 # =============================================================================
 info_msg "System packages (apt update && apt upgrade)"
 apt update -qq
 apt upgrade -y -qq
+apt install -y -qq curl ca-certificates gnupg lsb-release
 done_msg "System packages up to date"
 
 # =============================================================================
@@ -47,6 +72,10 @@ else
   done_msg "Node.js installed ($(node --version))"
 fi
 
+# Update npm to latest
+npm install -g npm@latest &>/dev/null
+done_msg "npm $(npm --version)"
+
 # =============================================================================
 # 3. PostgreSQL (official pgdg repo)
 # =============================================================================
@@ -54,12 +83,11 @@ if command -v psql &>/dev/null; then
   done_msg "PostgreSQL already installed ($(psql --version))"
 else
   info_msg "PostgreSQL from pgdg repository"
-  apt install -y -qq curl ca-certificates
   install -d /usr/share/postgresql-common/pgdg
   curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
     -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
   echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
-https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+https://apt.postgresql.org/pub/repos/apt ${CODENAME}-pgdg main" \
     > /etc/apt/sources.list.d/pgdg.list
   apt update -qq
   apt install -y -qq postgresql postgresql-contrib
@@ -73,13 +101,12 @@ if command -v docker &>/dev/null; then
   done_msg "Docker already installed ($(docker --version))"
 else
   info_msg "Docker CE from official repository"
-  apt install -y -qq ca-certificates curl gnupg
   install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  curl -fsSL "https://download.docker.com/linux/${DISTRO}/gpg" \
     -o /etc/apt/keyrings/docker.asc
   chmod a+r /etc/apt/keyrings/docker.asc
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
-https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+https://download.docker.com/linux/${DISTRO} ${CODENAME} stable" \
     > /etc/apt/sources.list.d/docker.list
   apt update -qq
   apt install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
@@ -117,14 +144,18 @@ else
 fi
 
 # =============================================================================
-# 7. Certbot via snap
+# 7. Certbot
 # =============================================================================
 if command -v certbot &>/dev/null; then
   done_msg "Certbot already installed ($(certbot --version 2>&1))"
-else
+elif command -v snap &>/dev/null; then
   info_msg "Certbot via snap"
   snap install --classic certbot
   ln -sf /snap/bin/certbot /usr/bin/certbot
+  done_msg "Certbot installed ($(certbot --version 2>&1))"
+else
+  info_msg "Certbot via apt (snap not available)"
+  apt install -y -qq certbot python3-certbot-nginx
   done_msg "Certbot installed ($(certbot --version 2>&1))"
 fi
 
@@ -162,10 +193,10 @@ echo "  Nginx        $(nginx -v 2>&1 || echo 'not found')"
 echo "  Certbot      $(certbot --version 2>&1 || echo 'not found')"
 echo "  UFW          $(ufw status | head -1)"
 echo ""
+echo -e "  ${BOLD}Note:${RESET} Log out and back in for docker group to take effect."
+echo ""
 echo "Next steps:"
-echo "  1. Create app user:    adduser deploy"
-echo "  2. Configure PostgreSQL databases and users"
-echo "  3. Start Redis containers (Docker)"
-echo "  4. Clone app repos and npm install"
-echo "  5. Set up Nginx server blocks + certbot --nginx"
+echo "  1. Log out and back in (docker group)"
+echo "  2. Clone the app repo"
+echo "  3. Run: bash scripts/install.sh"
 echo ""
