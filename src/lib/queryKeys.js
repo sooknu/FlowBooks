@@ -147,6 +147,12 @@ export const queryKeys = {
     user: (userId) => ['permissions', 'user', userId],
   },
 
+  backups: {
+    all: ['backups'],
+    config: () => ['backups', 'config'],
+    history: () => ['backups', 'history'],
+  },
+
   verification: {
     check: (email) => ['verification', 'check', email],
   },

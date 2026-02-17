@@ -25,6 +25,7 @@ export const PERMISSION_KEYS = [
   'manage_advances',
   'view_salary',
   'manage_salary',
+  'manage_backups',
 ] as const;
 
 export type PermissionKey = typeof PERMISSION_KEYS[number];
@@ -63,6 +64,7 @@ export const PERMISSION_META: PermissionMeta[] = [
   { key: 'manage_advances', label: 'Manage Advances', group: 'Finance', description: 'Create and manage team advances' },
   { key: 'view_salary', label: 'View Salaries', group: 'Finance', description: 'See the salary page (read-only)' },
   { key: 'manage_salary', label: 'Manage Salary', group: 'Finance', description: 'Create and manage salary entries' },
+  { key: 'manage_backups', label: 'Manage Backups', group: 'Settings', description: 'Create, view, and delete backups' },
 ];
 
 // ── Hardcoded defaults per role ──
@@ -98,6 +100,7 @@ export const DEFAULT_ROLE_PERMISSIONS: AllRoleDefaults = {
     manage_advances: true,
     view_salary: true,
     manage_salary: true,
+    manage_backups: true,
   },
   lead: {
     view_prices: true,
@@ -123,6 +126,7 @@ export const DEFAULT_ROLE_PERMISSIONS: AllRoleDefaults = {
     manage_advances: false,
     view_salary: true,
     manage_salary: false,
+    manage_backups: false,
   },
   crew: {
     view_prices: false,
@@ -148,5 +152,6 @@ export const DEFAULT_ROLE_PERMISSIONS: AllRoleDefaults = {
     manage_advances: false,
     view_salary: false,
     manage_salary: false,
+    manage_backups: false,
   },
 };

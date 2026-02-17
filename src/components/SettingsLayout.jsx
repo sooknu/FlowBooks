@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Settings as SettingsIcon, CreditCard, Mail, Loader2, Layers } from 'lucide-react';
+import { Settings as SettingsIcon, CreditCard, Mail, Loader2, Layers, HardDrive } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const tabs = [
@@ -9,6 +9,7 @@ const tabs = [
   { path: '/settings/categories', label: 'Categories', icon: Layers },
   { path: '/settings/payments', label: 'Payments & Auth', icon: CreditCard },
   { path: '/settings/email', label: 'Email', icon: Mail },
+  { path: '/settings/backup', label: 'Backup', icon: HardDrive },
 ];
 
 const SettingsLayout = () => {

@@ -1,6 +1,6 @@
 import IORedis from 'ioredis';
 import { Worker } from 'bullmq';
-import { cleanupQueue, invoiceReminderQueue, recurringExpensesQueue, salaryAccrualQueue } from './lib/queue';
+import { cleanupQueue, invoiceReminderQueue, recurringExpensesQueue, salaryAccrualQueue, backupQueue } from './lib/queue';
 
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6380';
 const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
@@ -76,6 +76,21 @@ salaryAccrualWorker.on('failed', (job, err) => {
   console.error(`[salary-accrual] Job ${job?.id} failed:`, err.message);
 });
 
+// ── Backup worker ──
+import { processBackupJob } from './workers/backup.worker';
+
+const backupWorker = new Worker('backup', processBackupJob, {
+  connection,
+  concurrency: 1,
+});
+
+backupWorker.on('completed', (job) => {
+  console.log(`[backup] Job ${job.id} completed`);
+});
+backupWorker.on('failed', (job, err) => {
+  console.error(`[backup] Job ${job?.id} failed:`, err.message);
+});
+
 // ── Schedule repeatable cron jobs ──
 async function scheduleCronJobs() {
   // Daily cleanup at 3:00 AM
@@ -106,6 +121,25 @@ async function scheduleCronJobs() {
     { name: 'weekly-salary-accrual' },
   );
 
+  // Backup schedule (dynamic — reads from settings)
+  try {
+    const { db } = await import('./db');
+    const { appSettings } = await import('./db/schema');
+    const { eq } = await import('drizzle-orm');
+    const [scheduleSetting] = await db.select().from(appSettings).where(eq(appSettings.key, 'backup_schedule'));
+    const schedule = scheduleSetting?.value || 'manual';
+
+    if (schedule === 'daily') {
+      await backupQueue.upsertJobScheduler('scheduled-backup', { pattern: '0 2 * * *' }, { name: 'scheduled-backup', data: { triggeredBy: 'scheduled' } } as any);
+    } else if (schedule === 'weekly') {
+      await backupQueue.upsertJobScheduler('scheduled-backup', { pattern: '0 2 * * 0' }, { name: 'scheduled-backup', data: { triggeredBy: 'scheduled' } } as any);
+    } else {
+      await backupQueue.removeJobScheduler('scheduled-backup').catch(() => {});
+    }
+  } catch (err: any) {
+    console.error('[worker] Failed to configure backup schedule:', err.message);
+  }
+
   console.log('[worker] Cron jobs scheduled');
 }
 
@@ -119,6 +153,7 @@ async function shutdown() {
   await invoiceReminderWorker.close();
   await recurringExpensesWorker.close();
   await salaryAccrualWorker.close();
+  await backupWorker.close();
   await connection.quit();
   process.exit(0);
 }

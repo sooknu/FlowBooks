@@ -9,6 +9,7 @@ export const cleanupQueue = new Queue('cleanup', { connection });
 export const invoiceReminderQueue = new Queue('invoice-reminders', { connection });
 export const recurringExpensesQueue = new Queue('recurring-expenses', { connection });
 export const salaryAccrualQueue = new Queue('salary-accrual', { connection });
+export const backupQueue = new Queue('backup', { connection });
 
 export async function closeQueues() {
   await emailQueue.close();
@@ -16,5 +17,6 @@ export async function closeQueues() {
   await invoiceReminderQueue.close();
   await recurringExpensesQueue.close();
   await salaryAccrualQueue.close();
+  await backupQueue.close();
   await connection.quit();
 }

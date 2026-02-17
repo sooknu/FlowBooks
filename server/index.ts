@@ -48,6 +48,7 @@ import expenseRoutes from './routes/expenses';
 import recurringExpenseRoutes from './routes/recurringExpenses';
 import permissionRoutes from './routes/permissions';
 import errorRoutes from './routes/errors';
+import backupRoutes from './routes/backup';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -270,6 +271,7 @@ await app.register(expenseRoutes, { prefix: '/api/expenses' });
 await app.register(recurringExpenseRoutes, { prefix: '/api/recurring-expenses' });
 await app.register(permissionRoutes, { prefix: '/api/permissions' });
 await app.register(errorRoutes, { prefix: '/api/errors' });
+await app.register(backupRoutes, { prefix: '/api/backup' });
 
 const port = parseInt(process.env.API_PORT || '3001', 10);
 await app.listen({ port, host: '0.0.0.0' });

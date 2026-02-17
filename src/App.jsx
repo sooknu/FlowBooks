@@ -37,6 +37,7 @@ const ExpensesManager = React.lazy(() => import('@/components/ExpensesManager'))
 const FinanceManager = React.lazy(() => import('@/components/FinanceManager'));
 const SalaryManager = React.lazy(() => import('@/components/SalaryManager'));
 const PermissionsManager = React.lazy(() => import('@/components/PermissionsManager'));
+const BackupManager = React.lazy(() => import('@/components/BackupManager'));
 
 const LazyFallback = () => (
   <div className="flex items-center justify-center py-20">
@@ -100,6 +101,7 @@ function App() {
               <Route path="categories" element={<Lazy><CategoriesSettings /></Lazy>} />
               <Route path="payments" element={<Lazy><PaymentGatewayManager /></Lazy>} />
               <Route path="email" element={<Lazy><EmailManager /></Lazy>} />
+              <Route path="backup" element={<Lazy><BackupManager /></Lazy>} />
             </Route>
           </Route>
 

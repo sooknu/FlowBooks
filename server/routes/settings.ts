@@ -4,7 +4,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { requireAdmin } from '../lib/permissions';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
 
-const SENSITIVE_KEYS = ['oidc_client_secret', 'google_client_secret', 'smtp_pass', 'stripe_secret_key', 'stripe_test_secret_key', 'paypal_client_secret', 'paypal_test_client_secret', 'unsplash_api_key'];
+const SENSITIVE_KEYS = ['oidc_client_secret', 'google_client_secret', 'smtp_pass', 'stripe_secret_key', 'stripe_test_secret_key', 'paypal_client_secret', 'paypal_test_client_secret', 'unsplash_api_key', 'backup_s3_secret_key', 'backup_b2_app_key', 'backup_gdrive_credentials'];
 
 export default async function settingRoutes(fastify: any) {
   // GET /api/settings — all settings (authenticated)

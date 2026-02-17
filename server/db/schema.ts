@@ -14,6 +14,7 @@ export const teamRoleEnum = pgEnum('TeamRole', ['owner', 'manager', 'lead', 'lea
 export const teamPaymentStatusEnum = pgEnum('TeamPaymentStatus', ['pending', 'paid']);
 export const recurringFrequencyEnum = pgEnum('RecurringFrequency', ['weekly', 'monthly', 'yearly']);
 export const expenseTypeEnum = pgEnum('ExpenseType', ['expense', 'credit']);
+export const backupStatusEnum = pgEnum('BackupStatus', ['pending', 'running', 'completed', 'failed']);
 
 // ── Better Auth managed tables ──
 
@@ -632,6 +633,27 @@ export const userPermissionOverrides = pgTable('user_permission_overrides', {
   index('user_permission_overrides_user_id_idx').on(table.userId),
 ]);
 
+// ── Backups ──
+
+export const backups = pgTable('backups', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  provider: text('provider').notNull(),
+  status: backupStatusEnum('status').notNull().default('pending'),
+  fileName: text('file_name'),
+  fileSize: doublePrecision('file_size'),
+  manifest: text('manifest'),
+  errorMessage: text('error_message'),
+  triggeredBy: text('triggered_by'),
+  userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+  startedAt: timestamp('started_at', { mode: 'date' }),
+  completedAt: timestamp('completed_at', { mode: 'date' }),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+}, (table) => [
+  index('backups_status_idx').on(table.status),
+  index('backups_created_at_idx').on(table.createdAt),
+]);
+
 // ── Relations ──
 
 export const userRelations = relations(user, ({ many, one }) => ({
@@ -788,4 +810,8 @@ export const recurringExpenseRelations = relations(recurringExpenses, ({ one }) 
 
 export const userPermissionOverrideRelations = relations(userPermissionOverrides, ({ one }) => ({
   user: one(user, { fields: [userPermissionOverrides.userId], references: [user.id] }),
+}));
+
+export const backupRelations = relations(backups, ({ one }) => ({
+  user: one(user, { fields: [backups.userId], references: [user.id] }),
 }));
