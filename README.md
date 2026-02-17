@@ -1,6 +1,6 @@
-# Madrid Photography — Billing & Project Management
+# FlowBooks — Billing & Project Management
 
-A self-hosted business management app for photography studios. Handles quoting, invoicing, project tracking, team management, and expense tracking.
+A self-hosted business management app for photography studios and creative agencies. Handles quoting, invoicing, project tracking, team management, and expense tracking.
 
 ## Stack
 
@@ -23,72 +23,87 @@ A self-hosted business management app for photography studios. Handles quoting, 
 - **Notifications** — In-app notification bell with browser push support.
 - **Calendar** — Project calendar view.
 - **Reports** — Dashboard with stats, revenue tracking, and expense breakdowns.
-- **Backup & Restore** — Automated database backups to AWS S3, Backblaze B2, or Google Drive with configurable schedules (daily/weekly/manual) and retention policies.
+- **Backup & Restore** — Multi-destination backups to AWS S3, Backblaze B2, or Google Drive (OAuth linking) with configurable schedules and retention policies.
 
 ## Prerequisites
 
 - Node.js 24.x LTS (see `.nvmrc`)
 - PostgreSQL 14+
 - Redis (for BullMQ background jobs)
+- Docker (for Redis container, or use a standalone Redis install)
 
-## Setup
+## Quick Start (Development)
 
 ```bash
-# Install dependencies
+git clone https://github.com/sooknu/madrid-photo.git && cd madrid-photo
 npm install
-
-# Copy and configure environment variables
-cp .env.example .env
-# Edit .env with your database, auth, and service credentials
-
-# Push database schema
-npm run db:push
-
-# Start development (frontend + backend)
-npm run dev
+cp .env.example .env        # Edit with your database, auth, and service credentials
+npm run db:push              # Create database tables
+npm run dev                  # Start frontend + backend + open http://localhost:3000
 ```
 
-## Commands
+In a separate terminal:
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start frontend (Vite) + backend (Fastify) concurrently |
-| `npm run dev:client` | Frontend only |
-| `npm run dev:server` | Backend only (tsx watch) |
-| `npm run dev:worker` | Background worker (tsx watch) |
-| `npm run build` | Production build |
-| `npm start` | Production server |
-| `npm run start:worker` | Production worker |
-| `npm run db:push` | Sync Drizzle schema to database |
-| `npm run db:migrate` | Run Drizzle migrations |
-| `npm run db:generate` | Generate migration files |
-| `npm run db:studio` | Open Drizzle Studio GUI |
+```bash
+npm run dev:worker           # Start background job processor
+```
 
 ## Fresh VPS Deployment
 
 Deploy to a bare Ubuntu VPS in three steps:
 
 ```bash
-git clone git@github.com:sooknu/madrid-photo.git && cd madrid-photo
+git clone https://github.com/sooknu/madrid-photo.git && cd madrid-photo
 sudo bash scripts/deploy.sh       # Install Node.js, PostgreSQL, Docker, Nginx, pm2, Certbot, UFW
 bash scripts/install.sh            # Create DB, Redis, .env, Nginx config, SSL, start app
-# Open https://your-domain.com/setup in browser to create admin account
+# Open https://your-domain.com/setup in browser to create admin account or restore from backup
 ```
 
 `deploy.sh` is idempotent — safe to re-run. `install.sh` auto-generates all credentials and only asks for the domain name.
 
-## Production Deployment
+## Commands
 
-Uses pm2 to run both the server and background worker:
+### Development
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start frontend (Vite :3000) + backend (Fastify) with hot reload |
+| `npm run dev:client` | Frontend only |
+| `npm run dev:server` | Backend only (tsx watch) |
+| `npm run dev:worker` | Background worker (tsx watch) |
+| `npm run db:studio` | Open Drizzle Studio GUI |
+
+### Production (pm2)
+
+The app runs two pm2 processes — a Fastify server and a BullMQ worker.
+
+| Command | Description |
+|---------|-------------|
+| `pm2 start ecosystem.config.cjs` | **Start** the full stack (server + worker) |
+| `pm2 stop all` | **Stop** the full stack |
+| `pm2 restart all` | **Restart** the full stack |
+| `pm2 logs` | Tail live logs from both processes |
+| `pm2 status` | Check if processes are running |
+
+### Build & Deploy
+
+| Command | Description |
+|---------|-------------|
+| `npm run build` | Build frontend for production |
+| `npm run db:push` | Sync Drizzle schema to database |
+| `npm run db:migrate` | Run Drizzle migrations |
+| `npm run db:generate` | Generate migration files |
+| `npm run restore` | Restore from a cloud backup (interactive CLI) |
+
+### Typical deploy after code changes
 
 ```bash
-npm run build
-pm2 start ecosystem.config.cjs
+git pull
+npm install                  # If dependencies changed
+npm run db:push              # If schema changed
+npm run build                # Rebuild frontend
+pm2 restart all              # Restart server + worker
 ```
-
-This starts two processes:
-- `madrid-quotes` — Fastify server (serves API + built frontend)
-- `madrid-worker` — BullMQ worker (email sending, invoice reminders, recurring expenses, backup jobs, cleanup)
 
 ## Project Structure
 
@@ -114,7 +129,8 @@ This starts two processes:
 │   └── index.css         # Tailwind + custom styles
 ├── scripts/
 │   ├── deploy.sh         # VPS provisioning (Node, PG, Docker, Nginx)
-│   └── install.sh        # App installation (DB, Redis, .env, SSL)
+│   ├── install.sh        # App installation (DB, Redis, .env, SSL)
+│   └── restore.js        # Interactive backup restore CLI
 ├── ecosystem.config.cjs  # pm2 config
 ├── drizzle.config.ts     # Drizzle ORM config
 └── vite.config.js        # Vite + proxy config
@@ -126,4 +142,4 @@ See [`.env.example`](.env.example) for all required and optional variables.
 
 ## License
 
-Private — All rights reserved.
+MIT
