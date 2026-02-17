@@ -35,7 +35,7 @@ A self-hosted business management app for photography studios and creative agenc
 ## Quick Start (Development)
 
 ```bash
-git clone https://github.com/sooknu/madrid-photo.git && cd madrid-photo
+git clone https://github.com/sooknu/FlowBooks.git && cd FlowBooks
 npm install
 cp .env.example .env        # Edit with your database, auth, and service credentials
 npm run db:push              # Create database tables
@@ -53,7 +53,7 @@ npm run dev:worker           # Start background job processor
 Deploy to a bare Ubuntu VPS in three steps:
 
 ```bash
-git clone https://github.com/sooknu/madrid-photo.git && cd madrid-photo
+git clone https://github.com/sooknu/FlowBooks.git && cd FlowBooks
 sudo bash scripts/deploy.sh       # Install Node.js, PostgreSQL, Docker, Nginx, pm2, Certbot, UFW
 bash scripts/install.sh            # Create DB, Redis, .env, Nginx config, SSL, start app
 # Open https://your-domain.com/setup in browser to create admin account or restore from backup
