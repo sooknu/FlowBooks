@@ -1,0 +1,35 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Uploads (user content)
+server/uploads/avatars/*
+server/uploads/branding/*
+server/uploads/documents/*
+!server/uploads/avatars/.gitkeep
+!server/uploads/branding/.gitkeep
+!server/uploads/documents/.gitkeep
+
+# Drizzle
+server/db/migrations/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# Migration scripts (one-time, contain data dumps)
+scripts/
+
+# Hostinger dev plugins
+plugins/
+.version
+STACK.md
+server/scripts/
