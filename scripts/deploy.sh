@@ -36,13 +36,13 @@ apt upgrade -y -qq
 done_msg "System packages up to date"
 
 # =============================================================================
-# 2. Node.js 20 via NodeSource
+# 2. Node.js 24 LTS via NodeSource
 # =============================================================================
-if node --version 2>/dev/null | grep -q 'v20'; then
-  done_msg "Node.js 20 already installed ($(node --version))"
+if node --version 2>/dev/null | grep -q 'v24'; then
+  done_msg "Node.js 24 already installed ($(node --version))"
 else
-  info_msg "Node.js 20 via NodeSource"
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  info_msg "Node.js 24 LTS via NodeSource"
+  curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
   apt install -y -qq nodejs
   done_msg "Node.js installed ($(node --version))"
 fi
