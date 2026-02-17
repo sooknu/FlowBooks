@@ -38,7 +38,7 @@ export async function createBackupArchive(
 
   try {
     execSync(
-      `pg_dump -h ${host} -p ${port} -U ${username} -d ${dbName} --format=plain --no-owner --no-privileges > database.sql`,
+      `pg_dump -h ${host} -p ${port} -U ${username} -d ${dbName} --format=plain --no-owner --no-privileges --clean --if-exists > database.sql`,
       { cwd: workDir, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, PGPASSWORD: password } },
     );
   } catch (err: any) {

@@ -135,12 +135,21 @@ export default async function setupRoutes(fastify: any) {
         const sqlPath = path.join(extractDir, 'database.sql');
         if (fs.existsSync(sqlPath)) {
           const dbUrl = new URL(process.env.DATABASE_URL!);
+          const pgHost = dbUrl.hostname;
+          const pgPort = dbUrl.port || '5432';
+          const pgUser = dbUrl.username;
+          const pgDb = dbUrl.pathname.replace(/^\//, '');
+          const pgEnv = { ...process.env, PGPASSWORD: decodeURIComponent(dbUrl.password) };
+
+          // Drop all existing tables first (handles old backups without --clean flag)
           execSync(
-            `psql -h ${dbUrl.hostname} -p ${dbUrl.port || '5432'} -U ${dbUrl.username} -d ${dbUrl.pathname.replace(/^\//, '')} -f "${sqlPath}"`,
-            {
-              stdio: ['pipe', 'pipe', 'pipe'],
-              env: { ...process.env, PGPASSWORD: decodeURIComponent(dbUrl.password) },
-            },
+            `psql -h ${pgHost} -p ${pgPort} -U ${pgUser} -d ${pgDb} -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO ${pgUser};"`,
+            { stdio: ['pipe', 'pipe', 'pipe'], env: pgEnv },
+          );
+
+          execSync(
+            `psql -h ${pgHost} -p ${pgPort} -U ${pgUser} -d ${pgDb} -f "${sqlPath}"`,
+            { stdio: ['pipe', 'pipe', 'pipe'], env: pgEnv },
           );
         }
 
@@ -157,7 +166,21 @@ export default async function setupRoutes(fastify: any) {
           stdio: ['pipe', 'pipe', 'pipe'],
         });
 
-        // 8. Mark setup complete
+        // 8. Update domain-dependent settings for new environment
+        const newDomain = process.env.BETTER_AUTH_URL || process.env.CLIENT_ORIGIN || '';
+        if (newDomain) {
+          const domainUpdates: Record<string, string> = {
+            company_website: newDomain,
+          };
+          for (const [key, value] of Object.entries(domainUpdates)) {
+            await db
+              .insert(appSettings)
+              .values({ key, value, updatedAt: new Date() })
+              .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } });
+          }
+        }
+
+        // 9. Mark setup complete
         await db
           .insert(appSettings)
           .values({ key: 'setup_complete', value: 'true', updatedAt: new Date() })
