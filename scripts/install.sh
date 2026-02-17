@@ -92,7 +92,7 @@ else
     --name "${APP_NAME}-redis" \
     --restart unless-stopped \
     -p "${REDIS_PORT}:6379" \
-    redis:7-alpine
+    redis:8-alpine
   ok "Created Redis container ${BOLD}${APP_NAME}-redis${NC} on port ${REDIS_PORT}"
 fi
 
