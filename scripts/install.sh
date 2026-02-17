@@ -98,7 +98,9 @@ echo ""
 info "Creating PostgreSQL user and database..."
 
 if sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" | grep -q 1; then
-  warn "PostgreSQL user ${BOLD}${DB_USER}${NC} already exists, skipping."
+  # User exists — update password to match the new .env (handles --force re-installs)
+  sudo -u postgres psql -c "ALTER USER ${DB_USER} WITH PASSWORD '${DB_PASSWORD}';"
+  ok "PostgreSQL user ${BOLD}${DB_USER}${NC} already exists, password updated"
 else
   sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASSWORD}';"
   ok "Created PostgreSQL user ${BOLD}${DB_USER}${NC}"
@@ -116,7 +118,9 @@ info "Creating Docker Redis container..."
 
 REDIS_CONTAINER="${APP_NAME}-redis"
 if docker ps -a --format '{{.Names}}' | grep -q "^${REDIS_CONTAINER}$"; then
-  warn "Docker container ${BOLD}${REDIS_CONTAINER}${NC} already exists, skipping."
+  # Ensure it's running
+  docker start "${REDIS_CONTAINER}" &>/dev/null || true
+  warn "Docker container ${BOLD}${REDIS_CONTAINER}${NC} already exists, ensured running."
 else
   docker run -d \
     --name "${REDIS_CONTAINER}" \
@@ -186,6 +190,18 @@ if ! npm run build; then
 fi
 ok "Build complete"
 
+# ─── Start pm2 + auto-start on reboot ───────────────────────────────────────
+# Start pm2 BEFORE SSL — so the app is running even if certbot fails
+echo ""
+info "Starting pm2 processes..."
+pm2 start ecosystem.config.cjs
+pm2 save
+
+# Set up pm2 to start on boot
+sudo env PATH="$PATH" "$(which pm2)" startup systemd -u "$(whoami)" --hp "$HOME"
+
+ok "pm2 processes started and saved"
+
 # ─── Generate Nginx config ──────────────────────────────────────────────────
 echo ""
 info "Generating Nginx config..."
@@ -218,25 +234,18 @@ ok "Nginx configured for ${BOLD}${DOMAIN_NAME}${NC}"
 # ─── SSL ─────────────────────────────────────────────────────────────────────
 if [[ "$SSL_CHOICE" == "1" ]]; then
   info "Requesting SSL certificate via Certbot..."
-  sudo certbot --nginx -d "${DOMAIN_NAME}" --non-interactive --agree-tos --register-unsafely-without-email
-  ok "SSL certificate installed"
+  if sudo certbot --nginx -d "${DOMAIN_NAME}" --non-interactive --agree-tos --register-unsafely-without-email; then
+    ok "SSL certificate installed"
+  else
+    warn "Certbot failed — the app is running but without SSL."
+    warn "Fix DNS and re-run: ${BOLD}sudo certbot --nginx -d ${DOMAIN_NAME}${NC}"
+  fi
 elif [[ "$SSL_CHOICE" == "2" ]]; then
   ok "Skipping Certbot — Cloudflare handles SSL"
   warn "Set Cloudflare SSL/TLS mode to ${BOLD}Full${NC} (not Full Strict)"
 else
   ok "Skipping SSL — configure manually later"
 fi
-
-# ─── Start pm2 + auto-start on reboot ───────────────────────────────────────
-info "Starting pm2 processes..."
-pm2 start ecosystem.config.cjs
-pm2 save
-
-# Set up pm2 to start on boot — run the startup command directly instead of parsing output
-sudo env PATH="$PATH" "$(which pm2)" startup systemd -u "$(whoami)" --hp "$HOME"
-ok "pm2 configured to start on boot"
-
-ok "pm2 processes started and saved"
 
 # ─── Completion banner ───────────────────────────────────────────────────────
 echo ""

@@ -181,6 +181,19 @@ if ! command -v ufw &>/dev/null; then
   apt install -y -qq ufw
 fi
 
+# Flush pre-existing iptables rules (Oracle Cloud, etc. ship restrictive defaults that block UFW)
+if iptables -L -n 2>/dev/null | grep -q 'REJECT\|DROP'; then
+  info_msg "Clearing pre-existing iptables rules"
+  iptables -F
+  iptables -P INPUT ACCEPT
+  iptables -P FORWARD ACCEPT
+  iptables -P OUTPUT ACCEPT
+  if command -v netfilter-persistent &>/dev/null; then
+    netfilter-persistent save 2>/dev/null || true
+  fi
+  done_msg "iptables rules cleared"
+fi
+
 if ufw status 2>/dev/null | grep -q 'Status: active'; then
   done_msg "UFW already active"
 else
