@@ -61,6 +61,15 @@ fi
 
 ok "Domain: ${BOLD}${DOMAIN_NAME}${NC}"
 
+echo ""
+echo "  SSL options:"
+echo "    1) Certbot (Let's Encrypt) — direct server, no proxy"
+echo "    2) Cloudflare proxy — SSL handled by Cloudflare"
+echo "    3) Skip — configure SSL later"
+echo ""
+read -rp "  Choose [1/2/3]: " SSL_CHOICE
+SSL_CHOICE="${SSL_CHOICE:-1}"
+
 # ─── Auto-detect available ports ─────────────────────────────────────────────
 find_available_port() {
   local start=$1
@@ -206,10 +215,17 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ok "Nginx configured for ${BOLD}${DOMAIN_NAME}${NC}"
 
-# ─── Certbot ─────────────────────────────────────────────────────────────────
-info "Requesting SSL certificate..."
-sudo certbot --nginx -d "${DOMAIN_NAME}" --non-interactive --agree-tos --register-unsafely-without-email
-ok "SSL certificate installed"
+# ─── SSL ─────────────────────────────────────────────────────────────────────
+if [[ "$SSL_CHOICE" == "1" ]]; then
+  info "Requesting SSL certificate via Certbot..."
+  sudo certbot --nginx -d "${DOMAIN_NAME}" --non-interactive --agree-tos --register-unsafely-without-email
+  ok "SSL certificate installed"
+elif [[ "$SSL_CHOICE" == "2" ]]; then
+  ok "Skipping Certbot — Cloudflare handles SSL"
+  warn "Set Cloudflare SSL/TLS mode to ${BOLD}Full${NC} (not Full Strict)"
+else
+  ok "Skipping SSL — configure manually later"
+fi
 
 # ─── Start pm2 + auto-start on reboot ───────────────────────────────────────
 info "Starting pm2 processes..."
