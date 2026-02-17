@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   HardDrive, Trash2, Download, CheckCircle, XCircle, Loader2, Clock, Wifi, Play,
+  Eye, EyeOff,
 } from 'lucide-react';
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
@@ -103,6 +104,9 @@ const BackupManager = () => {
   // Google Drive
   const [gdriveCredentials, setGdriveCredentials] = useState('');
   const [gdriveFolderId, setGdriveFolderId] = useState('');
+
+  // Google Drive visibility toggle
+  const [gdriveVisible, setGdriveVisible] = useState(false);
 
   // Schedule & retention
   const [schedule, setSchedule] = useState('manual');
@@ -328,14 +332,24 @@ const BackupManager = () => {
           <h3 className="text-sm font-medium text-surface-700">Google Drive Credentials</h3>
           <div>
             <label className="block text-sm font-medium text-surface-700 mb-1">Service Account JSON</label>
-            <textarea
-              value={gdriveCredentials}
-              onChange={(e) => setGdriveCredentials(e.target.value)}
-              className="glass-input w-full font-mono text-xs"
-              rows={6}
-              placeholder='{"type": "service_account", "project_id": "...", ...}'
-              style={{ WebkitTextSecurity: gdriveCredentials ? 'disc' : 'none' }}
-            />
+            <div className="relative">
+              <textarea
+                value={gdriveCredentials}
+                onChange={(e) => setGdriveCredentials(e.target.value)}
+                className="glass-input w-full font-mono text-xs pr-9"
+                rows={6}
+                placeholder='{"type": "service_account", "project_id": "...", ...}'
+                style={{ WebkitTextSecurity: !gdriveVisible && gdriveCredentials ? 'disc' : 'none' }}
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setGdriveVisible(!gdriveVisible)}
+                className="absolute right-2.5 top-3 text-surface-400 hover:text-surface-600 transition-colors"
+              >
+                {gdriveVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
             <p className="text-xs text-surface-500 mt-1">
               Paste the full JSON key file contents from your Google Cloud service account.
             </p>

@@ -40,11 +40,7 @@ export default async function backupRoutes(fastify: any) {
 
     const map: Record<string, string> = {};
     for (const s of settings) {
-      if (SENSITIVE_BACKUP_KEYS.includes(s.key) && s.value) {
-        map[s.key] = '********';
-      } else {
-        map[s.key] = s.value;
-      }
+      map[s.key] = s.value;
     }
 
     return { data: map };
@@ -206,7 +202,12 @@ export default async function backupRoutes(fastify: any) {
     const { provider, ...credentials } = request.body;
 
     try {
-      const storageProvider = createProviderFromCredentials(provider, credentials);
+      // If any credential is masked ('********'), the form was saved and
+      // the real values are in the DB — use getStorageProvider() instead.
+      const hasMasked = Object.values(credentials).some((v) => v === '********');
+      const storageProvider = hasMasked
+        ? await getStorageProvider()
+        : createProviderFromCredentials(provider, credentials);
       const result = await storageProvider.testConnection();
       return { data: result };
     } catch (err: any) {
