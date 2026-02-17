@@ -64,11 +64,34 @@ ok "Domain: ${BOLD}${DOMAIN_NAME}${NC}"
 echo ""
 echo "  SSL options:"
 echo "    1) Certbot (Let's Encrypt) — direct server, no proxy"
-echo "    2) Cloudflare proxy — SSL handled by Cloudflare"
+echo "    2) Cloudflare proxy — Origin Certificate for Full (Strict) mode"
 echo "    3) Skip — configure SSL later"
 echo ""
 read -rp "  Choose [1/2/3]: " SSL_CHOICE
 SSL_CHOICE="${SSL_CHOICE:-1}"
+
+if [[ "$SSL_CHOICE" == "2" ]]; then
+  echo ""
+  echo "  Create an Origin Certificate in Cloudflare:"
+  echo "    SSL/TLS → Origin Server → Create Certificate"
+  echo "    Keep defaults (RSA, 15 years) → Create"
+  echo ""
+  echo "  Paste the ${BOLD}Origin Certificate${NC} below, then press Enter and Ctrl+D:"
+  CF_CERT=$(cat)
+  echo ""
+  echo "  Paste the ${BOLD}Private Key${NC} below, then press Enter and Ctrl+D:"
+  CF_KEY=$(cat)
+
+  if [[ -z "$CF_CERT" || -z "$CF_KEY" ]]; then
+    warn "Certificate or key is empty. Falling back to skip."
+    SSL_CHOICE="3"
+  else
+    sudo tee /etc/ssl/cloudflare-cert.pem > /dev/null <<< "$CF_CERT"
+    sudo tee /etc/ssl/cloudflare-key.pem > /dev/null <<< "$CF_KEY"
+    sudo chmod 600 /etc/ssl/cloudflare-key.pem
+    ok "Cloudflare Origin Certificate saved"
+  fi
+fi
 
 # ─── Auto-detect available ports ─────────────────────────────────────────────
 find_available_port() {
@@ -206,13 +229,7 @@ ok "pm2 processes started and saved"
 echo ""
 info "Generating Nginx config..."
 
-sudo tee "/etc/nginx/sites-available/${DOMAIN_NAME}" > /dev/null <<EOF
-server {
-    listen 80;
-    server_name ${DOMAIN_NAME};
-
-    location / {
-        proxy_pass http://127.0.0.1:${APP_PORT};
+PROXY_BLOCK="        proxy_pass http://127.0.0.1:${APP_PORT};
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -221,17 +238,49 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_cache_bypass \$http_upgrade;
-        client_max_body_size 10M;
+        client_max_body_size 10M;"
+
+if [[ "$SSL_CHOICE" == "2" ]]; then
+  # Cloudflare Origin Certificate — Nginx listens on 80 + 443
+  sudo tee "/etc/nginx/sites-available/${DOMAIN_NAME}" > /dev/null <<EOF
+server {
+    listen 80;
+    server_name ${DOMAIN_NAME};
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name ${DOMAIN_NAME};
+
+    ssl_certificate /etc/ssl/cloudflare-cert.pem;
+    ssl_certificate_key /etc/ssl/cloudflare-key.pem;
+
+    location / {
+${PROXY_BLOCK}
     }
 }
 EOF
+else
+  # Certbot or Skip — Nginx listens on port 80 only (certbot adds SSL later)
+  sudo tee "/etc/nginx/sites-available/${DOMAIN_NAME}" > /dev/null <<EOF
+server {
+    listen 80;
+    server_name ${DOMAIN_NAME};
+
+    location / {
+${PROXY_BLOCK}
+    }
+}
+EOF
+fi
 
 sudo ln -sf "/etc/nginx/sites-available/${DOMAIN_NAME}" "/etc/nginx/sites-enabled/"
 sudo nginx -t && sudo systemctl reload nginx
 
 ok "Nginx configured for ${BOLD}${DOMAIN_NAME}${NC}"
 
-# ─── SSL ─────────────────────────────────────────────────────────────────────
+# ─── SSL (Certbot only) ─────────────────────────────────────────────────────
 if [[ "$SSL_CHOICE" == "1" ]]; then
   info "Requesting SSL certificate via Certbot..."
   if sudo certbot --nginx -d "${DOMAIN_NAME}" --non-interactive --agree-tos --register-unsafely-without-email; then
@@ -241,9 +290,8 @@ if [[ "$SSL_CHOICE" == "1" ]]; then
     warn "Fix DNS and re-run: ${BOLD}sudo certbot --nginx -d ${DOMAIN_NAME}${NC}"
   fi
 elif [[ "$SSL_CHOICE" == "2" ]]; then
-  ok "Skipping Certbot — Cloudflare handles SSL"
-  warn "Set Cloudflare SSL/TLS mode to ${BOLD}Full${NC} (not Full Strict)"
-else
+  ok "Cloudflare Origin Certificate configured — set SSL/TLS to ${BOLD}Full (Strict)${NC}"
+elif [[ "$SSL_CHOICE" == "3" ]]; then
   ok "Skipping SSL — configure manually later"
 fi
 
