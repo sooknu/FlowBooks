@@ -16,7 +16,7 @@ const RoleRow = ({ role: r, index: i, onUpdate, onRemove }) => {
       value={r}
       dragListener={false}
       dragControls={controls}
-      className="grid grid-cols-[24px_1fr_32px] gap-x-3 items-center"
+      className="grid grid-cols-[24px_1fr_32px] gap-x-3 items-center select-none"
     >
       <div
         className="flex justify-center cursor-grab active:cursor-grabbing touch-none"

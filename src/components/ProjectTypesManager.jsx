@@ -68,7 +68,7 @@ const TypeRow = ({ type: t, index: i, onUpdate, onRemove }) => {
       value={t}
       dragListener={false}
       dragControls={controls}
-      className="grid grid-cols-[24px_40px_1fr_1fr_32px] sm:grid-cols-[24px_40px_1fr_1fr_120px_32px] gap-x-3 items-center"
+      className="grid grid-cols-[24px_40px_1fr_1fr_32px] sm:grid-cols-[24px_40px_1fr_1fr_120px_32px] gap-x-3 items-center select-none"
     >
       {/* Drag handle */}
       <div
