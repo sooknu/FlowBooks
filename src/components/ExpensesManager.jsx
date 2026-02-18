@@ -277,7 +277,7 @@ const ExpensesManager = () => {
   // Stat cards scroll-snap dot tracking — must be AFTER useQuery so stats is available
   const statScrollRef = useRef(null);
   const [activeStatIdx, setActiveStatIdx] = useState(0);
-  const STAT_COUNT = 3;
+  const STAT_COUNT = 4;
 
   const checkActiveCard = useCallback(() => {
     const el = statScrollRef.current;
@@ -417,9 +417,10 @@ const ExpensesManager = () => {
           <div>
             <div
               ref={statScrollRef}
-              className="flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide sm:grid sm:grid-cols-3 sm:snap-none sm:overflow-visible"
+              className="flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide sm:grid sm:grid-cols-4 sm:snap-none sm:overflow-visible"
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
+              <StatCard label="Total" value={formatCurrency(stats.totalAllTime)} icon={Wallet} />
               <StatCard label="This Year" value={formatCurrency(stats.totalThisYear)} icon={CalendarIcon} />
               <StatCard label="This Month" value={formatCurrency(stats.totalThisMonth)} icon={DollarSign} />
               <StatCard label="Avg / Month" value={formatCurrency(avgPerMonth)} icon={TrendingDown} />

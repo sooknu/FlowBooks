@@ -105,11 +105,15 @@ export default async function expenseRoutes(fastify: any) {
     const netAmount = sql<number>`SUM(CASE WHEN ${expenses.type} = 'credit' THEN -${expenses.amount} ELSE ${expenses.amount} END)`;
 
     const [
+      [{ totalAllTime }],
       [{ totalThisYear }],
       [{ totalThisMonth }],
       byCategory,
       byMonth,
     ] = await Promise.all([
+      // Total all time (expenses only, excluding credits)
+      db.select({ totalAllTime: sql<number>`COALESCE(SUM(CASE WHEN ${expenses.type} = 'expense' THEN ${expenses.amount} ELSE 0 END), 0)` })
+        .from(expenses),
       // Total this year
       db.select({ totalThisYear: netAmount })
         .from(expenses)
@@ -141,6 +145,7 @@ export default async function expenseRoutes(fastify: any) {
     ]);
 
     return {
+      totalAllTime: parseFloat(totalAllTime as string) || 0,
       totalThisYear: parseFloat(totalThisYear as string) || 0,
       totalThisMonth: parseFloat(totalThisMonth as string) || 0,
       byCategory: byCategory.map(c => ({ ...c, total: parseFloat(c.total as string) || 0 })),
