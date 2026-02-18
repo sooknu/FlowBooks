@@ -62,12 +62,13 @@ fi
 ok "Domain: ${BOLD}${DOMAIN_NAME}${NC}"
 
 echo ""
-echo "  SSL options:"
-echo "    1) Certbot (Let's Encrypt) — direct server, no proxy"
-echo "    2) Cloudflare proxy — auto-generates cert, set SSL to Full"
-echo "    3) Skip — configure SSL later"
+echo "  Reverse proxy / SSL options:"
+echo "    1) Nginx + Certbot (Let's Encrypt) — direct server, no proxy"
+echo "    2) Nginx + Cloudflare — auto-generates self-signed cert, set SSL to Full"
+echo "    3) Traefik — generate file-provider config for existing Traefik"
+echo "    4) Skip — configure reverse proxy & SSL later"
 echo ""
-read -rp "  Choose [1/2/3]: " SSL_CHOICE
+read -rp "  Choose [1/2/3/4]: " SSL_CHOICE
 SSL_CHOICE="${SSL_CHOICE:-1}"
 
 if [[ "$SSL_CHOICE" == "2" ]]; then
@@ -79,6 +80,76 @@ if [[ "$SSL_CHOICE" == "2" ]]; then
     2>/dev/null
   sudo chmod 600 /etc/ssl/cloudflare-key.pem
   ok "Self-signed certificate generated (10 years)"
+fi
+
+# ─── Traefik detection (option 3) ──────────────────────────────────────────
+if [[ "$SSL_CHOICE" == "3" ]]; then
+  # Auto-detect Traefik dynamic config directory
+  TRAEFIK_DYNAMIC_DIR=""
+  TRAEFIK_CERT_RESOLVER=""
+  TRAEFIK_HOST_IP=""
+
+  # Check for Traefik compose in common locations
+  for dir in /home/*/traefik /opt/traefik /etc/traefik; do
+    if [[ -f "${dir}/docker-compose.yml" ]] || [[ -f "${dir}/docker-compose.yaml" ]]; then
+      # Found Traefik — look for dynamic config directory
+      if [[ -d "${dir}/config/dynamic" ]]; then
+        TRAEFIK_DYNAMIC_DIR="${dir}/config/dynamic"
+      elif [[ -d "${dir}/dynamic" ]]; then
+        TRAEFIK_DYNAMIC_DIR="${dir}/dynamic"
+      fi
+      break
+    fi
+  done
+
+  if [[ -z "$TRAEFIK_DYNAMIC_DIR" ]]; then
+    warn "Could not auto-detect Traefik dynamic config directory."
+    read -rp "  Traefik dynamic config path: " TRAEFIK_DYNAMIC_DIR
+    if [[ -z "$TRAEFIK_DYNAMIC_DIR" || ! -d "$TRAEFIK_DYNAMIC_DIR" ]]; then
+      err "Directory does not exist: ${TRAEFIK_DYNAMIC_DIR}"
+      exit 1
+    fi
+  else
+    ok "Detected Traefik dynamic dir: ${BOLD}${TRAEFIK_DYNAMIC_DIR}${NC}"
+  fi
+
+  # Auto-detect cert resolver from traefik static config
+  TRAEFIK_CONFIG=""
+  for cfg in "$(dirname "$TRAEFIK_DYNAMIC_DIR")"/traefik.{yaml,yml,toml} "$(dirname "$(dirname "$TRAEFIK_DYNAMIC_DIR")")"/{traefik,config/traefik}.{yaml,yml,toml}; do
+    if [[ -f "$cfg" ]]; then
+      TRAEFIK_CONFIG="$cfg"
+      break
+    fi
+  done
+
+  if [[ -n "$TRAEFIK_CONFIG" ]]; then
+    # Extract first certificatesResolvers name from YAML
+    TRAEFIK_CERT_RESOLVER=$(grep -A1 'certificatesResolvers:' "$TRAEFIK_CONFIG" 2>/dev/null | tail -1 | sed 's/[: ]//g' | tr -d ' ' || true)
+  fi
+
+  if [[ -z "$TRAEFIK_CERT_RESOLVER" ]]; then
+    read -rp "  Traefik cert resolver name [letsencrypt]: " TRAEFIK_CERT_RESOLVER
+    TRAEFIK_CERT_RESOLVER="${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+  else
+    ok "Detected cert resolver: ${BOLD}${TRAEFIK_CERT_RESOLVER}${NC}"
+  fi
+
+  # Auto-detect host IP reachable from Traefik container
+  if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q traefik; then
+    TRAEFIK_CONTAINER=$(docker ps --format '{{.Names}}' | grep traefik | head -1)
+    # Get the network Traefik is on and its gateway (= host IP from container's perspective)
+    TRAEFIK_NETWORK=$(docker inspect "$TRAEFIK_CONTAINER" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null | awk '{print $1}')
+    if [[ -n "$TRAEFIK_NETWORK" ]]; then
+      TRAEFIK_HOST_IP=$(docker network inspect "$TRAEFIK_NETWORK" --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null || true)
+    fi
+  fi
+
+  # Fallback to docker0 bridge
+  if [[ -z "$TRAEFIK_HOST_IP" ]]; then
+    TRAEFIK_HOST_IP=$(ip -4 addr show docker0 2>/dev/null | grep -oP 'inet \K[\d.]+' || echo "172.17.0.1")
+  fi
+
+  ok "Host IP (for Traefik→app): ${BOLD}${TRAEFIK_HOST_IP}${NC}"
 fi
 
 # ─── Auto-detect available ports ─────────────────────────────────────────────
@@ -213,11 +284,41 @@ sudo env PATH="$PATH" "$(which pm2)" startup systemd -u "$(whoami)" --hp "$HOME"
 
 ok "pm2 processes started and saved"
 
-# ─── Generate Nginx config ──────────────────────────────────────────────────
+# ─── Generate reverse proxy config ─────────────────────────────────────────
 echo ""
-info "Generating Nginx config..."
 
-PROXY_BLOCK="        proxy_pass http://127.0.0.1:${APP_PORT};
+if [[ "$SSL_CHOICE" == "3" ]]; then
+  # ── Traefik file-provider config ──
+  info "Generating Traefik dynamic config..."
+
+  TRAEFIK_SAFE_NAME="$(echo "${DOMAIN_NAME}" | tr '.' '-')"
+
+  cat > "${TRAEFIK_DYNAMIC_DIR}/${TRAEFIK_SAFE_NAME}.yaml" <<EOF
+http:
+  routers:
+    ${TRAEFIK_SAFE_NAME}:
+      rule: "Host(\`${DOMAIN_NAME}\`)"
+      entryPoints:
+        - websecure
+      service: ${TRAEFIK_SAFE_NAME}
+      tls:
+        certResolver: ${TRAEFIK_CERT_RESOLVER}
+
+  services:
+    ${TRAEFIK_SAFE_NAME}:
+      loadBalancer:
+        servers:
+          - url: "http://${TRAEFIK_HOST_IP}:${APP_PORT}"
+EOF
+
+  ok "Traefik config written to ${BOLD}${TRAEFIK_DYNAMIC_DIR}/${TRAEFIK_SAFE_NAME}.yaml${NC}"
+  ok "Traefik will auto-reload (file watch enabled)"
+
+elif [[ "$SSL_CHOICE" != "4" ]]; then
+  # ── Nginx config (options 1 and 2) ──
+  info "Generating Nginx config..."
+
+  PROXY_BLOCK="        proxy_pass http://127.0.0.1:${APP_PORT};
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -228,9 +329,9 @@ PROXY_BLOCK="        proxy_pass http://127.0.0.1:${APP_PORT};
         proxy_cache_bypass \$http_upgrade;
         client_max_body_size 10M;"
 
-if [[ "$SSL_CHOICE" == "2" ]]; then
-  # Cloudflare Origin Certificate — Nginx listens on 80 + 443
-  sudo tee "/etc/nginx/sites-available/${DOMAIN_NAME}" > /dev/null <<EOF
+  if [[ "$SSL_CHOICE" == "2" ]]; then
+    # Cloudflare Origin Certificate — Nginx listens on 80 + 443
+    sudo tee "/etc/nginx/sites-available/${DOMAIN_NAME}" > /dev/null <<EOF
 server {
     listen 80;
     server_name ${DOMAIN_NAME};
@@ -249,9 +350,9 @@ ${PROXY_BLOCK}
     }
 }
 EOF
-else
-  # Certbot or Skip — Nginx listens on port 80 only (certbot adds SSL later)
-  sudo tee "/etc/nginx/sites-available/${DOMAIN_NAME}" > /dev/null <<EOF
+  else
+    # Certbot or Skip — Nginx listens on port 80 only (certbot adds SSL later)
+    sudo tee "/etc/nginx/sites-available/${DOMAIN_NAME}" > /dev/null <<EOF
 server {
     listen 80;
     server_name ${DOMAIN_NAME};
@@ -261,14 +362,15 @@ ${PROXY_BLOCK}
     }
 }
 EOF
+  fi
+
+  sudo ln -sf "/etc/nginx/sites-available/${DOMAIN_NAME}" "/etc/nginx/sites-enabled/"
+  sudo nginx -t && sudo systemctl reload nginx
+
+  ok "Nginx configured for ${BOLD}${DOMAIN_NAME}${NC}"
 fi
 
-sudo ln -sf "/etc/nginx/sites-available/${DOMAIN_NAME}" "/etc/nginx/sites-enabled/"
-sudo nginx -t && sudo systemctl reload nginx
-
-ok "Nginx configured for ${BOLD}${DOMAIN_NAME}${NC}"
-
-# ─── SSL (Certbot only) ─────────────────────────────────────────────────────
+# ─── SSL (Certbot — option 1 only) ──────────────────────────────────────────
 if [[ "$SSL_CHOICE" == "1" ]]; then
   info "Requesting SSL certificate via Certbot..."
   if sudo certbot --nginx -d "${DOMAIN_NAME}" --non-interactive --agree-tos --register-unsafely-without-email; then
@@ -279,8 +381,8 @@ if [[ "$SSL_CHOICE" == "1" ]]; then
   fi
 elif [[ "$SSL_CHOICE" == "2" ]]; then
   ok "Self-signed SSL configured — set Cloudflare SSL/TLS to ${BOLD}Full${NC}"
-elif [[ "$SSL_CHOICE" == "3" ]]; then
-  ok "Skipping SSL — configure manually later"
+elif [[ "$SSL_CHOICE" == "4" ]]; then
+  ok "Skipping reverse proxy — configure manually later"
 fi
 
 # ─── Completion banner ───────────────────────────────────────────────────────
@@ -297,6 +399,9 @@ echo -e "  ${BOLD}Redis port:${NC}    ${REDIS_PORT}"
 echo -e "  ${BOLD}App port:${NC}      ${APP_PORT}"
 echo -e "  ${BOLD}pm2 server:${NC}    ${APP_NAME}-server"
 echo -e "  ${BOLD}pm2 worker:${NC}    ${APP_NAME}-worker"
+if [[ "$SSL_CHOICE" == "3" ]]; then
+echo -e "  ${BOLD}Traefik:${NC}       ${TRAEFIK_DYNAMIC_DIR}/${TRAEFIK_SAFE_NAME}.yaml"
+fi
 echo ""
 echo -e "  Go to ${BOLD}https://${DOMAIN_NAME}/setup${NC} to complete installation."
 echo ""
