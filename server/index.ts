@@ -54,7 +54,7 @@ import setupRoutes from './routes/setup';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const app = Fastify({ logger: true });
+const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'warn' } });
 
 // Override default JSON parser to tolerate empty bodies (e.g. DELETE with Content-Type: application/json)
 app.removeContentTypeParser('application/json');

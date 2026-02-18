@@ -3,7 +3,7 @@ import postgres from 'postgres';
 import * as schema from './schema';
 
 const client = postgres(process.env.DATABASE_URL!, {
-  max: 20,
+  max: 8,
   idle_timeout: 20,
   connect_timeout: 10,
 });

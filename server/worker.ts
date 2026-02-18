@@ -10,7 +10,7 @@ import { processEmailJob } from './workers/email.worker';
 
 const emailWorker = new Worker('email', processEmailJob, {
   connection,
-  concurrency: 2,
+  concurrency: 1,
 });
 
 emailWorker.on('completed', (job) => {
