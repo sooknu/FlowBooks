@@ -22,9 +22,8 @@ server/db/migrations/
 .DS_Store
 Thumbs.db
 
-# Claude Code
+# Claude Code (private memory, not CLAUDE.md)
 .claude/
-CLAUDE.md
 
 # Migration scripts (one-time, contain data dumps)
 scripts/*
@@ -35,5 +34,4 @@ scripts/*
 # Hostinger dev plugins
 plugins/
 .version
-STACK.md
 server/scripts/

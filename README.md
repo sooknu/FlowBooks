@@ -50,16 +50,30 @@ npm run dev:worker           # Start background job processor
 
 ## Fresh VPS Deployment
 
-Deploy to a bare Ubuntu VPS in three steps:
+Deploy to a bare Ubuntu/Debian VPS (x86 or ARM64) in three steps:
 
 ```bash
+# 1. Provision the server (as root)
 git clone https://github.com/sooknu/FlowBooks.git && cd FlowBooks
-sudo bash scripts/deploy.sh       # Install Node.js, PostgreSQL, Docker, Nginx, pm2, Certbot, UFW
-bash scripts/install.sh            # Create DB, Redis, .env, Nginx config, SSL, start app
-# Open https://your-domain.com/setup in browser to create admin account or restore from backup
+sudo bash scripts/deploy.sh
+
+# 2. Log out and back in (for docker group), then install the app
+bash scripts/install.sh
+
+# 3. Open browser to complete setup
+# https://your-domain.com/setup
 ```
 
-`deploy.sh` is idempotent — safe to re-run. `install.sh` auto-generates all credentials and only asks for the domain name.
+**`deploy.sh`** installs Node.js 24, PostgreSQL, Docker, Nginx, Certbot, pm2, UFW. Creates 2GB swap for low-memory VPS. Flushes restrictive iptables (Oracle Cloud). Idempotent — safe to re-run.
+
+**`install.sh`** asks for domain name and SSL choice, then auto-generates everything else (DB credentials, Redis, `.env`, Nginx config). Three SSL options:
+- **Certbot** — Let's Encrypt for direct servers
+- **Cloudflare** — Auto-generates self-signed cert, set Cloudflare SSL to Full
+- **Skip** — Configure later
+
+**Setup wizard** (`/setup`) lets you create an admin account or restore from a cloud backup (S3, Backblaze B2, or Google Drive).
+
+Tested on: Ubuntu 22.04/24.04, Debian 11+, AWS free tier (t2.micro), Oracle Cloud free tier (ARM64).
 
 ## Commands
 
