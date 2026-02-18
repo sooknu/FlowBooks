@@ -89,6 +89,7 @@ export default async function calendarRoutes(fastify: any) {
       .select(selectFields)
       .from(projects)
       .leftJoin(clients, eq(projects.clientId, clients.id))
+      .leftJoin(projectTypes, eq(projects.projectTypeId, projectTypes.id))
       .where(where);
 
     return { data: formatProjects(data) };
