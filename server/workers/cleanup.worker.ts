@@ -3,8 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Job } from 'bullmq';
 import { db } from '../db';
-import { pdfDocuments, activityLog, session, appSettings } from '../db/schema';
-import { lt, eq } from 'drizzle-orm';
+import { pdfDocuments, activityLog, session, appSettings, backups, backupUploads } from '../db/schema';
+import { lt, eq, and, inArray } from 'drizzle-orm';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const documentsDir = path.join(__dirname, '..', 'uploads', 'documents');
@@ -14,6 +14,7 @@ export async function processCleanupJob(job: Job) {
     expiredPdfs: 0,
     prunedActivityLogs: 0,
     expiredSessions: 0,
+    stuckBackups: 0,
   };
 
   const now = new Date();
@@ -80,6 +81,47 @@ export async function processCleanupJob(job: Job) {
     console.error('[cleanup] Session cleanup error:', err);
   }
 
-  console.log(`[cleanup] Done — PDFs: ${results.expiredPdfs}, logs: ${results.prunedActivityLogs}, sessions: ${results.expiredSessions}`);
+  // ── 4. Mark stuck backups as failed ──
+  try {
+    const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+    const thirtyMinAgo = new Date(now.getTime() - 30 * 60 * 1000);
+
+    // Backups stuck in "running" for over 2 hours
+    const stuckRunning = await db
+      .select({ id: backups.id })
+      .from(backups)
+      .where(and(eq(backups.status, 'running'), lt(backups.startedAt, twoHoursAgo)));
+
+    // Backups stuck in "pending" for over 30 minutes (never picked up by worker)
+    const stuckPending = await db
+      .select({ id: backups.id })
+      .from(backups)
+      .where(and(eq(backups.status, 'pending'), lt(backups.createdAt, thirtyMinAgo)));
+
+    const stuckIds = [...stuckRunning, ...stuckPending].map(b => b.id);
+
+    if (stuckIds.length > 0) {
+      // Mark stuck upload rows as failed
+      await db
+        .update(backupUploads)
+        .set({ status: 'failed', errorMessage: 'Backup timed out — worker may have crashed', completedAt: now })
+        .where(and(
+          inArray(backupUploads.backupId, stuckIds),
+          inArray(backupUploads.status, ['pending', 'uploading']),
+        ));
+
+      // Mark the backup records as failed
+      await db
+        .update(backups)
+        .set({ status: 'failed', errorMessage: 'Timed out — worker may have crashed', completedAt: now, updatedAt: now })
+        .where(inArray(backups.id, stuckIds));
+
+      results.stuckBackups = stuckIds.length;
+    }
+  } catch (err) {
+    console.error('[cleanup] Stuck backup cleanup error:', err);
+  }
+
+  console.log(`[cleanup] Done — PDFs: ${results.expiredPdfs}, logs: ${results.prunedActivityLogs}, sessions: ${results.expiredSessions}, stuck backups: ${results.stuckBackups}`);
   return results;
 }
