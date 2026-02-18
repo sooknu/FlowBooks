@@ -8,7 +8,7 @@ FlowBooks is a self-hosted business management app for photography studios and c
 
 ## Commands
 
-- **Dev (full stack):** `npm run dev` — starts both Vite (port 3000) and Fastify (port 3002) via concurrently
+- **Dev (full stack):** `npm run dev` — starts both Vite (port 3000) and Fastify (port 3002) via concurrently. Backend port is 3002 (Vite proxies `/api` and `/uploads` to it)
 - **Dev (client only):** `npm run dev:client`
 - **Dev (server only):** `npm run dev:server`
 - **Dev worker:** `npm run dev:worker` — runs BullMQ worker in tsx watch mode
@@ -216,7 +216,7 @@ No test framework is configured.
 - Tailwind config uses HSL variable-based color system
 
 ### ESLint
-Flat config in `eslint.config.mjs`. Key rules: `no-undef: error`, `import/no-self-import: error`. Most style/non-critical rules are disabled. React prop-types validation is off.
+Flat config in `eslint.config.mjs`. **Only covers frontend `.js`/`.jsx` files** — server TypeScript is not linted. Key rules: `no-undef: error`, `import/no-self-import: error`. Most style/non-critical rules are disabled. React prop-types validation is off.
 
 ### Bundle Splitting
 Production build uses vendor chunk splitting (`manualChunks` in `vite.config.js`) and route-level lazy loading (`React.lazy` in `App.jsx`):
