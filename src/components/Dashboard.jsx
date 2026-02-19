@@ -46,12 +46,28 @@ const card = 'content-card p-5 sm:p-6';
 
 // ── Subcomponents ────────────────────────────────────────────────
 
-const BigNumber = ({ value, label, color }) => (
-  <div className="min-w-0">
-    <p className={`text-[clamp(1.25rem,5vw,3rem)] font-bold tabular-nums leading-none tracking-tight truncate ${color || ''}`}>{value}</p>
-    <p className="text-xs sm:text-sm text-muted-foreground mt-2.5 truncate">{label}</p>
-  </div>
-);
+const BigNumber = ({ value, label, size = 'default', tint, colorClass }) => {
+  const sizes = {
+    hero: 'text-[clamp(1.5rem,6vw,3.5rem)] font-extrabold',
+    compact: 'text-[clamp(1rem,4vw,2rem)] font-bold',
+    default: 'text-[clamp(1rem,4vw,2.25rem)] font-bold',
+  };
+  const tints = {
+    green: 'bg-[rgba(68,131,97,0.06)]',
+    red: 'bg-[rgba(212,76,71,0.06)]',
+    neutral: 'bg-[rgba(55,53,47,0.03)]',
+  };
+  const colors = {
+    green: 'text-[rgb(68,131,97)]',
+    red: 'text-[rgb(212,76,71)]',
+  };
+  return (
+    <div className={cn('min-w-0 rounded-lg px-4 py-3.5 sm:px-6 sm:py-5 transition-colors', tints[tint] || '')}>
+      <p className={cn('tabular-nums leading-none tracking-tight truncate', sizes[size], colors[colorClass] || '')}>{value}</p>
+      <p className="text-[10px] sm:text-xs font-medium uppercase tracking-[0.08em] text-surface-400 mt-2 sm:mt-2.5 truncate">{label}</p>
+    </div>
+  );
+};
 
 const STAT_ICONS = {
   Projects: Briefcase, Clients: Users, Quotes: FileText, Invoices: Receipt,
@@ -461,6 +477,7 @@ const Dashboard = () => {
 
   // Financials
   const totalRevenue = stats?.totalRevenue || 0;
+  const grossSales = stats?.grossSales || 0;
   const pendingPayments = stats?.pendingPayments || 0;
   const totalExpenses = stats?.totalExpenses || 0;
   const totalCredits = stats?.totalCredits || 0;
@@ -488,7 +505,11 @@ const Dashboard = () => {
   const myAssignments = stats?.myAssignments || [];
   const now = new Date();
   const upcomingGigs = myAssignments.filter(a => a.shootStartDate && new Date(a.shootStartDate) >= now);
-  const pastGigs = myAssignments.filter(a => !a.shootStartDate || new Date(a.shootStartDate) < now);
+  const recentGigs = [...myAssignments].sort((a, b) => {
+    const da = a.shootStartDate ? new Date(a.shootStartDate) : new Date(0);
+    const db_ = b.shootStartDate ? new Date(b.shootStartDate) : new Date(0);
+    return db_ - da;
+  });
 
   return (
     <motion.div className="space-y-5" variants={stagger.container} initial="initial" animate="animate">
@@ -520,35 +541,65 @@ const Dashboard = () => {
 
       {/* 2. Financial hero */}
       {hasFinancials && (
-        <motion.div variants={stagger.item} className={card}>
-          <div className="grid grid-cols-3 gap-4 sm:gap-12">
-            <BigNumber value={fmtFull(profit)} label="Net profit" color={profit < 0 ? 'text-surface-400' : 'text-surface-900'} />
-            <BigNumber value={fmtFull(pendingPayments)} label="Awaiting payment" color={pendingPayments > 0 ? 'text-surface-400' : 'text-surface-900'} />
-            <BigNumber value={fmtFull(totalRevenue)} label="Revenue collected" color="text-surface-900" />
+        <motion.div variants={stagger.item} className="space-y-3">
+          <div className="grid grid-cols-[1fr_auto] sm:grid-cols-[2fr_1fr] gap-3">
+            <div className="content-card">
+              <BigNumber
+                value={fmtFull(profit)}
+                label="Net profit"
+                size="hero"
+                tint={profit < 0 ? 'red' : profit > 0 ? 'green' : 'neutral'}
+                colorClass={profit < 0 ? 'red' : profit > 0 ? 'green' : ''}
+              />
+            </div>
+            <div className="content-card">
+              <BigNumber
+                value={fmtFull(pendingPayments)}
+                label="Awaiting payment"
+                size="compact"
+                tint={pendingPayments > 0 ? 'red' : 'neutral'}
+                colorClass={pendingPayments > 0 ? 'red' : ''}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="content-card">
+              <BigNumber
+                value={fmtFull(totalCredits)}
+                label="Revenue collected"
+                tint="neutral"
+              />
+            </div>
+            <div className="content-card">
+              <BigNumber
+                value={fmtFull(totalExpenses)}
+                label="Total expenses"
+                tint={totalExpenses > 0 ? 'red' : 'neutral'}
+                colorClass={totalExpenses > 0 ? 'red' : ''}
+              />
+            </div>
           </div>
         </motion.div>
       )}
 
       {/* 3. Salary owed */}
       {salaryByMember.length > 0 && (
-        <motion.div variants={stagger.item} className={card}>
+        <motion.div variants={stagger.item} className="content-card p-5 sm:p-6">
           <SectionLabel action={<ViewAllLink onClick={() => navigate('/salary')} />}>
             Salary owed
           </SectionLabel>
-          <div className="space-y-2 mt-3">
+          <div className="space-y-0.5 mt-3">
             {salaryByMember.map(m => (
               <button
                 key={m.name}
                 onClick={() => navigate('/salary')}
-                className="content-card__row flex items-center justify-between gap-3 px-4 py-3 w-full text-left hover:bg-surface-100/60 transition-colors"
+                className="flex items-center justify-between gap-3 px-2 py-2.5 w-full text-left rounded-md hover:bg-[rgba(212,76,71,0.04)] transition-colors group"
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-surface-100 flex items-center justify-center shrink-0">
-                    <Wallet className="w-4 h-4 text-surface-400" />
-                  </div>
-                  <p className="text-sm font-medium text-surface-700 truncate">{m.name}</p>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[rgb(212,76,71)] opacity-40 shrink-0" />
+                  <p className="text-sm text-surface-600 truncate group-hover:text-surface-800 transition-colors">{m.name}</p>
                 </div>
-                <p className="text-sm font-bold tabular-nums text-amber-600 shrink-0">{fmtFull(m.owed)}</p>
+                <p className="text-sm font-semibold tabular-nums text-[rgb(212,76,71)] shrink-0">{fmtFull(m.owed)}</p>
               </button>
             ))}
           </div>
@@ -613,16 +664,16 @@ const Dashboard = () => {
 
           <motion.div variants={stagger.item}>
             <SectionLabel action={<ViewAllLink onClick={() => navigate('/projects?mine=true')} />}>
-              My projects
+              My recent projects
             </SectionLabel>
-            {(upcomingGigs.length > 0 ? pastGigs : myAssignments).length > 0 ? (
+            {recentGigs.length > 0 ? (
               <div className="grid gap-2.5 mt-2">
-                {(upcomingGigs.length > 0 ? pastGigs : myAssignments).slice(0, 5).map(gig => (
+                {recentGigs.slice(0, 5).map(gig => (
                   <GigCard key={gig.id} gig={gig} getTypeColor={getTypeColor} onClick={() => navigate(`/projects/${gig.projectId}`)} />
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground py-6 text-center">All your projects are upcoming</p>
+              <p className="text-sm text-muted-foreground py-6 text-center">No projects yet</p>
             )}
           </motion.div>
         </>

@@ -74,8 +74,24 @@ export default async function statsRoutes(fastify: any) {
       queries.totalRevenue = db.select({ val: sum(invoices.total) })
         .from(invoices);
 
+      queries.grossSales = db.select({ val: sum(invoices.paidAmount) })
+        .from(invoices);
+
       queries.pendingPayments = db.select({ val: sum(sql`${invoices.total} - ${invoices.paidAmount}`) })
         .from(invoices).where(ne(invoices.status, 'paid'));
+
+      // Balance owed per project: projectPrice minus credits, only where balance > 0
+      queries.projectBalancesOwed = db.execute(sql`
+        SELECT COALESCE(SUM(balance), 0) AS val FROM (
+          SELECT p.id,
+            p.project_price - COALESCE((
+              SELECT SUM(e.amount) FROM expenses e
+              WHERE e.project_id = p.id AND e.type = 'credit'
+            ), 0) AS balance
+          FROM projects p
+          WHERE p.status != 'archived' AND p.project_price IS NOT NULL AND p.project_price > 0
+        ) sub WHERE balance > 0
+      `);
 
 
       queries.totalExpenses = db.select({ val: sum(expenses.amount) })
@@ -196,10 +212,13 @@ export default async function statsRoutes(fastify: any) {
     // Business financials
     if (perms.view_financial_summary) {
       result.totalRevenue = parseFloat(d.totalRevenue?.[0]?.val as string) || 0;
-      result.pendingPayments = parseFloat(d.pendingPayments?.[0]?.val as string) || 0;
+      result.grossSales = parseFloat(d.grossSales?.[0]?.val as string) || 0;
       result.totalExpenses = parseFloat(d.totalExpenses?.[0]?.val as string) || 0;
       result.totalCredits = parseFloat(d.totalCredits?.[0]?.val as string) || 0;
       result.totalPaidSalary = parseFloat(d.totalPaidSalary?.[0]?.val as string) || 0;
+      const projectBalancesOwed = parseFloat(d.projectBalancesOwed?.rows?.[0]?.val as string ?? d.projectBalancesOwed?.[0]?.val as string) || 0;
+      const invoicePending = parseFloat(d.pendingPayments?.[0]?.val as string) || 0;
+      result.pendingPayments = projectBalancesOwed + invoicePending;
 
       // Salary breakdown
       const salaryMap: Record<string, { name: string; accrued: number; paid: number }> = {};
