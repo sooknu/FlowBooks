@@ -87,7 +87,7 @@ const AppLayout = () => {
           onSignOut={signOut}
         />
 
-        <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain">
+        <main ref={mainRef} className="flex-1 overflow-y-auto">
           <div className={`app-container lg:pt-10 ${isImpersonating ? 'pt-[93px]' : 'pt-[61px]'}`}>
             <motion.div
               key={location.pathname.startsWith('/settings') ? '/settings' : location.pathname}

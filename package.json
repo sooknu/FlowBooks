@@ -8,6 +8,7 @@
     "dev:client": "vite --host :: --port 3000",
     "dev:server": "tsx watch --env-file=.env server/index.ts",
     "build": "node tools/generate-llms.js || true && vite build",
+    "deploy": "npm run build && pm2 restart FlowBooks-server",
     "start": "tsx --env-file=.env server/index.ts",
     "preview": "vite preview --host :: --port 3000",
     "db:push": "drizzle-kit push",

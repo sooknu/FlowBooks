@@ -37,7 +37,7 @@ function formatDateShort(d) {
 const StatCard = ({ label, value, icon: Icon, accent, snap }) => (
   <div className={cn(
     "flex items-center gap-3 rounded-xl border border-surface-200/60 bg-white px-4 py-3.5 shrink-0 sm:shrink sm:min-w-0",
-    snap && "min-w-[calc(33.333%-8px)] snap-start"
+    snap && "min-w-[calc(33.333%-8px)]"
   )}>
     <div className="w-9 h-9 rounded-lg bg-surface-100 flex items-center justify-center shrink-0">
       <Icon className="w-[18px] h-[18px] text-surface-400" />
@@ -402,7 +402,7 @@ const FinanceManager = () => {
             <div>
               <div
                 ref={statScrollRef}
-                className="flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide sm:grid sm:grid-cols-3 sm:snap-none sm:overflow-visible"
+                className="flex gap-3 overflow-x-auto scrollbar-hide sm:grid sm:grid-cols-3 sm:overflow-visible"
                 style={{ WebkitOverflowScrolling: 'touch' }}
               >
                 <StatCard snap

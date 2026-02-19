@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useAppData } from '@/hooks/useAppData';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCreateAssignment, useDeleteAssignment, useUpdateAssignment, useCreateTeamPayment, useDeleteTeamPayment, useCreateExpense, useUpdateExpense, useDeleteExpense } from '@/hooks/useMutations';
+import { useCreateAssignment, useDeleteAssignment, useUpdateAssignment, useCreateTeamPayment, useUpdateTeamPayment, useDeleteTeamPayment, useCreateExpense, useUpdateExpense, useDeleteExpense } from '@/hooks/useMutations';
 import ExpenseFormDialog from '@/components/ExpenseFormDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
@@ -542,6 +542,7 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
   const [assignDialog, setAssignDialog] = useState(false);
   const [paymentDialog, setPaymentDialog] = useState(false);
   const [editAssignment, setEditAssignment] = useState(null);
+  const [editPayment, setEditPayment] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [assignForm, setAssignForm] = useState({ teamMemberId: '', role: '', daysWorked: '', hoursWorked: '', notes: '' });
   const [paymentForm, setPaymentForm] = useState({ teamMemberId: '', amount: '', paymentDate: '', paymentMethod: '', status: 'paid', notes: '', advanceRepayment: '', salaryDeduction: '' });
@@ -550,6 +551,7 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
   const updateAssignment = useUpdateAssignment();
   const deleteAssignment = useDeleteAssignment();
   const createPayment = useCreateTeamPayment();
+  const updatePayment = useUpdateTeamPayment();
   const deletePayment = useDeleteTeamPayment();
 
   const { data: teamList = [] } = useQuery({
@@ -610,18 +612,32 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
     try {
-      await createPayment.mutateAsync({
-        projectId,
-        teamMemberId: paymentForm.teamMemberId,
-        amount: parseFloat(paymentForm.amount),
-        paymentDate: paymentForm.paymentDate || undefined,
-        paymentMethod: paymentForm.paymentMethod || undefined,
-        status: paymentForm.status,
-        notes: paymentForm.notes || undefined,
-        advanceRepayment: paymentForm.advanceRepayment ? parseFloat(paymentForm.advanceRepayment) : undefined,
-        salaryDeduction: paymentForm.salaryDeduction ? parseFloat(paymentForm.salaryDeduction) : undefined,
-      });
+      if (editPayment) {
+        await updatePayment.mutateAsync({
+          id: editPayment.id,
+          projectId,
+          teamMemberId: paymentForm.teamMemberId,
+          amount: parseFloat(paymentForm.amount),
+          paymentDate: paymentForm.paymentDate || undefined,
+          paymentMethod: paymentForm.paymentMethod || undefined,
+          status: paymentForm.status,
+          notes: paymentForm.notes || undefined,
+        });
+      } else {
+        await createPayment.mutateAsync({
+          projectId,
+          teamMemberId: paymentForm.teamMemberId,
+          amount: parseFloat(paymentForm.amount),
+          paymentDate: paymentForm.paymentDate || undefined,
+          paymentMethod: paymentForm.paymentMethod || undefined,
+          status: paymentForm.status,
+          notes: paymentForm.notes || undefined,
+          advanceRepayment: paymentForm.advanceRepayment ? parseFloat(paymentForm.advanceRepayment) : undefined,
+          salaryDeduction: paymentForm.salaryDeduction ? parseFloat(paymentForm.salaryDeduction) : undefined,
+        });
+      }
       setPaymentDialog(false);
+      setEditPayment(null);
       setPaymentForm({ teamMemberId: '', amount: '', paymentDate: '', paymentMethod: '', status: 'paid', notes: '', advanceRepayment: '', salaryDeduction: '' });
     } catch { /* handled */ }
   };
@@ -703,7 +719,7 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-surface-500 uppercase tracking-wider">Team Payments ({payments.length})</h3>
           {isPrivileged && assignments.length > 0 && (
-            <button onClick={() => { const sd = project.shootStartDate; const defaultDate = sd ? new Date(sd).toISOString().slice(0, 10) : ''; setPaymentForm({ teamMemberId: assignments[0]?.teamMemberId || '', amount: '', paymentDate: defaultDate, paymentMethod: '', status: 'paid', notes: '', advanceRepayment: '' }); setPaymentDialog(true); }}
+            <button onClick={() => { const sd = project.shootStartDate; const defaultDate = sd ? new Date(sd).toISOString().slice(0, 10) : ''; setEditPayment(null); setPaymentForm({ teamMemberId: assignments[0]?.teamMemberId || '', amount: '', paymentDate: defaultDate, paymentMethod: '', status: 'paid', notes: '', advanceRepayment: '', salaryDeduction: '' }); setPaymentDialog(true); }}
               className="action-btn text-xs !py-1.5 !px-3 flex items-center gap-1.5">
               <Plus className="w-3.5 h-3.5" /> Record Payment
             </button>
@@ -724,9 +740,27 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
                   <span className={`text-sm font-bold ${p.status === 'paid' ? 'text-emerald-400' : 'text-amber-400'}`}>{formatCurrency(p.amount)}</span>
                   <span className={`chip text-xs ${p.status === 'paid' ? 'chip--success' : 'chip--warning'}`}>{p.status}</span>
                   {isPrivileged && (
-                    <button onClick={() => setDeleteConfirm({ type: 'payment', id: p.id, label: `${formatCurrency(p.amount)} to ${getMemberName(p)}` })} className="icon-button">
-                      <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                    </button>
+                    <>
+                      <button onClick={() => {
+                        setEditPayment(p);
+                        setPaymentForm({
+                          teamMemberId: p.teamMemberId,
+                          amount: p.amount?.toString() || '',
+                          paymentDate: p.paymentDate ? new Date(p.paymentDate).toISOString().slice(0, 10) : '',
+                          paymentMethod: p.paymentMethod || '',
+                          status: p.status || 'paid',
+                          notes: p.notes || '',
+                          advanceRepayment: '',
+                          salaryDeduction: '',
+                        });
+                        setPaymentDialog(true);
+                      }} className="icon-button" title="Edit">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => setDeleteConfirm({ type: 'payment', id: p.id, label: `${formatCurrency(p.amount)} to ${getMemberName(p)}` })} className="icon-button">
+                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      </button>
+                    </>
                   )}
                 </div>
               </motion.div>
@@ -790,7 +824,7 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
       {/* Payment Dialog */}
       <Dialog open={paymentDialog} onOpenChange={setPaymentDialog}>
         <DialogContent className="glass-modal max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
-          <DialogHeader><DialogTitle>Record Team Payment</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editPayment ? 'Edit Team Payment' : 'Record Team Payment'}</DialogTitle></DialogHeader>
           <form onSubmit={handlePaymentSubmit} className="space-y-4 mt-2">
             <div>
               <label className="text-xs font-medium text-surface-500 mb-1 block">Team Member</label>
@@ -827,8 +861,8 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
               <label className="text-xs font-medium text-surface-500 mb-1 block">Notes</label>
               <textarea value={paymentForm.notes} onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))} className="glass-textarea w-full" rows={2} />
             </div>
-            {/* Apply toward advance — only if selected member has advancesEnabled */}
-            {(() => {
+            {/* Apply toward advance — only if selected member has advancesEnabled (create only) */}
+            {!editPayment && (() => {
               const selectedAssignment = assignments.find(a => a.teamMemberId === paymentForm.teamMemberId);
               if (selectedAssignment?.teamMember?.advancesEnabled) {
                 return (
@@ -851,8 +885,8 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
               }
               return null;
             })()}
-            {/* Apply toward salary — only if selected member has salaryEnabled */}
-            {(() => {
+            {/* Apply toward salary — only if selected member has salaryEnabled (create only) */}
+            {!editPayment && (() => {
               const selectedAssignment = assignments.find(a => a.teamMemberId === paymentForm.teamMemberId);
               if (selectedAssignment?.teamMember?.salaryEnabled) {
                 return (
@@ -877,7 +911,7 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
             })()}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setPaymentDialog(false)} className="action-btn action-btn--secondary text-sm">Cancel</button>
-              <button type="submit" className="action-btn text-sm" disabled={createPayment.isPending}>Record Payment</button>
+              <button type="submit" className="action-btn text-sm" disabled={createPayment.isPending || updatePayment.isPending}>{editPayment ? 'Update' : 'Record Payment'}</button>
             </div>
           </form>
         </DialogContent>

@@ -377,7 +377,7 @@ const ProjectsManager = () => {
         <div className="flex-shrink-0">
           <div
             ref={tabScrollRef}
-            className="flex gap-1 px-2 py-1 bg-surface-100 rounded-lg overflow-x-auto snap-x snap-mandatory scroll-pl-[6px] scrollbar-hide sm:snap-none sm:overflow-visible"
+            className="flex gap-1 px-2 py-1 bg-surface-100 rounded-lg overflow-x-auto scrollbar-hide"
             style={{ WebkitOverflowScrolling: 'touch' }}
           >
             {STATUS_FILTERS.map(f => (
@@ -388,7 +388,7 @@ const ProjectsManager = () => {
                   e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
                 }}
                 className={cn(
-                  "px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap snap-start flex-shrink-0",
+                  "px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap flex-shrink-0",
                   statusFilter === f.value
                     ? 'bg-white text-surface-800 shadow-sm'
                     : 'text-surface-500 hover:text-surface-700'

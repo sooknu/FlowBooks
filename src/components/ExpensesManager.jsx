@@ -37,7 +37,7 @@ function formatCompact(n) {
 // ─── Stat Card ─────────────────────────────────────────────────────────────
 
 const StatCard = ({ label, value, icon: Icon }) => (
-  <div className="flex items-center gap-3 rounded-xl border border-surface-200/60 bg-white px-4 py-3.5 min-w-[calc(50%-6px)] snap-start shrink-0 sm:min-w-0 sm:shrink sm:snap-align-none">
+  <div className="flex items-center gap-3 rounded-xl border border-surface-200/60 bg-white px-4 py-3.5 min-w-[calc(50%-6px)] shrink-0 sm:min-w-0 sm:shrink">
     <div className="w-9 h-9 rounded-lg bg-surface-100 flex items-center justify-center shrink-0">
       <Icon className="w-[18px] h-[18px] text-surface-400" />
     </div>
@@ -417,7 +417,7 @@ const ExpensesManager = () => {
           <div>
             <div
               ref={statScrollRef}
-              className="flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide sm:grid sm:grid-cols-4 sm:snap-none sm:overflow-visible"
+              className="flex gap-3 overflow-x-auto scrollbar-hide sm:grid sm:grid-cols-4 sm:overflow-visible"
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
               <StatCard label="Total" value={formatCurrency(stats.totalAllTime)} icon={Wallet} />
