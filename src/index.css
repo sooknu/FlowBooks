@@ -374,7 +374,7 @@
   /* ── User Row ──────────────────────── */
 
   .user-row {
-    @apply flex items-center gap-3 px-3.5 py-2.5 transition-colors;
+    @apply flex items-center gap-3 px-4 py-3 transition-colors;
     border-bottom: 1px solid rgba(var(--surface-200) / 0.5);
   }
   .user-row:last-child {
@@ -387,6 +387,12 @@
   .user-row--pending {
     border-left: 3px solid rgb(245 158 11); /* amber-500 */
     padding-left: calc(0.875rem - 3px);
+  }
+  @media (max-width: 767px) {
+    .user-row--pending {
+      @apply py-3.5 px-3.5;
+      padding-left: calc(0.875rem - 3px);
+    }
   }
 
   .user-row__icon {
@@ -473,7 +479,7 @@
   }
 
   .user-row__action {
-    @apply p-1.5 rounded-lg transition-colors;
+    @apply p-1.5 rounded-md transition-all duration-150;
     color: rgb(var(--surface-400));
   }
   .user-row__action:hover {
@@ -495,7 +501,7 @@
 
   /* Pending row: inline approve/reject actions always visible */
   .user-row--pending .user-row__approve-actions {
-    @apply flex items-center gap-1.5 shrink-0;
+    @apply items-center gap-1.5 shrink-0;
   }
 
   /* Avatar variant — for team members with profile images */

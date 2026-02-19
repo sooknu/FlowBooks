@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from '@/components/ui/use-toast';
 import api from '@/lib/apiClient';
@@ -37,22 +36,6 @@ const UsersManager = () => {
   const [userToDelete, setUserToDelete] = useState(null);
   const [pendingRoles, setPendingRoles] = useState({});
   const [pendingLinks, setPendingLinks] = useState({});
-  const [searchParams, setSearchParams] = useSearchParams();
-  const highlightId = searchParams.get('approve');
-  const highlightRef = useRef(null);
-
-  // Scroll to and highlight the specific user from the email link
-  useEffect(() => {
-    if (highlightId && highlightRef.current) {
-      highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // Clear the param so refreshing doesn't re-highlight
-      const timeout = setTimeout(() => {
-        searchParams.delete('approve');
-        setSearchParams(searchParams, { replace: true });
-      }, 3000);
-      return () => clearTimeout(timeout);
-    }
-  }, [highlightId, loading]);
 
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
@@ -199,46 +182,55 @@ const UsersManager = () => {
           {/* Pending Approval Section */}
           {pendingUsers.length > 0 && (
             <div>
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-2.5">
                 <Clock className="w-3.5 h-3.5 text-amber-500" />
                 <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Pending Approval ({pendingUsers.length})</h3>
               </div>
-              <div className="border border-border rounded-lg overflow-hidden">
+
+              {/* Mobile: card-based layout */}
+              <div className="md:hidden space-y-3">
                 {pendingUsers.map((u, index) => (
-                  <motion.div key={u.id} ref={u.id === highlightId ? highlightRef : undefined}
-                    initial={{ opacity: 0 }} animate={{ opacity: 1, backgroundColor: u.id === highlightId ? ['rgba(251,191,36,0.25)', 'rgba(251,191,36,0)'] : undefined }}
-                    transition={{ delay: index * 0.03, backgroundColor: { duration: 2, ease: 'easeOut' } }}
-                    className="user-row user-row--pending"
+                  <motion.div key={u.id}
+                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="rounded-xl border border-amber-200 bg-white p-4 space-y-3"
                   >
-                    <div className="user-row__icon">
-                      <User />
+                    {/* User info */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
+                        <User className="w-5 h-5 text-amber-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[15px] font-semibold text-surface-900 truncate">{u.displayName || u.display_name || u.email}</p>
+                        <p className="text-[13px] text-surface-500 truncate mt-0.5">{u.email}</p>
+                      </div>
                     </div>
-                    <div className="user-row__body">
-                      <p className="user-row__name">{u.displayName || u.display_name || u.email}</p>
-                      <p className="user-row__email">{u.email}</p>
-                    </div>
-                    <div className="user-row__meta">
+
+                    {/* Status row */}
+                    <div className="flex items-center gap-3 text-[11.5px]">
                       <span className="user-row__verified">
                         {u.emailVerified
-                          ? <span className="text-emerald-500 flex items-center gap-0.5"><CheckCircle2 />Verified</span>
-                          : <span className="text-amber-500 flex items-center gap-0.5"><AlertCircle />Unverified</span>
+                          ? <span className="text-emerald-500 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" />Verified</span>
+                          : <span className="text-amber-500 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" />Unverified</span>
                         }
                       </span>
-                      <span className="user-row__date">{fmtDate(u.createdAt || u.created_at)}</span>
+                      <span className="text-surface-300">&middot;</span>
+                      <span className="text-surface-400">{fmtDate(u.createdAt || u.created_at)}</span>
                     </div>
-                    <div className="user-row__approve-actions">
+
+                    {/* Selects row */}
+                    <div className="flex gap-2">
                       {unlinkedMembers.length > 0 && (
                         <select
                           value={pendingLinks[u.id] || ''}
                           onChange={(e) => {
                             setPendingLinks(prev => ({ ...prev, [u.id]: e.target.value }));
-                            // Auto-set role from linked member
                             if (e.target.value) {
                               const member = unlinkedMembers.find(m => m.id === e.target.value);
                               if (member) setPendingRoles(prev => ({ ...prev, [u.id]: member.role }));
                             }
                           }}
-                          className="glass-input text-xs !py-1 !px-2 w-[130px]"
+                          className="glass-input text-sm !py-2.5 !px-3 !rounded-lg flex-1 min-w-0"
                         >
                           <option value="">Link member...</option>
                           {unlinkedMembers.map(m => (
@@ -250,18 +242,95 @@ const UsersManager = () => {
                         <select
                           value={pendingRoles[u.id] || ''}
                           onChange={(e) => setPendingRoles(prev => ({ ...prev, [u.id]: e.target.value }))}
-                          className="glass-input text-xs !py-1 !px-2 w-[120px]"
+                          className="glass-input text-sm !py-2.5 !px-3 !rounded-lg flex-1 min-w-0"
                         >
                           {TEAM_ROLES.map(r => (
                             <option key={r.value} value={r.value}>{r.label}</option>
                           ))}
                         </select>
                       )}
-                      <button onClick={() => handleApprove(u.id)} disabled={approveUser.isPending} className="user-row__action user-row__action--success" title="Approve">
-                        {approveUser.isPending && approveUser.variables?.id === u.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2">
+                      <button onClick={() => handleApprove(u.id)} disabled={approveUser.isPending}
+                        className="flex-1 flex items-center justify-center gap-1.5 h-11 rounded-lg text-[14px] font-semibold bg-surface-900 text-white active:bg-surface-800 transition-colors"
+                      >
+                        {approveUser.isPending && approveUser.variables?.id === u.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><UserCheck className="w-4 h-4" /> Approve</>}
                       </button>
-                      <button onClick={() => handleReject(u.id)} disabled={rejectUser.isPending} className="user-row__action user-row__action--danger" title="Reject">
-                        {rejectUser.isPending && rejectUser.variables === u.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserX className="w-3.5 h-3.5" />}
+                      <button onClick={() => handleReject(u.id)} disabled={rejectUser.isPending}
+                        className="flex items-center justify-center gap-1.5 h-11 px-5 rounded-lg text-[14px] font-medium text-surface-500 border border-surface-200 active:bg-red-50 active:text-red-500 active:border-red-200 transition-colors"
+                      >
+                        {rejectUser.isPending && rejectUser.variables === u.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserX className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Desktop: table-style rows */}
+              <div className="hidden md:block border border-border rounded-lg overflow-hidden">
+                {pendingUsers.map((u, index) => (
+                  <motion.div key={u.id}
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                    transition={{ delay: index * 0.03 }}
+                    className="user-row user-row--pending !py-3"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
+                      <User className="w-4 h-4 text-amber-600" />
+                    </div>
+                    <div className="user-row__body">
+                      <p className="user-row__name truncate">{u.displayName || u.display_name || u.email}</p>
+                      <p className="user-row__email">{u.email}</p>
+                    </div>
+                    <div className="user-row__meta">
+                      <span className="user-row__verified shrink-0">
+                        {u.emailVerified
+                          ? <span className="text-emerald-500 flex items-center gap-0.5"><CheckCircle2 />Verified</span>
+                          : <span className="text-amber-500 flex items-center gap-0.5"><AlertCircle />Unverified</span>
+                        }
+                      </span>
+                      <span className="user-row__date">{fmtDate(u.createdAt || u.created_at)}</span>
+                    </div>
+                    <div className="user-row__approve-actions hidden md:flex">
+                      {unlinkedMembers.length > 0 && (
+                        <select
+                          value={pendingLinks[u.id] || ''}
+                          onChange={(e) => {
+                            setPendingLinks(prev => ({ ...prev, [u.id]: e.target.value }));
+                            if (e.target.value) {
+                              const member = unlinkedMembers.find(m => m.id === e.target.value);
+                              if (member) setPendingRoles(prev => ({ ...prev, [u.id]: member.role }));
+                            }
+                          }}
+                          className="glass-input text-xs !py-1.5 !px-2.5 w-[140px]"
+                        >
+                          <option value="">Link member...</option>
+                          {unlinkedMembers.map(m => (
+                            <option key={m.id} value={m.id}>{m.name || 'Unnamed'}</option>
+                          ))}
+                        </select>
+                      )}
+                      {!pendingLinks[u.id] && (
+                        <select
+                          value={pendingRoles[u.id] || ''}
+                          onChange={(e) => setPendingRoles(prev => ({ ...prev, [u.id]: e.target.value }))}
+                          className="glass-input text-xs !py-1.5 !px-2.5 w-[130px]"
+                        >
+                          {TEAM_ROLES.map(r => (
+                            <option key={r.value} value={r.value}>{r.label}</option>
+                          ))}
+                        </select>
+                      )}
+                      <button onClick={() => handleApprove(u.id)} disabled={approveUser.isPending}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-surface-900 text-white hover:bg-surface-800 transition-colors"
+                      >
+                        {approveUser.isPending && approveUser.variables?.id === u.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <><UserCheck className="w-3 h-3" /> Approve</>}
+                      </button>
+                      <button onClick={() => handleReject(u.id)} disabled={rejectUser.isPending}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium text-surface-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                      >
+                        {rejectUser.isPending && rejectUser.variables === u.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserX className="w-3 h-3" />}
                       </button>
                     </div>
                   </motion.div>
@@ -270,34 +339,36 @@ const UsersManager = () => {
             </div>
           )}
 
-          {/* Approved Users */}
+          {/* Active Users */}
           <div>
-            {pendingUsers.length > 0 && (
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                <h3 className="text-xs font-semibold text-surface-500 uppercase tracking-wider">Active Users ({approvedUsers.length})</h3>
-              </div>
-            )}
+            <div className="flex items-center gap-2 mb-2.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              <h3 className="text-xs font-semibold text-surface-500 uppercase tracking-wider">Active Users ({approvedUsers.length})</h3>
+            </div>
             <div className="border border-border rounded-lg overflow-hidden">
               {approvedUsers.map((u, index) => {
                 const canModify = !u.isSuperAdmin && u.id !== currentUser.id;
+                const iconBg = u.isSuperAdmin ? 'bg-amber-50' : u.role === 'admin' ? 'bg-violet-50' : 'bg-surface-100';
+                const iconColor = u.isSuperAdmin ? 'text-amber-600' : u.role === 'admin' ? 'text-violet-600' : 'text-surface-400';
                 return (
                   <motion.div key={u.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.03 }}
                     className="user-row group"
                   >
-                    <div className={`user-row__icon ${u.isSuperAdmin ? 'user-row__icon--super' : ''}`}>
-                      {u.isSuperAdmin ? <ShieldCheck /> : u.role === 'admin' ? <Shield /> : <User />}
+                    <div className={`w-8 h-8 rounded-full ${iconBg} flex items-center justify-center shrink-0`}>
+                      {u.isSuperAdmin ? <ShieldCheck className={`w-4 h-4 ${iconColor}`} /> : u.role === 'admin' ? <Shield className={`w-4 h-4 ${iconColor}`} /> : <User className={`w-4 h-4 ${iconColor}`} />}
                     </div>
 
                     <div className="user-row__body">
-                      <p className="user-row__name">{u.displayName || u.display_name || u.email}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="user-row__name truncate">{u.displayName || u.display_name || u.email}</p>
+                        <span className={`user-row__badge ${u.isSuperAdmin ? 'user-row__badge--super' : u.role === 'admin' ? 'user-row__badge--admin' : ''}`}>
+                          {u.isSuperAdmin ? 'Owner' : u.role}
+                        </span>
+                      </div>
                       <p className="user-row__email">{u.email}</p>
                     </div>
 
                     <div className="user-row__meta">
-                      <span className={`user-row__badge ${u.isSuperAdmin ? 'user-row__badge--super' : u.role === 'admin' ? 'user-row__badge--admin' : ''}`}>
-                        {u.isSuperAdmin ? 'Super Admin' : u.role}
-                      </span>
                       <span className="user-row__verified">
                         {u.emailVerified
                           ? <span className="text-emerald-500 flex items-center gap-0.5"><CheckCircle2 />Verified</span>

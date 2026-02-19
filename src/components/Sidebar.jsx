@@ -242,8 +242,6 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
                   if (!n.isRead) markRead.mutate(n.id);
                   if (n.entityType === 'project' && n.entityId) {
                     navigate(`/projects/${n.entityId}`);
-                  } else if (n.entityType === 'user' && n.entityId) {
-                    navigate(`/team?tab=accounts&approve=${n.entityId}`);
                   } else if (cfg.route) {
                     navigate(cfg.route);
                   }
