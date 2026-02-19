@@ -13,6 +13,7 @@ import {
   getCompanySettings,
   buildVerificationEmailHtml,
 } from './lib/mailer';
+import { notifyNewUserSignup } from './lib/notifications';
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: 'pg', schema }),
@@ -114,6 +115,11 @@ export const auth = betterAuth({
             createdAt: new Date(),
             updatedAt: new Date(),
           }).onConflictDoNothing();
+
+          // Notify admins/managers about new signup (skip for auto-approved users)
+          if (!approved) {
+            notifyNewUserSignup({ id: user.id, email: user.email, name: user.name });
+          }
         },
       },
     },

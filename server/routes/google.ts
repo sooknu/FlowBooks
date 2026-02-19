@@ -4,6 +4,7 @@ import { appSettings, user, account, profiles } from '../db/schema';
 import { eq, and, inArray, count } from 'drizzle-orm';
 import { auth } from '../auth';
 import { exchangeCodeForTokens, decodeIdToken } from '../lib/oidc';
+import { notifyNewUserSignup } from '../lib/notifications';
 
 // Google's fixed OAuth endpoints
 const GOOGLE_AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -243,6 +244,11 @@ async function googleRoutes(fastify: any) {
           createdAt: new Date(),
           updatedAt: new Date(),
         }).onConflictDoNothing();
+
+        // Notify admins/managers about new signup (skip if first user / auto-admin)
+        if (role !== 'admin') {
+          notifyNewUserSignup({ id: foundUser.id, email: foundUser.email, name });
+        }
       }
 
       // Create session via Better Auth's internal adapter

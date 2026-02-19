@@ -17,6 +17,11 @@ function mapProjectBody(body: any) {
     shootEndDate: parseDateInput(body.shootEndDate || body.shoot_end_date),
     deliveryDate: parseDateInput(body.deliveryDate || body.delivery_date),
     location: body.location ?? null,
+    addressStreet: body.addressStreet ?? null,
+    addressCity: body.addressCity ?? null,
+    addressState: body.addressState ?? null,
+    addressZip: body.addressZip ?? null,
+    projectPrice: body.projectPrice != null ? parseFloat(body.projectPrice) || null : null,
   };
 }
 
@@ -178,6 +183,11 @@ export default async function projectRoutes(fastify: any) {
     if ('shootEndDate' in b || 'shoot_end_date' in b) updates.shootEndDate = parseDateInput(b.shootEndDate || b.shoot_end_date);
     if ('deliveryDate' in b || 'delivery_date' in b) updates.deliveryDate = parseDateInput(b.deliveryDate || b.delivery_date);
     if ('location' in b) updates.location = b.location ?? null;
+    if ('addressStreet' in b) updates.addressStreet = b.addressStreet ?? null;
+    if ('addressCity' in b) updates.addressCity = b.addressCity ?? null;
+    if ('addressState' in b) updates.addressState = b.addressState ?? null;
+    if ('addressZip' in b) updates.addressZip = b.addressZip ?? null;
+    if ('projectPrice' in b) updates.projectPrice = b.projectPrice != null ? parseFloat(b.projectPrice) || null : null;
 
     // Strip status if user lacks edit_project_status permission
     if (!hasPermission(request, 'edit_project_status')) {

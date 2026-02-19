@@ -222,8 +222,11 @@ if (fs.existsSync(distPath)) {
     prefix: '/',
     wildcard: false,
     setHeaders: (res: any, filePath: string) => {
-      // Immutable caching for Vite's hashed assets (e.g. index-12266eec.js)
-      if (filePath.includes('/assets/') && /\-[a-f0-9]{8}\.(js|css)$/.test(filePath)) {
+      if (filePath.endsWith('index.html')) {
+        // Never cache index.html — ensures browser always gets fresh chunk references after deploys
+        res.setHeader('Cache-Control', 'no-cache');
+      } else if (filePath.includes('/assets/') && /\-[a-f0-9]{8}\.(js|css)$/.test(filePath)) {
+        // Immutable caching for Vite's hashed assets (e.g. index-12266eec.js)
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       }
     },
@@ -233,7 +236,7 @@ if (fs.existsSync(distPath)) {
     if (request.url.startsWith('/api/') || request.url.startsWith('/uploads/')) {
       reply.code(404).send({ error: 'Not found' });
     } else {
-      reply.sendFile('index.html', distPath);
+      reply.header('Cache-Control', 'no-cache').sendFile('index.html', distPath);
     }
   });
 }

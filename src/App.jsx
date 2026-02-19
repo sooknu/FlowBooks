@@ -31,6 +31,7 @@ const EmailManager = React.lazy(() => import('@/components/EmailManager'));
 const ActivityLogViewer = React.lazy(() => import('@/components/ActivityLogViewer'));
 const TeamManager = React.lazy(() => import('@/components/TeamManager'));
 const ProjectsManager = React.lazy(() => import('@/components/ProjectsManager'));
+const ProjectForm = React.lazy(() => import('@/components/ProjectForm'));
 const ProjectDetail = React.lazy(() => import('@/components/ProjectDetail'));
 const CalendarView = React.lazy(() => import('@/components/CalendarView'));
 const ExpensesManager = React.lazy(() => import('@/components/ExpensesManager'));
@@ -65,6 +66,8 @@ function App() {
 
           {/* Projects */}
           <Route path="/projects" element={<Lazy><ProjectsManager /></Lazy>} />
+          <Route path="/projects/new" element={<Lazy><ProjectForm /></Lazy>} />
+          <Route path="/projects/:id/edit" element={<Lazy><ProjectForm /></Lazy>} />
           <Route path="/projects/:id" element={<Lazy><ProjectDetail /></Lazy>} />
           <Route path="/calendar" element={<Lazy><CalendarView /></Lazy>} />
 

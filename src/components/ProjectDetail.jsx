@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTabScroll } from '@/hooks/useTabScroll';
 import { useNavigate, useParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, useMotionValue, animate } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import api from '@/lib/apiClient';
@@ -21,7 +21,6 @@ import ExpenseFormDialog from '@/components/ExpenseFormDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import ProjectFormDialog from '@/components/ProjectFormDialog';
 import { useProjectTypes } from '@/lib/projectTypes';
 import { useProjectRoles } from '@/lib/projectRoles';
 import { TEAM_ROLE_LABELS } from '@/lib/teamRoles';
@@ -128,10 +127,14 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
 
   const totalInvoiced = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
   const totalPaid = invoices.reduce((sum, inv) => sum + (inv.paidAmount || 0), 0);
-  const openBalance = totalInvoiced - totalPaid;
   const totalCredits = expenses.filter(e => e.type === 'credit').reduce((sum, e) => sum + (e.amount || 0), 0);
   const totalCosts = expenses.filter(e => e.type !== 'credit').reduce((sum, e) => sum + (e.amount || 0), 0);
-  const totalIncome = totalInvoiced + totalCredits;
+
+  const hasProjectPrice = project.projectPrice != null;
+  const openBalance = hasProjectPrice
+    ? project.projectPrice - totalCredits
+    : totalInvoiced - totalPaid;
+  const totalIncome = hasProjectPrice ? project.projectPrice : totalInvoiced + totalCredits;
   const profit = totalIncome - totalCosts;
 
   return (
@@ -141,7 +144,7 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <FinancialCard label="Profit" value={formatCurrency(profit)} icon={TrendingUp} delay={0} />
           <FinancialCard label="Total Income" value={formatCurrency(totalIncome)} icon={Receipt} delay={0.05} />
-          <FinancialCard label="Total Paid" value={formatCurrency(totalPaid)} icon={DollarSign} delay={0.1} />
+          <FinancialCard label="Total Paid" value={formatCurrency(hasProjectPrice ? totalCredits : totalPaid)} icon={DollarSign} delay={0.1} />
           <FinancialCard label="Open Balance" value={formatCurrency(openBalance)} icon={CreditCard} delay={0.15} />
         </div>
       )}
@@ -179,12 +182,25 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
               <span className="project-details__prop-value">{formatDate(project.deliveryDate)}</span>
             </div>
           )}
-          {project.location && (
-            <div className="project-details__prop">
-              <span className="project-details__prop-label"><MapPin className="project-details__prop-icon" /> Location</span>
-              <span className="project-details__prop-value">{project.location}</span>
-            </div>
-          )}
+          {(project.location || project.addressStreet || project.addressCity) && (() => {
+            const addressParts = [project.addressStreet, project.addressCity, [project.addressState, project.addressZip].filter(Boolean).join(' ')].filter(Boolean);
+            const addressLine = addressParts.join(', ');
+            const mapsQuery = encodeURIComponent([project.location, addressLine].filter(Boolean).join(', '));
+            return (
+              <div className="project-details__prop">
+                <span className="project-details__prop-label"><MapPin className="project-details__prop-icon" /> Location</span>
+                <span className="project-details__prop-value">
+                  {project.location && <span>{project.location}</span>}
+                  {project.location && addressLine && <br />}
+                  {addressLine && (
+                    <a href={`https://www.google.com/maps/search/?api=1&query=${mapsQuery}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs">
+                      {addressLine}
+                    </a>
+                  )}
+                </span>
+              </div>
+            );
+          })()}
           {project.projectTypeRel && (
             <div className="project-details__prop">
               <span className="project-details__prop-label"><Package className="project-details__prop-icon" /> Type</span>
@@ -535,6 +551,82 @@ const NotesTab = ({ projectId, isPrivileged }) => {
   );
 };
 
+// ─── Swipeable Payment Row ───────────────────────────────────────────────────
+
+const PAYMENT_SWIPE_THRESHOLD = -120;
+
+const SwipeablePaymentRow = ({ payment: p, index: i, isPrivileged, getMemberName, formatCurrency, formatDate, onEdit, onDelete }) => {
+  const x = useMotionValue(0);
+
+  const cardContent = (
+    <div className="content-card__row p-3 flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{getMemberName(p)}</p>
+          <p className="text-xs text-surface-400">{formatDate(p.paymentDate)}{p.paymentMethod ? ` · ${p.paymentMethod}` : ''}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <span className={`text-sm font-bold ${p.status === 'paid' ? 'text-emerald-400' : 'text-amber-400'}`}>{formatCurrency(p.amount)}</span>
+        <span className={`chip text-xs ${p.status === 'paid' ? 'chip--success' : 'chip--warning'}`}>{p.status}</span>
+        {isPrivileged && (
+          <div className="hidden md:flex items-center gap-3">
+            <button onClick={onEdit} className="icon-button" title="Edit">
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={onDelete} className="icon-button">
+              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (!isPrivileged) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+        {cardContent}
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
+      className="relative overflow-hidden rounded-xl md:overflow-visible">
+      {/* Swipe actions behind */}
+      <div className="absolute inset-0 flex items-stretch justify-end rounded-xl md:hidden">
+        <button onClick={(e) => { e.stopPropagation(); animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 }); onEdit(); }}
+          className="flex items-center justify-center w-[60px] bg-blue-500 text-white">
+          <Pencil className="w-4 h-4" />
+        </button>
+        <button onClick={(e) => { e.stopPropagation(); animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 }); onDelete(); }}
+          className="flex items-center justify-center w-[60px] bg-red-500 text-white">
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      <motion.div
+        className="relative z-10 swipe-card"
+        style={{ x }}
+        drag="x"
+        dragDirectionLock
+        dragConstraints={{ left: PAYMENT_SWIPE_THRESHOLD, right: 0 }}
+        dragElastic={0.1}
+        onDragEnd={(_, info) => {
+          if (info.offset.x < PAYMENT_SWIPE_THRESHOLD / 2) {
+            animate(x, PAYMENT_SWIPE_THRESHOLD, { type: 'spring', stiffness: 300, damping: 30 });
+          } else {
+            animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 });
+          }
+        }}
+      >
+        {cardContent}
+      </motion.div>
+    </motion.div>
+  );
+};
+
 // ─── Team Tab ───────────────────────────────────────────────────────────────
 
 const TeamTab = ({ project, projectId, isPrivileged }) => {
@@ -563,13 +655,6 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
   const assignments = project.assignments || [];
   const payments = project.teamPayments || [];
   const teamCostPaid = project.teamCostPaid || 0;
-
-  const invoices = project.invoices || [];
-  const expenses = project.expenses || [];
-  const totalInvoiced = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
-  const totalCredits = expenses.filter(e => e.type === 'credit').reduce((sum, e) => sum + (e.amount || 0), 0);
-  const totalCosts = expenses.filter(e => e.type !== 'credit').reduce((sum, e) => sum + (e.amount || 0), 0);
-  const profit = (totalInvoiced + totalCredits) - totalCosts;
 
   const assignedMemberIds = assignments.map(a => a.teamMemberId);
   const availableMembers = teamList.filter(m => !assignedMemberIds.includes(m.id) && m.isActive);
@@ -661,10 +746,8 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
   return (
     <div className="space-y-5">
       {/* Financial Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <FinancialCard label="Paid to Team" value={formatCurrency(teamCostPaid)} icon={Users} delay={0} />
-        <FinancialCard label="Revenue" value={formatCurrency(totalInvoiced)} icon={DollarSign} delay={0.05} />
-        <FinancialCard label="Profit" value={formatCurrency(profit)} icon={TrendingUp} delay={0.1} />
       </div>
 
       {/* Assigned Crew */}
@@ -728,42 +811,24 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
         {payments.length > 0 ? (
           <div className="space-y-2">
             {payments.map((p, i) => (
-              <motion.div key={p.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-                className="content-card__row p-3 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{getMemberName(p)}</p>
-                    <p className="text-xs text-surface-400">{formatDate(p.paymentDate)}{p.paymentMethod ? ` · ${p.paymentMethod}` : ''}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className={`text-sm font-bold ${p.status === 'paid' ? 'text-emerald-400' : 'text-amber-400'}`}>{formatCurrency(p.amount)}</span>
-                  <span className={`chip text-xs ${p.status === 'paid' ? 'chip--success' : 'chip--warning'}`}>{p.status}</span>
-                  {isPrivileged && (
-                    <>
-                      <button onClick={() => {
-                        setEditPayment(p);
-                        setPaymentForm({
-                          teamMemberId: p.teamMemberId,
-                          amount: p.amount?.toString() || '',
-                          paymentDate: p.paymentDate ? new Date(p.paymentDate).toISOString().slice(0, 10) : '',
-                          paymentMethod: p.paymentMethod || '',
-                          status: p.status || 'paid',
-                          notes: p.notes || '',
-                          advanceRepayment: '',
-                          salaryDeduction: '',
-                        });
-                        setPaymentDialog(true);
-                      }} className="icon-button" title="Edit">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => setDeleteConfirm({ type: 'payment', id: p.id, label: `${formatCurrency(p.amount)} to ${getMemberName(p)}` })} className="icon-button">
-                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </motion.div>
+              <SwipeablePaymentRow key={p.id} payment={p} index={i} isPrivileged={isPrivileged}
+                getMemberName={getMemberName} formatCurrency={formatCurrency} formatDate={formatDate}
+                onEdit={() => {
+                  setEditPayment(p);
+                  setPaymentForm({
+                    teamMemberId: p.teamMemberId,
+                    amount: p.amount?.toString() || '',
+                    paymentDate: p.paymentDate ? new Date(p.paymentDate).toISOString().slice(0, 10) : '',
+                    paymentMethod: p.paymentMethod || '',
+                    status: p.status || 'paid',
+                    notes: p.notes || '',
+                    advanceRepayment: '',
+                    salaryDeduction: '',
+                  });
+                  setPaymentDialog(true);
+                }}
+                onDelete={() => setDeleteConfirm({ type: 'payment', id: p.id, label: `${formatCurrency(p.amount)} to ${getMemberName(p)}` })}
+              />
             ))}
           </div>
         ) : (
@@ -1158,7 +1223,6 @@ const ProjectDetail = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const { tabsRef, scrollToTabs } = useTabScroll();
   const tabScrollRef = useRef(null);
-  const [isEditOpen, setIsEditOpen] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const updateProject = useUpdateProject();
@@ -1276,7 +1340,7 @@ const ProjectDetail = () => {
 
           <div className="project-hero__actions">
             {canEdit && (
-              <button onClick={() => setIsEditOpen(true)} className="project-hero__action-btn" title="Edit project">
+              <button onClick={() => navigate(`/projects/${projectId}/edit`)} className="project-hero__action-btn" title="Edit project">
                 <Pencil className="w-4 h-4" />
               </button>
             )}
@@ -1439,12 +1503,6 @@ const ProjectDetail = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Edit Project Dialog */}
-      <ProjectFormDialog
-        open={isEditOpen}
-        onOpenChange={setIsEditOpen}
-        project={project}
-      />
     </motion.div>
   );
 };

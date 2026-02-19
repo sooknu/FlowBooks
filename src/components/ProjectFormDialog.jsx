@@ -22,7 +22,7 @@ export const PROJECT_STATUSES = [
   { value: 'completed', label: 'Completed' },
 ];
 
-const EMPTY_FORM = { title: '', clientId: '', projectTypeId: '', status: 'lead', shootStartDate: '', shootEndDate: '', deliveryDate: '', location: '', description: '' };
+const EMPTY_FORM = { title: '', clientId: '', projectTypeId: '', status: 'lead', shootStartDate: '', shootEndDate: '', deliveryDate: '', location: '', addressStreet: '', addressCity: '', addressState: 'CA', addressZip: '', description: '', projectPrice: '' };
 
 function getMemberName(m) {
   return m.displayName || m.firstName || m.name || m.userName || m.userEmail || '—';
@@ -80,7 +80,12 @@ const ProjectFormDialog = ({ open, onOpenChange, project, defaultValues }) => {
         shootEndDate: hasEnd ? new Date(project.shootEndDate).toISOString().split('T')[0] : '',
         deliveryDate: project.deliveryDate ? new Date(project.deliveryDate).toISOString().split('T')[0] : '',
         location: project.location || '',
+        addressStreet: project.addressStreet || '',
+        addressCity: project.addressCity || '',
+        addressState: project.addressState || '',
+        addressZip: project.addressZip || '',
         description: project.description || '',
+        projectPrice: project.projectPrice != null ? project.projectPrice.toString() : '',
       });
       // Pre-populate existing assignments
       if (project.assignments) {
@@ -155,6 +160,7 @@ const ProjectFormDialog = ({ open, onOpenChange, project, defaultValues }) => {
       shootStartDate: form.shootStartDate || null,
       shootEndDate: isMultiDay && form.shootEndDate ? form.shootEndDate : null,
       deliveryDate: form.deliveryDate || null,
+      projectPrice: form.projectPrice ? parseFloat(form.projectPrice) : null,
     };
 
     try {
@@ -370,10 +376,48 @@ const ProjectFormDialog = ({ open, onOpenChange, project, defaultValues }) => {
               </div>
             </div>
 
-            {/* Location */}
+            {/* Location & Address */}
             <div>
-              <label className="text-xs font-medium text-surface-600 mb-1 block">Location</label>
-              <input type="text" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} className="glass-input w-full" placeholder="e.g. The Grand Venue, Miami" />
+              <label className="text-xs font-medium text-surface-600 mb-1 block">Location Name</label>
+              <input type="text" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} className="glass-input w-full" placeholder="e.g. The Grand Venue" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-surface-600 mb-1 block">Street Address</label>
+              <input type="text" value={form.addressStreet} onChange={e => setForm({ ...form, addressStreet: e.target.value })} className="glass-input w-full" placeholder="123 Main St" />
+            </div>
+            <div className="grid grid-cols-5 gap-2">
+              <div className="col-span-2">
+                <label className="text-xs font-medium text-surface-600 mb-1 block">City</label>
+                <input type="text" value={form.addressCity} onChange={e => setForm({ ...form, addressCity: e.target.value })} className="glass-input w-full" placeholder="Miami" />
+              </div>
+              <div className="col-span-1">
+                <label className="text-xs font-medium text-surface-600 mb-1 block">State</label>
+                <select value={form.addressState} onChange={e => setForm({ ...form, addressState: e.target.value })} className="glass-input w-full">
+                  <option value="">—</option>
+                  {['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC','PR','VI','GU','AS','MP'].map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs font-medium text-surface-600 mb-1 block">Zip</label>
+                <input type="text" value={form.addressZip} onChange={e => setForm({ ...form, addressZip: e.target.value })} className="glass-input w-full" placeholder="33101" />
+              </div>
+            </div>
+
+            {/* Project Price */}
+            <div>
+              <label className="text-xs font-medium text-surface-600 mb-1 block">Project Price</label>
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                value={form.projectPrice}
+                onChange={e => setForm({ ...form, projectPrice: e.target.value })}
+                className="glass-input w-full"
+                placeholder="Total amount owed by client (optional)"
+              />
             </div>
 
             {/* Description */}

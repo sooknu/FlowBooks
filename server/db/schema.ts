@@ -200,10 +200,15 @@ export const projects = pgTable('projects', {
   shootEndDate: timestamp('shoot_end_date', { mode: 'date' }),
   deliveryDate: timestamp('delivery_date', { mode: 'date' }),
   location: text('location'),
+  addressStreet: text('address_street'),
+  addressCity: text('address_city'),
+  addressState: text('address_state'),
+  addressZip: text('address_zip'),
   lockedBy: text('locked_by').references(() => user.id, { onDelete: 'set null' }),
   teamCost: doublePrecision('team_cost').default(0),
   teamCostPaid: doublePrecision('team_cost_paid').default(0),
   margin: doublePrecision('margin'),
+  projectPrice: doublePrecision('project_price'),
   createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
 }, (table) => [
@@ -449,7 +454,7 @@ export const notifications = pgTable('notifications', {
 
 export const teamMembers = pgTable('team_members', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
+  userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
   name: text('name'),
   role: teamRoleEnum('role').notNull(),
   paymentMethod: text('payment_method'),

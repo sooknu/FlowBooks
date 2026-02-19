@@ -10,6 +10,7 @@ import {
   decodeIdToken,
   fetchUserInfo,
 } from '../lib/oidc';
+import { notifyNewUserSignup } from '../lib/notifications';
 
 async function getOidcSettings() {
   const keys = ['oidc_enabled', 'oidc_provider_name', 'oidc_client_id', 'oidc_client_secret', 'oidc_base_url', 'oidc_callback_url'];
@@ -254,6 +255,11 @@ async function oidcRoutes(fastify: any) {
           createdAt: new Date(),
           updatedAt: new Date(),
         }).onConflictDoNothing();
+
+        // Notify admins/managers about new signup (skip if first user / auto-admin)
+        if (role !== 'admin') {
+          notifyNewUserSignup({ id: foundUser.id, email: foundUser.email, name });
+        }
       }
 
       // Create session via Better Auth's internal adapter (correct token format + storage)

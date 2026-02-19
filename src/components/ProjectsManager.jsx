@@ -15,8 +15,6 @@ import { useAppData } from '@/hooks/useAppData';
 import { useAuth } from '@/contexts/AuthContext';
 import { queryKeys } from '@/lib/queryKeys';
 import api from '@/lib/apiClient';
-import ProjectFormDialog from '@/components/ProjectFormDialog';
-
 const PAGE_SIZE = 25;
 
 const PROJECT_STATUSES = [
@@ -187,8 +185,6 @@ const ProjectsManager = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const mineFilter = searchParams.get('mine') === 'true';
   const [sortIndex, setSortIndex] = useState(0);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingProject, setEditingProject] = useState(null);
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
@@ -244,8 +240,7 @@ const ProjectsManager = () => {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleEdit = (project) => {
-    setEditingProject(project);
-    setIsFormOpen(true);
+    navigate(`/projects/${project.id}/edit`);
   };
 
   const handleArchive = (project) => {
@@ -330,7 +325,7 @@ const ProjectsManager = () => {
             <span className="hidden sm:inline">{currentSort.label}</span>
           </button>
           <button
-            onClick={() => { setEditingProject(null); setIsFormOpen(true); }}
+            onClick={() => navigate('/projects/new')}
             className="action-btn"
           >
             <Plus className="action-btn__icon" />
@@ -426,7 +421,7 @@ const ProjectsManager = () => {
           </div>
           <h3 className="text-lg font-semibold text-surface-700 mb-1">No projects yet</h3>
           <p className="text-surface-400 text-sm mb-4">Create your first project to get started.</p>
-          <button onClick={() => { setEditingProject(null); setIsFormOpen(true); }} className="action-btn">
+          <button onClick={() => navigate('/projects/new')} className="action-btn">
             <Plus className="w-4 h-4 mr-2" /> New Project
           </button>
         </div>
@@ -446,13 +441,6 @@ const ProjectsManager = () => {
           )}
         </>
       )}
-
-      {/* Create/Edit Dialog */}
-      <ProjectFormDialog
-        open={isFormOpen}
-        onOpenChange={(open) => { if (!open) setEditingProject(null); setIsFormOpen(open); }}
-        project={editingProject}
-      />
 
       {/* Archive Confirmation */}
       <AlertDialog open={!!archiveTarget} onOpenChange={(open) => { if (!open) setArchiveTarget(null); }}>

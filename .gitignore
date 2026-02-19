@@ -22,8 +22,9 @@ server/db/migrations/
 .DS_Store
 Thumbs.db
 
-# Claude Code (private memory, not CLAUDE.md)
+# Claude Code
 .claude/
+CLAUDE.md
 
 # Migration scripts (one-time, contain data dumps)
 scripts/*

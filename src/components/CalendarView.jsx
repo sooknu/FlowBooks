@@ -19,8 +19,6 @@ import { useAppData } from '@/hooks/useAppData';
 import { useProjectTypes } from '@/lib/projectTypes';
 import { queryKeys } from '@/lib/queryKeys';
 import api from '@/lib/apiClient';
-import ProjectFormDialog from '@/components/ProjectFormDialog';
-
 const STATUS_LABELS = {
   lead: 'Lead', booked: 'Booked', shooting: 'Shooting',
   editing: 'Editing', delivered: 'Delivered', completed: 'Completed',
@@ -544,8 +542,6 @@ const CalendarView = () => {
   const [view, setView] = useState('month');
   const [selectedDate, setSelectedDate] = useState(null);
   const [teamMemberFilter, setTeamMemberFilter] = useState('');
-  const [newProjectDate, setNewProjectDate] = useState(null);
-
   // Compute date range for the API query
   const { rangeStart, rangeEnd } = useMemo(() => {
     if (view === 'month') {
@@ -606,7 +602,7 @@ const CalendarView = () => {
   };
 
   const handleNewProject = (date) => {
-    setNewProjectDate(date);
+    navigate(`/projects/new?shootDate=${format(date, 'yyyy-MM-dd')}`);
   };
 
   return (
@@ -674,13 +670,6 @@ const CalendarView = () => {
         getTypeColor={getTypeColor}
       />
 
-      {/* New project dialog (from calendar date click) */}
-      <ProjectFormDialog
-        open={!!newProjectDate}
-        onOpenChange={(open) => { if (!open) setNewProjectDate(null); }}
-        project={null}
-        defaultValues={newProjectDate ? { shootStartDate: format(newProjectDate, 'yyyy-MM-dd') } : undefined}
-      />
     </motion.div>
   );
 };
