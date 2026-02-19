@@ -90,7 +90,7 @@ async function _notifyNewUserSignup(newUser: { id: string; email: string; name?:
   const darkBg = companySettings.email_header_bg_color || '#1a1a2e';
   const headerTextColor = companySettings.email_header_text_color || '#ffffff';
   const baseUrl = process.env.BETTER_AUTH_URL || 'http://localhost:3002';
-  const usersUrl = `${baseUrl}/settings/permissions`;
+  const usersUrl = `${baseUrl}/team?tab=accounts&approve=${newUser.id}`;
   const date = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
   const html = `<!DOCTYPE html>

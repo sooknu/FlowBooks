@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from '@/components/ui/use-toast';
 import api from '@/lib/apiClient';
@@ -36,6 +37,22 @@ const UsersManager = () => {
   const [userToDelete, setUserToDelete] = useState(null);
   const [pendingRoles, setPendingRoles] = useState({});
   const [pendingLinks, setPendingLinks] = useState({});
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlightId = searchParams.get('approve');
+  const highlightRef = useRef(null);
+
+  // Scroll to and highlight the specific user from the email link
+  useEffect(() => {
+    if (highlightId && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Clear the param so refreshing doesn't re-highlight
+      const timeout = setTimeout(() => {
+        searchParams.delete('approve');
+        setSearchParams(searchParams, { replace: true });
+      }, 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [highlightId, loading]);
 
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
@@ -188,7 +205,9 @@ const UsersManager = () => {
               </div>
               <div className="border border-border rounded-lg overflow-hidden">
                 {pendingUsers.map((u, index) => (
-                  <motion.div key={u.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.03 }}
+                  <motion.div key={u.id} ref={u.id === highlightId ? highlightRef : undefined}
+                    initial={{ opacity: 0 }} animate={{ opacity: 1, backgroundColor: u.id === highlightId ? ['rgba(251,191,36,0.25)', 'rgba(251,191,36,0)'] : undefined }}
+                    transition={{ delay: index * 0.03, backgroundColor: { duration: 2, ease: 'easeOut' } }}
                     className="user-row user-row--pending"
                   >
                     <div className="user-row__icon">

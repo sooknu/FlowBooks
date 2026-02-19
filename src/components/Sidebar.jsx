@@ -7,7 +7,7 @@ import {
   Users, Package, Wallet,
   BarChart3,
   Settings, Shield, ScrollText,
-  LogOut, User, ChevronsLeft, Menu, X, Bell, Lock, Banknote, ChevronRight,
+  LogOut, User, UserPlus, ChevronsLeft, Menu, X, Bell, Lock, Banknote, ChevronRight,
 } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -62,6 +62,7 @@ const NOTIF_TYPE_CONFIG = {
   unlock_request: { icon: Lock, color: 'text-amber-500', bg: 'bg-amber-50', route: '/projects' },
   advance_created: { icon: Banknote, color: 'text-amber-500', bg: 'bg-amber-50', route: '/finance' },
   salary_accrued: { icon: Wallet, color: 'text-emerald-500', bg: 'bg-emerald-50', route: '/salary' },
+  new_user_signup: { icon: UserPlus, color: 'text-amber-500', bg: 'bg-amber-50', route: '/team?tab=accounts' },
 };
 
 function timeAgo(date) {
@@ -241,6 +242,8 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
                   if (!n.isRead) markRead.mutate(n.id);
                   if (n.entityType === 'project' && n.entityId) {
                     navigate(`/projects/${n.entityId}`);
+                  } else if (n.entityType === 'user' && n.entityId) {
+                    navigate(`/team?tab=accounts&approve=${n.entityId}`);
                   } else if (cfg.route) {
                     navigate(cfg.route);
                   }

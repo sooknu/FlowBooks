@@ -1,5 +1,6 @@
 import React, { useState, useMemo, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Shield, Plus, Pencil, Trash2, Users, UserPlus, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -60,7 +61,8 @@ const TeamManager = () => {
   const { teamRole, teamMemberId, isPrivileged } = useAppData();
   const isOwner = teamRole === 'owner';
 
-  const [activeTab, setActiveTab] = useState('members');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'members');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
