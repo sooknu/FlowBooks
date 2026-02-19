@@ -1,6 +1,6 @@
 import { db } from '../db';
-import { appSettings, invoices, invoiceItems, payments, quotes, quoteItems, clients, products, pdfDocuments, profiles, user } from '../db/schema';
-import { eq, inArray, or } from 'drizzle-orm';
+import { appSettings, invoices, invoiceItems, payments, quotes, quoteItems, clients, products, pdfDocuments, profiles, user, teamMembers } from '../db/schema';
+import { eq, and, inArray, or, isNull } from 'drizzle-orm';
 import { clearRoleCache } from './permissions';
 import fs from 'fs';
 import path from 'path';
@@ -74,6 +74,16 @@ export async function deleteUserAndRelatedData(userId: string) {
       .select({ fileName: pdfDocuments.fileName })
       .from(pdfDocuments)
       .where(pdfConditions.length === 1 ? pdfConditions[0] : or(...pdfConditions));
+  }
+
+  // Backfill team member name before deleting user (SET NULL will clear userId but preserve the record)
+  const [profile] = await db.select({ displayName: profiles.displayName, email: profiles.email }).from(profiles).where(eq(profiles.id, userId));
+  const [usr] = await db.select({ name: user.name, email: user.email }).from(user).where(eq(user.id, userId));
+  const preservedName = profile?.displayName || usr?.name || usr?.email;
+  if (preservedName) {
+    await db.update(teamMembers)
+      .set({ name: preservedName })
+      .where(and(eq(teamMembers.userId, userId), or(isNull(teamMembers.name), eq(teamMembers.name, ''))));
   }
 
   await db.transaction(async (tx) => {

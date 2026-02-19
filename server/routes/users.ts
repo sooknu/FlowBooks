@@ -364,10 +364,14 @@ export default async function userRoutes(fastify: any) {
 
     if (linkTeamMemberId) {
       // Link an existing unlinked team member to this user
-      const [member] = await db.select({ id: teamMembers.id, userId: teamMembers.userId }).from(teamMembers).where(eq(teamMembers.id, linkTeamMemberId));
+      const [member] = await db.select({ id: teamMembers.id, userId: teamMembers.userId, name: teamMembers.name }).from(teamMembers).where(eq(teamMembers.id, linkTeamMemberId));
       if (member && !member.userId) {
+        const updates: any = { userId: targetId, updatedAt: new Date() };
+        if (teamRole) updates.role = teamRole;
+        // Backfill name from profile if team member has no name
+        if (!member.name) updates.name = existing.displayName || existing.email;
         await db.update(teamMembers)
-          .set({ userId: targetId, ...(teamRole ? { role: teamRole } : {}), updatedAt: new Date() })
+          .set(updates)
           .where(eq(teamMembers.id, linkTeamMemberId));
       }
     } else if (teamRole) {
