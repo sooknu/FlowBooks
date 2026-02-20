@@ -3,6 +3,7 @@ import { teamMembers, user, profiles, projectAssignments, projects } from '../db
 import { eq, asc, isNull } from 'drizzle-orm';
 import { requireRole, requireSelfOrRole, requirePermission, clearRoleCache } from '../lib/permissions';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
+import { broadcast } from '../lib/pubsub';
 
 export default async function teamRoutes(fastify: any) {
   // GET /api/team — list all team members (owner, manager)
@@ -130,6 +131,7 @@ export default async function teamRoutes(fastify: any) {
 
       clearRoleCache(userId);
       logActivity({ ...actorFromRequest(request), action: 'created', entityType: 'team_member', entityId: data.id, entityLabel: existingUser.name || name || userId });
+      broadcast('team_member', 'created', request.user.id, data.id);
       return { data };
     } else {
       // Unlinked member — name required
@@ -143,6 +145,7 @@ export default async function teamRoutes(fastify: any) {
       }).returning();
 
       logActivity({ ...actorFromRequest(request), action: 'created', entityType: 'team_member', entityId: data.id, entityLabel: name.trim() });
+      broadcast('team_member', 'created', request.user.id, data.id);
       return { data };
     }
   });
@@ -190,6 +193,7 @@ export default async function teamRoutes(fastify: any) {
     if (existing.userId) clearRoleCache(existing.userId);
     if (data.userId && data.userId !== existing.userId) clearRoleCache(data.userId);
     logActivity({ ...actorFromRequest(request), action: 'updated', entityType: 'team_member', entityId: id, entityLabel: data.name || data.role });
+    broadcast('team_member', 'updated', request.user.id, id);
 
     return { data };
   });
@@ -205,6 +209,7 @@ export default async function teamRoutes(fastify: any) {
 
     if (existing.userId) clearRoleCache(existing.userId);
     logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'team_member', entityId: id });
+    broadcast('team_member', 'deleted', request.user.id, id);
 
     return { success: true };
   });

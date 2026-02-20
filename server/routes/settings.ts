@@ -3,6 +3,7 @@ import { appSettings } from '../db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { requireAdmin } from '../lib/permissions';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
+import { broadcast } from '../lib/pubsub';
 
 const SENSITIVE_KEYS = ['oidc_client_secret', 'google_client_secret', 'smtp_pass', 'stripe_secret_key', 'stripe_test_secret_key', 'paypal_client_secret', 'paypal_test_client_secret', 'unsplash_api_key', 'backup_s3_secret_key', 'backup_b2_app_key', 'backup_gdrive_credentials'];
 
@@ -26,9 +27,11 @@ export default async function settingRoutes(fastify: any) {
     const publicKeys = [
       'app_name',
       'login_logo_url',
+      'login_logo_dark_url',
       'login_logo_light_url',
       'login_logo_size',
       'header_logo_url',
+      'header_logo_dark_url',
       'header_logo_light_url',
       'favicon_url',
       'accent_color',
@@ -89,6 +92,7 @@ export default async function settingRoutes(fastify: any) {
       .map((s: any) => s.key);
     if (changedKeys.length > 0) {
       logActivity({ ...actorFromRequest(request), action: 'settings_changed', entityType: 'settings', details: 'Updated: ' + changedKeys.join(', ') });
+      broadcast('settings', 'updated', request.user.id);
     }
 
     return { data: results };

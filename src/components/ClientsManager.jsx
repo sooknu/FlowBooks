@@ -9,28 +9,18 @@ import { useCreateClient, useUpdateClient, useDeleteClient, useImportClients } f
 import { useAuth } from '@/contexts/AuthContext';
 import { Edit2, Trash2, Mail, Phone, Loader2, Search, Eye, Upload, Download, X, ChevronDown, ChevronRight, FileText, Receipt, ArrowUpDown } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
-import { parseCsvLine } from '@/lib/utils';
+import { parseCsvLine, formatPhoneNumber } from '@/lib/utils';
 import { US_STATE_NAMES } from '@/lib/usStateTaxRates';
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const PAGE_SIZE = 50;
 
-const formatPhoneNumber = (phoneNumberString) => {
-  if (!phoneNumberString) return '';
-  const cleaned = ('' + phoneNumberString).replace(/\D/g, '');
-  const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
-  if (match) {
-    return '(' + match[1] + ') ' + match[2] + '-' + match[3];
-  }
-  return phoneNumberString;
-};
-
 const ClientRow = React.memo(({ client, onViewProfile, onEdit, onDelete, onNewQuote, onNewInvoice }) => {
   const clientFullName = client.displayName || `${client.firstName || ''} ${client.lastName || ''}`.trim();
   const initials = ((client.firstName?.[0] || '') + (client.lastName?.[0] || '')).toUpperCase() || '?';
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="list-card list-card-accent p-3 px-4 group" onClick={() => onViewProfile(client.id)}>
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="list-card list-card--accent p-3 px-4 group" onClick={() => onViewProfile(client.id)}>
       <div className="flex items-center gap-3">
         {/* Initials avatar */}
         <div className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-xs font-bold" style={{ background: 'rgba(var(--accent-rgb) / 0.15)', color: 'rgba(var(--accent-rgb) / 0.9)' }}>

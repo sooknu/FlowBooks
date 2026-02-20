@@ -2,6 +2,7 @@ import { db } from '../db';
 import { clientCredits } from '../db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
+import { broadcast } from '../lib/pubsub';
 
 export default async function creditRoutes(fastify: any) {
   // GET /api/credits?clientId=xxx
@@ -39,6 +40,7 @@ export default async function creditRoutes(fastify: any) {
       entityId: credit.id,
       entityLabel: `$${parseFloat(amount).toFixed(2)} credit`,
     });
+    broadcast('credit', 'created', request.user.id, credit.id);
 
     return { data: credit };
   });
@@ -61,6 +63,7 @@ export default async function creditRoutes(fastify: any) {
       entityId: request.params.id,
       entityLabel: `$${credit.amount.toFixed(2)} credit`,
     });
+    broadcast('credit', 'deleted', request.user.id, request.params.id);
 
     return { success: true };
   });

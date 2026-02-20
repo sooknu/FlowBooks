@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import api from '@/lib/apiClient';
 import { toast } from '@/components/ui/use-toast';
-import { cn, fmtDate, fmtTime, tzDate } from '@/lib/utils';
+import { cn, fmtDate, fmtTime, tzDate, formatPhoneNumber } from '@/lib/utils';
 import {
   useUpdateClient, useDeleteClient, useCreateClientNote, useDeleteClientNote,
   useDeleteQuote, useDeleteInvoice, useDeletePayment, useDeleteCredit,
@@ -21,14 +21,6 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { US_STATE_NAMES } from '@/lib/usStateTaxRates';
-
-const formatPhoneNumber = (phoneNumberString) => {
-  if (!phoneNumberString) return '';
-  const cleaned = ('' + phoneNumberString).replace(/\D/g, '');
-  const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
-  if (match) return '(' + match[1] + ') ' + match[2] + '-' + match[3];
-  return phoneNumberString;
-};
 
 const formatCurrency = (amount) => '$' + (parseFloat(amount) || 0).toFixed(2);
 
@@ -65,7 +57,7 @@ const PROJECT_STATUS_COLORS = {
 
 // ── Financial Summary Card ──────────────────────────────────────────────────
 
-const subtleCard = 'rounded-xl border border-surface-200/60 bg-white';
+const subtleCard = 'rounded-xl border border-surface-200/60 bg-[rgb(var(--glass-bg))]';
 
 const FinancialCard = ({ label, value, accent, delay }) => (
   <motion.div
@@ -363,7 +355,7 @@ const TransactionsTab = ({ quotes, invoices, credits, navigate, client, clientId
               {filteredQuotes.map(q => (
                 <div
                   key={q.id}
-                  className="flat-card flat-card-interactive p-3 flex items-center justify-between group"
+                  className="flat-card flat-card--interactive p-3 flex items-center justify-between group"
                   onClick={() => navigate(`/quotes/${q.id}`)}
                 >
                   <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -402,7 +394,7 @@ const TransactionsTab = ({ quotes, invoices, credits, navigate, client, clientId
               {filteredInvoices.map(i => (
                 <div
                   key={i.id}
-                  className="flat-card flat-card-interactive p-3 flex items-center justify-between group"
+                  className="flat-card flat-card--interactive p-3 flex items-center justify-between group"
                   onClick={async () => {
                     const result = await api.get('/invoices/' + i.id);
                     navigate('/invoices', { state: { invoiceToLoad: result.data } });
@@ -456,7 +448,7 @@ const TransactionsTab = ({ quotes, invoices, credits, navigate, client, clientId
               {filteredPayments.map(p => (
                 <div
                   key={p.id}
-                  className="flat-card flat-card-interactive p-3 flex items-center justify-between group"
+                  className="flat-card flat-card--interactive p-3 flex items-center justify-between group"
                   onClick={async () => {
                     const result = await api.get('/invoices/' + p.invoiceId);
                     navigate('/invoices', { state: { invoiceToLoad: result.data } });
@@ -952,7 +944,7 @@ const ProjectsTab = ({ clientId }) => {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: i * 0.03 }}
-          className="flat-card flat-card-interactive p-3 flex items-center justify-between group"
+          className="flat-card flat-card--interactive p-3 flex items-center justify-between group"
           onClick={() => navigate(`/projects/${p.id}`)}
         >
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -1143,7 +1135,7 @@ const ClientProfile = () => {
               onClick={(e) => { setActiveTab(tab.key); scrollToTabs(); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
               className={cn(
                 "nav-tab relative flex items-center gap-1.5 px-3 pb-2.5 text-sm whitespace-nowrap transition-colors duration-200 flex-shrink-0",
-                activeTab === tab.key ? "nav-tab-active" : ""
+                activeTab === tab.key ? "nav-tab--active" : ""
               )}
             >
               <tab.icon className="w-3.5 h-3.5 hidden md:block" />
@@ -1151,7 +1143,7 @@ const ClientProfile = () => {
               {activeTab === tab.key && (
                 <motion.div
                   layoutId="client-tab-glass"
-                  className="nav-tab-glass"
+                  className="nav-tab__glass"
                   transition={{ type: "spring", stiffness: 380, damping: 32 }}
                 />
               )}

@@ -4,6 +4,7 @@ import { eq, ilike, or, asc as ascFn, desc as descFn, count } from 'drizzle-orm'
 import { deleteClientAndRelatedData } from '../lib/rpc';
 import { requirePermission } from '../lib/permissions';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
+import { broadcast } from '../lib/pubsub';
 
 export default async function clientRoutes(fastify: any) {
   // GET /api/clients
@@ -110,6 +111,7 @@ export default async function clientRoutes(fastify: any) {
       .values({ ...mapClientBody(request.body), userId: request.user.id })
       .returning();
     logActivity({ ...actorFromRequest(request), action: 'created', entityType: 'client', entityId: data.id, entityLabel: data.displayName || [data.firstName, data.lastName].filter(Boolean).join(' ') });
+    broadcast('client', 'created', request.user.id, data.id);
     return { data };
   });
 
@@ -121,6 +123,7 @@ export default async function clientRoutes(fastify: any) {
       .where(eq(clients.id, request.params.id))
       .returning();
     logActivity({ ...actorFromRequest(request), action: 'updated', entityType: 'client', entityId: data.id, entityLabel: data.displayName || [data.firstName, data.lastName].filter(Boolean).join(' ') });
+    broadcast('client', 'updated', request.user.id, data.id);
     return { data };
   });
 
@@ -152,6 +155,7 @@ export default async function clientRoutes(fastify: any) {
     }
 
     logActivity({ ...actorFromRequest(request), action: 'imported', entityType: 'client', entityLabel: `${results.length} clients` });
+    broadcast('client', 'imported', request.user.id);
     return { count: results.length };
   });
 
@@ -159,7 +163,10 @@ export default async function clientRoutes(fastify: any) {
   fastify.delete('/:id', { preHandler: [requirePermission('manage_clients')] }, async (request: any) => {
     const [existing] = await db.select({ displayName: clients.displayName, firstName: clients.firstName, lastName: clients.lastName }).from(clients).where(eq(clients.id, request.params.id));
     await deleteClientAndRelatedData(request.params.id);
-    if (existing) logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'client', entityId: request.params.id, entityLabel: existing.displayName || [existing.firstName, existing.lastName].filter(Boolean).join(' ') });
+    if (existing) {
+      logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'client', entityId: request.params.id, entityLabel: existing.displayName || [existing.firstName, existing.lastName].filter(Boolean).join(' ') });
+      broadcast('client', 'deleted', request.user.id, request.params.id);
+    }
     return { success: true };
   });
 

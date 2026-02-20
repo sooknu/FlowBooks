@@ -4,6 +4,7 @@ import { eq, and, desc, sum } from 'drizzle-orm';
 import { requireSelfOrRole, requirePermission, hasPermission } from '../lib/permissions';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
 import { parseDateInput } from '../lib/dates';
+import { broadcast } from '../lib/pubsub';
 
 export default async function teamSalaryRoutes(fastify: any) {
   // GET /api/team-salary — list entries (privileged see all, crew see own)
@@ -128,6 +129,7 @@ export default async function teamSalaryRoutes(fastify: any) {
       entityId: data.id,
       entityLabel: `$${amount}`,
     });
+    broadcast('team_salary', 'created', request.user.id, data.id);
 
     return { data };
   });
@@ -154,6 +156,7 @@ export default async function teamSalaryRoutes(fastify: any) {
       .returning();
 
     logActivity({ ...actorFromRequest(request), action: 'updated', entityType: 'team_salary', entityId: id });
+    broadcast('team_salary', 'updated', request.user.id, id);
     return { data };
   });
 
@@ -166,6 +169,7 @@ export default async function teamSalaryRoutes(fastify: any) {
 
     await db.delete(teamSalary).where(eq(teamSalary.id, id));
     logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'team_salary', entityId: id });
+    broadcast('team_salary', 'deleted', request.user.id, id);
 
     return { success: true };
   });

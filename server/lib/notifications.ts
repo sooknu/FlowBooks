@@ -2,6 +2,7 @@ import { db } from '../db';
 import { notifications, teamMembers, user, profiles } from '../db/schema';
 import { eq, and, inArray, isNotNull } from 'drizzle-orm';
 import { getSmtpSettings, createTransporter, buildFromAddress, getCompanySettings } from './mailer';
+import { broadcast } from './pubsub';
 
 /**
  * Get user IDs of all privileged users (owner/manager team roles + admin users).
@@ -48,6 +49,7 @@ export async function notifyUsers(opts: {
       entityId: opts.entityId ?? null,
     }));
     await db.insert(notifications).values(rows);
+    broadcast('notification', 'created', 'system');
   } catch (err) {
     console.error('[notifications] Failed to create notifications:', err);
   }

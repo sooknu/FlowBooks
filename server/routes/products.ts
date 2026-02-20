@@ -3,6 +3,7 @@ import { products } from '../db/schema';
 import { eq, ilike, and, asc as ascFn, desc as descFn, count, isNotNull, inArray } from 'drizzle-orm';
 import { requireAdmin } from '../lib/permissions';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
+import { broadcast } from '../lib/pubsub';
 
 function mapProductBody(body: any) {
   const category = (body.category ?? null);
@@ -86,6 +87,7 @@ export default async function productRoutes(fastify: any) {
       .values({ ...mapProductBody(request.body), userId: request.user.id })
       .returning();
     logActivity({ ...actorFromRequest(request), action: 'created', entityType: 'product', entityId: data.id, entityLabel: data.name });
+    broadcast('product', 'created', request.user.id, data.id);
     return { data };
   });
 
@@ -97,6 +99,7 @@ export default async function productRoutes(fastify: any) {
       .where(eq(products.id, request.params.id))
       .returning();
     logActivity({ ...actorFromRequest(request), action: 'updated', entityType: 'product', entityId: data.id, entityLabel: data.name });
+    broadcast('product', 'updated', request.user.id, data.id);
     return { data };
   });
 
@@ -132,6 +135,7 @@ export default async function productRoutes(fastify: any) {
     }
 
     logActivity({ ...actorFromRequest(request), action: 'imported', entityType: 'product', entityLabel: `${results.length} products` });
+    broadcast('product', 'imported', request.user.id);
     return { count: results.length };
   });
 
@@ -140,6 +144,7 @@ export default async function productRoutes(fastify: any) {
     const [existing] = await db.select({ name: products.name }).from(products).where(eq(products.id, request.params.id));
     await db.delete(products).where(eq(products.id, request.params.id));
     if (existing) logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'product', entityId: request.params.id, entityLabel: existing.name });
+    broadcast('product', 'deleted', request.user.id, request.params.id);
     return { success: true };
   });
 
@@ -148,6 +153,7 @@ export default async function productRoutes(fastify: any) {
     const { ids } = request.body;
     await db.delete(products).where(inArray(products.id, ids));
     logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'product', entityLabel: `${ids.length} products` });
+    broadcast('product', 'deleted', request.user.id);
     return { success: true };
   });
 }

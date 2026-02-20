@@ -4,6 +4,7 @@ import { eq, and } from 'drizzle-orm';
 import { requirePermission } from '../lib/permissions';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
 import { recalculateProjectTeamFinancials } from '../lib/teamCalc';
+import { broadcast } from '../lib/pubsub';
 
 export default async function assignmentRoutes(fastify: any) {
   // GET /api/assignments — list assignments (filtered by role)
@@ -80,6 +81,7 @@ export default async function assignmentRoutes(fastify: any) {
 
     await recalculateProjectTeamFinancials(projectId);
     logActivity({ ...actorFromRequest(request), action: 'created', entityType: 'project_assignment', entityId: data.id, entityLabel: project.title });
+    broadcast('project_assignment', 'created', request.user.id, data.id);
 
     return { data };
   });
@@ -105,6 +107,7 @@ export default async function assignmentRoutes(fastify: any) {
 
     await recalculateProjectTeamFinancials(existing.projectId);
     logActivity({ ...actorFromRequest(request), action: 'updated', entityType: 'project_assignment', entityId: id });
+    broadcast('project_assignment', 'updated', request.user.id, id);
 
     return { data };
   });
@@ -120,6 +123,7 @@ export default async function assignmentRoutes(fastify: any) {
 
     await recalculateProjectTeamFinancials(existing.projectId);
     logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'project_assignment', entityId: id });
+    broadcast('project_assignment', 'deleted', request.user.id, id);
 
     return { success: true };
   });

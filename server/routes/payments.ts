@@ -6,6 +6,7 @@ import { checkDepositAndBookProject, revertProjectIfUnpaid } from '../lib/stripe
 import { notifyUsers, getPrivilegedUserIds } from '../lib/notifications';
 import { recalculateProjectTeamFinancials } from '../lib/teamCalc';
 import { parseDateInput } from '../lib/dates';
+import { broadcast } from '../lib/pubsub';
 
 export default async function paymentRoutes(fastify: any) {
   // POST /api/payments
@@ -52,6 +53,7 @@ export default async function paymentRoutes(fastify: any) {
     const [parentInv] = await db.select({ invoiceNumber: invoices.invoiceNumber, clientName: invoices.clientName }).from(invoices).where(eq(invoices.id, invoiceId));
     const invLabel = parentInv ? 'Invoice #' + String(parentInv.invoiceNumber).padStart(5, '0') : '';
     logActivity({ ...actorFromRequest(request), action: 'created', entityType: 'payment', entityId: payment.id, entityLabel: `$${parseFloat(amount).toFixed(2)} for ${invLabel}` });
+    broadcast('payment', 'created', request.user.id, payment.id);
 
     const privilegedIds = await getPrivilegedUserIds();
     notifyUsers({
@@ -111,6 +113,7 @@ export default async function paymentRoutes(fastify: any) {
     const [parentInv] = await db.select({ invoiceNumber: invoices.invoiceNumber }).from(invoices).where(eq(invoices.id, invoiceId));
     const invLabel = parentInv ? 'Invoice #' + String(parentInv.invoiceNumber).padStart(5, '0') : '';
     logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'payment', entityId: request.params.id, entityLabel: `$${payment.amount.toFixed(2)} from ${invLabel}` });
+    broadcast('payment', 'deleted', request.user.id, request.params.id);
 
     return { success: true };
   });

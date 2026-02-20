@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAppData, usePublicSettings } from '@/hooks/useAppData';
 import { queryClient } from '@/lib/queryClient';
 import Sidebar from '@/components/Sidebar';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 
 const AppLayout = () => {
   const { user, signOut, isImpersonating } = useAuth();
@@ -15,6 +16,9 @@ const AppLayout = () => {
   const navigate = useNavigate();
 
   const effectiveSettings = hasLoadedInitialData ? appData.settings : (publicSettings || {});
+
+  // Real-time cross-user data sync via SSE
+  useRealtimeSync();
 
   // Reset cache on user identity change
   const userId = user?.id;
@@ -61,6 +65,7 @@ const AppLayout = () => {
   const appName = effectiveSettings?.app_name || 'QuoteFlow';
   const faviconUrl = effectiveSettings?.favicon_url;
   const headerLogoUrl = effectiveSettings?.header_logo_url;
+  const headerLogoDarkUrl = effectiveSettings?.header_logo_dark_url;
   const headerLogoSize = effectiveSettings?.header_logo_size || '28';
 
   return (
@@ -80,6 +85,7 @@ const AppLayout = () => {
           can={can}
           appName={appName}
           headerLogoUrl={headerLogoUrl}
+          headerLogoDarkUrl={headerLogoDarkUrl}
           headerLogoSize={headerLogoSize}
           faviconUrl={faviconUrl}
           userProfile={userProfile}

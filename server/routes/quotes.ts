@@ -5,6 +5,7 @@ import { getNextQuoteNumber } from '../lib/rpc';
 import { serializeItems, parseQuoteItems, replaceQuoteItems } from '../lib/items';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
 import { parseDateInput } from '../lib/dates';
+import { broadcast } from '../lib/pubsub';
 
 function docLabel(num: number) {
   return 'Quote #' + String(num).padStart(5, '0');
@@ -135,6 +136,7 @@ export default async function quoteRoutes(fastify: any) {
     });
 
     logActivity({ ...actorFromRequest(request), action: 'created', entityType: 'quote', entityId: created.id, entityLabel: docLabel(quoteNumber) });
+    broadcast('quote', 'created', request.user.id, created.id);
 
     return { data: withSerializedItems(data) };
   });
@@ -168,6 +170,7 @@ export default async function quoteRoutes(fastify: any) {
     });
 
     logActivity({ ...actorFromRequest(request), action: 'updated', entityType: 'quote', entityId: updated.id, entityLabel: docLabel(updated.quoteNumber) });
+    broadcast('quote', 'updated', request.user.id, updated.id);
 
     return { data: withSerializedItems(data) };
   });
@@ -176,7 +179,10 @@ export default async function quoteRoutes(fastify: any) {
   fastify.delete('/:id', async (request: any) => {
     const [existing] = await db.select({ quoteNumber: quotes.quoteNumber }).from(quotes).where(eq(quotes.id, request.params.id));
     await db.delete(quotes).where(eq(quotes.id, request.params.id));
-    if (existing) logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'quote', entityId: request.params.id, entityLabel: docLabel(existing.quoteNumber) });
+    if (existing) {
+      logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'quote', entityId: request.params.id, entityLabel: docLabel(existing.quoteNumber) });
+      broadcast('quote', 'deleted', request.user.id, request.params.id);
+    }
     return { success: true };
   });
 
@@ -185,6 +191,7 @@ export default async function quoteRoutes(fastify: any) {
     const { ids } = request.body;
     await db.delete(quotes).where(inArray(quotes.id, ids));
     logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'quote', entityLabel: `${ids.length} quotes` });
+    broadcast('quote', 'deleted', request.user.id);
     return { success: true };
   });
 }

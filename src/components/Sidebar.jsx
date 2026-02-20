@@ -7,14 +7,16 @@ import {
   Users, Package, Wallet,
   BarChart3,
   Settings, Shield, ScrollText,
-  LogOut, User, UserPlus, ChevronsLeft, Menu, X, Bell, Lock, Banknote, ChevronRight,
+  LogOut, User, UserPlus, ChevronsLeft, Menu, X, Bell, Banknote, ChevronRight,
+  Sun, Moon, Monitor,
 } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
+import { cn, timeAgo } from '@/lib/utils';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/hooks/useTheme';
 
 const NAV_ITEMS = [
   { type: 'item', path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -30,7 +32,7 @@ const NAV_ITEMS = [
   { type: 'item', path: '/services', label: 'Services', icon: Package },
   { type: 'section', label: 'Finance', collapsible: true },
   { type: 'item', path: '/expenses', label: 'Expenses', icon: Wallet, permission: 'view_expenses' },
-  { type: 'item', path: '/finance', label: 'Advances', icon: Banknote, permission: 'view_advances' },
+  { type: 'item', path: '/finance', label: 'Finance', icon: Banknote, permission: 'view_advances' },
   { type: 'item', path: '/salary', label: 'Salary', icon: Wallet, permission: 'view_salary' },
   { type: 'item', path: '/reports', label: 'Reports', icon: BarChart3 },
 ];
@@ -59,25 +61,12 @@ const NOTIF_TYPE_CONFIG = {
   quote_approved: { icon: FileText, color: 'text-emerald-500', bg: 'bg-emerald-50', route: '/quotes' },
   payment_received: { icon: CreditCard, color: 'text-blue-500', bg: 'bg-blue-50', route: '/invoices' },
   project_booked: { icon: FolderKanban, color: 'text-indigo-500', bg: 'bg-indigo-50', route: '/projects' },
-  unlock_request: { icon: Lock, color: 'text-amber-500', bg: 'bg-amber-50', route: '/projects' },
   advance_created: { icon: Banknote, color: 'text-amber-500', bg: 'bg-amber-50', route: '/finance' },
   salary_accrued: { icon: Wallet, color: 'text-emerald-500', bg: 'bg-emerald-50', route: '/salary' },
   new_user_signup: { icon: UserPlus, color: 'text-amber-500', bg: 'bg-amber-50', route: '/team?tab=accounts' },
 };
 
-function timeAgo(date) {
-  const now = Date.now();
-  const diff = now - new Date(date).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, headerLogoSize, faviconUrl, userProfile, user, onSignOut, advancesEnabled, salaryEnabled, can }) => {
+const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, headerLogoDarkUrl, headerLogoSize, faviconUrl, userProfile, user, onSignOut, advancesEnabled, salaryEnabled, can }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
@@ -85,6 +74,8 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
   const [collapsedSections, setCollapsedSections] = useState(() => new Set(['Sales', 'Management', 'Finance', 'System']));
   const { notifications: notifs, unreadCount, markRead, markAllRead, clearAll } = useNotifications();
   const { isImpersonating, stopImpersonating } = useAuth();
+  const { theme, resolvedTheme, cycleTheme } = useTheme();
+  const effectiveHeaderLogo = resolvedTheme === 'dark' ? (headerLogoDarkUrl || headerLogoUrl) : headerLogoUrl;
 
   // Close mobile sidebar on navigation
   useEffect(() => {
@@ -192,7 +183,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
           title={collapsed ? item.label : undefined}
           className={({ isActive }) => cn(
             "sidebar-item group",
-            isActive && "sidebar-item-active"
+            isActive && "sidebar-item--active"
           )}
         >
           <Icon className="w-[18px] h-[18px] flex-shrink-0" />
@@ -285,8 +276,8 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
           {collapsed && faviconUrl ? (
             <img src={faviconUrl} alt="Logo" className="w-6 h-6 object-contain flex-shrink-0 hidden lg:block" />
           ) : null}
-          {headerLogoUrl ? (
-            <img src={headerLogoUrl} alt="Logo" className={cn("object-contain flex-shrink-0", collapsed && "lg:hidden")} style={{ height: `${parseInt(headerLogoSize, 10) || 28}px` }} />
+          {effectiveHeaderLogo ? (
+            <img src={effectiveHeaderLogo} alt="Logo" className={cn("object-contain flex-shrink-0", collapsed && "lg:hidden")} style={{ height: `${parseInt(headerLogoSize, 10) || 28}px` }} />
           ) : (
             <div className={cn("w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0", collapsed && faviconUrl && "lg:hidden")}>
               <span className="text-white text-xs font-bold">{(appName || 'Q')[0]}</span>
@@ -303,7 +294,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className={cn(
-              "flex items-center gap-2 min-w-0 flex-1 px-1 py-0.5 rounded-md hover:bg-white/60 transition-colors",
+              "flex items-center gap-2 min-w-0 flex-1 px-1 py-0.5 rounded-md hover:bg-white/60 dark:hover:bg-white/10 transition-colors",
               collapsed && "lg:p-1 lg:flex-none lg:justify-center"
             )}>
               <Avatar className="h-6 w-6 flex-shrink-0">
@@ -330,7 +321,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
           <Popover>
             <PopoverTrigger asChild>
               <button
-                className="relative flex items-center justify-center w-7 h-7 rounded-md text-surface-400 hover:text-surface-700 hover:bg-white/60 transition-colors"
+                className="relative flex items-center justify-center w-7 h-7 rounded-md text-surface-400 hover:text-surface-700 hover:bg-white/60 dark:hover:bg-white/10 transition-colors"
                 title="Notifications"
               >
                 <Bell className="w-[15px] h-[15px]" />
@@ -348,7 +339,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
 
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="hidden lg:flex items-center justify-center w-7 h-7 rounded-md text-surface-400 hover:text-surface-700 hover:bg-white/60 transition-colors"
+            className="hidden lg:flex items-center justify-center w-7 h-7 rounded-md text-surface-400 hover:text-surface-700 hover:bg-white/60 dark:hover:bg-white/10 transition-colors"
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             <ChevronsLeft className={cn("w-3.5 h-3.5 transition-transform duration-200", collapsed && "rotate-180")} />
@@ -373,6 +364,25 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
       <nav className="flex-1 overflow-y-auto py-1 pb-5 lg:pb-1 px-2 space-y-px sidebar-scrollable">
         {renderNavItems(items, isMobile)}
       </nav>
+
+      {/* Theme toggle */}
+      <div className={cn("flex-shrink-0 px-2 pb-3 pt-1", collapsed && "lg:px-1")}>
+        <button
+          onClick={cycleTheme}
+          title={`Theme: ${theme}`}
+          className={cn(
+            "flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-sidebar-muted hover:text-sidebar-text hover:bg-sidebar-hover transition-colors text-[13px]",
+            collapsed && "lg:justify-center lg:px-0"
+          )}
+        >
+          {theme === 'light' && <Sun className="w-4 h-4 flex-shrink-0" />}
+          {theme === 'dark' && <Moon className="w-4 h-4 flex-shrink-0" />}
+          {theme === 'system' && <Monitor className="w-4 h-4 flex-shrink-0" />}
+          <span className={cn("truncate", collapsed && "lg:hidden")}>
+            {theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System'}
+          </span>
+        </button>
+      </div>
     </>
   );
 
@@ -386,7 +396,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
               <button onClick={stopImpersonating} className="text-[11px] font-semibold text-amber-600 hover:text-amber-800 underline underline-offset-2">Exit</button>
             </div>
           )}
-          <div className="flex items-center justify-between h-[53px] px-3 bg-white/90 backdrop-blur-xl border-b border-surface-300 shadow-[0_1px_4px_rgba(0,0,0,0.1)]">
+          <div className="flex items-center justify-between h-[53px] px-3 bg-[rgb(var(--glass-bg)_/_0.9)] backdrop-blur-xl border-b border-surface-300 shadow-[0_1px_4px_rgba(0,0,0,0.1)]">
             <div className="flex items-center gap-2.5 min-w-0">
               <button
                 onClick={() => setMobileOpen(true)}

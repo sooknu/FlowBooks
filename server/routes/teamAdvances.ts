@@ -5,6 +5,7 @@ import { requireSelfOrRole, requirePermission } from '../lib/permissions';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
 import { notifyUsers } from '../lib/notifications';
 import { parseDateInput } from '../lib/dates';
+import { broadcast } from '../lib/pubsub';
 
 export default async function teamAdvanceRoutes(fastify: any) {
   // GET /api/team-advances — list entries (crew filtered to own)
@@ -42,6 +43,7 @@ export default async function teamAdvanceRoutes(fastify: any) {
         createdBy: teamAdvances.createdBy,
         createdAt: teamAdvances.createdAt,
         projectTitle: projects.title,
+        memberName: teamMembers.name,
         memberFirstName: profiles.firstName,
         memberLastName: profiles.lastName,
         memberDisplayName: profiles.displayName,
@@ -120,6 +122,7 @@ export default async function teamAdvanceRoutes(fastify: any) {
       entityId: data.id,
       entityLabel: `$${amount} — ${description}`,
     });
+    broadcast('team_advance', 'created', request.user.id, data.id);
 
     // Notify team member when a new advance is recorded
     if (type === 'advance') {
@@ -157,6 +160,7 @@ export default async function teamAdvanceRoutes(fastify: any) {
       .returning();
 
     logActivity({ ...actorFromRequest(request), action: 'updated', entityType: 'team_advance', entityId: id });
+    broadcast('team_advance', 'updated', request.user.id, id);
     return { data };
   });
 
@@ -169,6 +173,7 @@ export default async function teamAdvanceRoutes(fastify: any) {
 
     await db.delete(teamAdvances).where(eq(teamAdvances.id, id));
     logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'team_advance', entityId: id });
+    broadcast('team_advance', 'deleted', request.user.id, id);
 
     return { success: true };
   });

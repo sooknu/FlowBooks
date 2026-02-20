@@ -427,52 +427,6 @@ export function useDeleteProjectPermanently() {
   });
 }
 
-// ─── Project Lock ────────────────────────────────────────────────────────────
-
-export function useLockProject() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id) => api.put('/projects/' + id + '/lock'),
-    onSuccess: (_data, id) => {
-      toast({ title: "Project locked" });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-    },
-    onError: (error) => {
-      toast({ title: "Error locking project", description: error.message, variant: "destructive" });
-    },
-  });
-}
-
-export function useUnlockProject() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id) => api.put('/projects/' + id + '/unlock'),
-    onSuccess: (_data, id) => {
-      toast({ title: "Project unlocked" });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-    },
-    onError: (error) => {
-      toast({ title: "Error unlocking project", description: error.message, variant: "destructive" });
-    },
-  });
-}
-
-export function useRequestUnlock() {
-  return useMutation({
-    mutationFn: (id) => api.post('/projects/' + id + '/request-unlock'),
-    onSuccess: (data) => {
-      if (data.alreadyRequested) {
-        toast({ title: "Already requested", description: "An unlock request is still pending" });
-      } else {
-        toast({ title: "Unlock request sent", description: "A manager will be notified" });
-      }
-    },
-    onError: (error) => {
-      toast({ title: "Error requesting unlock", description: error.message, variant: "destructive" });
-    },
-  });
-}
-
 // ─── Project Notes ───────────────────────────────────────────────────────────
 
 export function useCreateProjectNote() {
@@ -854,7 +808,7 @@ export function useCreateTeamPayment() {
 export function useUpdateTeamPayment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, projectId, ...data }) => api.put(`/team-payments/${id}`, data).then(r => r.data),
+    mutationFn: ({ id, ...data }) => api.put(`/team-payments/${id}`, data).then(r => r.data),
     onSuccess: (_data, variables) => {
       toast({ title: "Payment updated!" });
       queryClient.invalidateQueries({ queryKey: queryKeys.teamPayments.all });

@@ -7,6 +7,7 @@ import { logActivity, actorFromRequest } from '../lib/activityLog';
 import { archiveProjectForDeletedInvoice } from '../lib/stripe';
 import { recalculateProjectTeamFinancials } from '../lib/teamCalc';
 import { parseDateInput } from '../lib/dates';
+import { broadcast } from '../lib/pubsub';
 
 function docLabel(num: number) {
   return 'Invoice #' + String(num).padStart(5, '0');
@@ -153,6 +154,7 @@ export default async function invoiceRoutes(fastify: any) {
     });
 
     logActivity({ ...actorFromRequest(request), action: 'created', entityType: 'invoice', entityId: created.id, entityLabel: docLabel(invoiceNumber) });
+    broadcast('invoice', 'created', request.user.id, created.id);
 
     return { data: withSerializedItems(data) };
   });
@@ -187,6 +189,7 @@ export default async function invoiceRoutes(fastify: any) {
     });
 
     logActivity({ ...actorFromRequest(request), action: 'updated', entityType: 'invoice', entityId: updated.id, entityLabel: docLabel(updated.invoiceNumber) });
+    broadcast('invoice', 'updated', request.user.id, updated.id);
 
     return { data: withSerializedItems(data) };
   });
@@ -229,6 +232,7 @@ export default async function invoiceRoutes(fastify: any) {
 
     await db.delete(invoices).where(eq(invoices.id, request.params.id));
     logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'invoice', entityId: request.params.id, entityLabel: docLabel(existing.invoiceNumber) });
+    broadcast('invoice', 'deleted', request.user.id, request.params.id);
 
     // Archive linked project and recalculate its financials
     if (existing.projectId) {
@@ -247,6 +251,7 @@ export default async function invoiceRoutes(fastify: any) {
     await db.delete(payments).where(inArray(payments.invoiceId, ids));
     await db.delete(invoices).where(inArray(invoices.id, ids));
     logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'invoice', entityLabel: `${ids.length} invoices` });
+    broadcast('invoice', 'deleted', request.user.id);
     return { success: true };
   });
 }

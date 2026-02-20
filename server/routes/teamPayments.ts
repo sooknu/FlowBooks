@@ -6,6 +6,7 @@ import { logActivity, actorFromRequest } from '../lib/activityLog';
 import { recalculateProjectTeamFinancials } from '../lib/teamCalc';
 import { syncTeamPaymentExpense } from '../lib/expenseSync';
 import { parseDateInput } from '../lib/dates';
+import { broadcast } from '../lib/pubsub';
 
 export default async function teamPaymentRoutes(fastify: any) {
   // GET /api/team-payments — list payments (filtered by role)
@@ -45,6 +46,7 @@ export default async function teamPaymentRoutes(fastify: any) {
         paidBy: teamPayments.paidBy,
         createdAt: teamPayments.createdAt,
         projectTitle: projects.title,
+        memberName: teamMembers.name,
         memberFirstName: profiles.firstName,
         memberLastName: profiles.lastName,
         memberDisplayName: profiles.displayName,
@@ -88,6 +90,7 @@ export default async function teamPaymentRoutes(fastify: any) {
 
     await recalculateProjectTeamFinancials(data.projectId);
     logActivity({ ...actorFromRequest(request), action: 'created', entityType: 'team_payment', entityId: data.id, entityLabel: `$${amount}` });
+    broadcast('team_payment', 'created', request.user.id, data.id);
 
     await syncTeamPaymentExpense(data.id, {
       teamMemberId,
@@ -167,6 +170,7 @@ export default async function teamPaymentRoutes(fastify: any) {
     }
 
     logActivity({ ...actorFromRequest(request), action: 'updated', entityType: 'team_payment', entityId: id });
+    broadcast('team_payment', 'updated', request.user.id, id);
 
     await syncTeamPaymentExpense(data.id, {
       teamMemberId: data.teamMemberId,
@@ -192,6 +196,7 @@ export default async function teamPaymentRoutes(fastify: any) {
 
     await recalculateProjectTeamFinancials(existing.projectId);
     logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'team_payment', entityId: id });
+    broadcast('team_payment', 'deleted', request.user.id, id);
 
     return { success: true };
   });

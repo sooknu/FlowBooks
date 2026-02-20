@@ -8,6 +8,7 @@ A self-hosted business management app for photography studios and creative agenc
 - **Backend:** Fastify 5, Drizzle ORM, PostgreSQL (postgres.js), TypeScript (tsx)
 - **Auth:** Better Auth (email/password, Google OAuth, OIDC, passkeys)
 - **Background Jobs:** BullMQ + Redis
+- **Real-time:** SSE (Server-Sent Events) via Redis Pub/Sub — live cross-user updates
 - **Payments:** Stripe, PayPal
 - **PDF:** pdf-lib (server-side generation)
 - **Email:** Nodemailer (SMTP)
@@ -20,16 +21,18 @@ A self-hosted business management app for photography studios and creative agenc
 - **Expenses** — Category-based expense tracking with recurring subscriptions, auto-generated entries, and team payment sync.
 - **Clients** — Client profiles with contact info, linked quotes/invoices/projects, and credit management.
 - **Permissions** — 21 granular permission keys across 7 groups with customizable per-role defaults and per-user overrides.
-- **Notifications** — In-app notification bell with browser push support.
-- **Calendar** — Project calendar view.
-- **Reports** — Dashboard with stats, revenue tracking, and expense breakdowns.
+- **Finance** — Team advances (advance/repayment tracking with per-member balances) and manual team payments with status and payment method tracking.
+- **Notifications** — In-app notification bell with browser push support. Delivered in real-time via SSE.
+- **Real-time Sync** — When one user makes a change, all other signed-in users see it instantly. No page refresh — React Query caches are invalidated via SSE, triggering seamless background refetches.
+- **Calendar** — Project calendar view with team member filtering and overlap detection.
+- **Reports** — Business analytics with 10 report types: P&L, revenue trends, cash flow, revenue by type, top clients, client profitability, repeat clients, income summary, expense breakdown, outstanding balances.
 - **Backup & Restore** — Multi-destination backups to AWS S3, Backblaze B2, or Google Drive (OAuth linking) with configurable schedules and retention policies.
 
 ## Prerequisites
 
 - Node.js 24.x LTS (see `.nvmrc`)
 - PostgreSQL 14+
-- Redis (for BullMQ background jobs)
+- Redis (for BullMQ background jobs and SSE real-time sync)
 - Docker (for Redis container, or use a standalone Redis install)
 
 ## Quick Start (Development)

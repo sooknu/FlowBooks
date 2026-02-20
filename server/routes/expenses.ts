@@ -6,6 +6,7 @@ import { logActivity, actorFromRequest } from '../lib/activityLog';
 import { parseDateInput } from '../lib/dates';
 import { getLinkedTeamPaymentId, syncTeamPaymentExpense } from '../lib/expenseSync';
 import { recalculateProjectTeamFinancials } from '../lib/teamCalc';
+import { broadcast } from '../lib/pubsub';
 
 const guard = requirePermission('manage_expenses');
 
@@ -101,8 +102,9 @@ export default async function expenseRoutes(fastify: any) {
     const yearStart = new Date(now.getFullYear(), 0, 1);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // Net amount: expenses add, credits subtract
-    const netAmount = sql<number>`SUM(CASE WHEN ${expenses.type} = 'credit' THEN -${expenses.amount} ELSE ${expenses.amount} END)`;
+    // Expenses only (exclude credits which are revenue tracking)
+    const expenseOnly = eq(expenses.type, sql`'expense'`);
+    const expenseSum = sql<number>`COALESCE(SUM(${expenses.amount}), 0)`;
 
     const [
       [{ totalAllTime }],
@@ -111,36 +113,37 @@ export default async function expenseRoutes(fastify: any) {
       byCategory,
       byMonth,
     ] = await Promise.all([
-      // Total all time (expenses only, excluding credits)
-      db.select({ totalAllTime: sql<number>`COALESCE(SUM(CASE WHEN ${expenses.type} = 'expense' THEN ${expenses.amount} ELSE 0 END), 0)` })
-        .from(expenses),
+      // Total all time
+      db.select({ totalAllTime: expenseSum })
+        .from(expenses)
+        .where(expenseOnly),
       // Total this year
-      db.select({ totalThisYear: netAmount })
+      db.select({ totalThisYear: expenseSum })
         .from(expenses)
-        .where(gte(expenses.expenseDate, yearStart)),
+        .where(and(expenseOnly, gte(expenses.expenseDate, yearStart))),
       // Total this month
-      db.select({ totalThisMonth: netAmount })
+      db.select({ totalThisMonth: expenseSum })
         .from(expenses)
-        .where(and(gte(expenses.expenseDate, monthStart))),
+        .where(and(expenseOnly, gte(expenses.expenseDate, monthStart))),
       // By category
       db.select({
         categoryId: expenses.categoryId,
         name: expenseCategories.name,
         color: expenseCategories.color,
-        total: netAmount,
+        total: expenseSum,
       })
         .from(expenses)
         .leftJoin(expenseCategories, eq(expenses.categoryId, expenseCategories.id))
-        .where(gte(expenses.expenseDate, yearStart))
+        .where(and(expenseOnly, gte(expenses.expenseDate, yearStart)))
         .groupBy(expenses.categoryId, expenseCategories.name, expenseCategories.color)
-        .orderBy(desc(netAmount)),
+        .orderBy(desc(expenseSum)),
       // By month (current year)
       db.select({
         month: sql<number>`EXTRACT(MONTH FROM ${expenses.expenseDate})::int`,
-        total: netAmount,
+        total: expenseSum,
       })
         .from(expenses)
-        .where(gte(expenses.expenseDate, yearStart))
+        .where(and(expenseOnly, gte(expenses.expenseDate, yearStart)))
         .groupBy(sql`EXTRACT(MONTH FROM ${expenses.expenseDate})`),
     ]);
 
@@ -160,6 +163,7 @@ export default async function expenseRoutes(fastify: any) {
       .values({ ...mapBody(request.body), userId: request.user.id })
       .returning();
     logActivity({ ...actorFromRequest(request), action: 'created', entityType: 'expense', entityId: data.id, entityLabel: data.description });
+    broadcast('expense', 'created', request.user.id, data.id);
     return { data };
   });
 
@@ -199,6 +203,7 @@ export default async function expenseRoutes(fastify: any) {
 
       const [data] = await db.select().from(expenses).where(eq(expenses.teamPaymentId, linkedTeamPaymentId));
       logActivity({ ...actorFromRequest(request), action: 'updated', entityType: 'expense', entityId: id, entityLabel: data?.description || '' });
+      broadcast('expense', 'updated', request.user.id, id);
       return { data };
     }
 
@@ -209,6 +214,7 @@ export default async function expenseRoutes(fastify: any) {
       .where(eq(expenses.id, id))
       .returning();
     if (data) logActivity({ ...actorFromRequest(request), action: 'updated', entityType: 'expense', entityId: data.id, entityLabel: data.description });
+    if (data) broadcast('expense', 'updated', request.user.id, data.id);
     return { data };
   });
 
@@ -232,6 +238,7 @@ export default async function expenseRoutes(fastify: any) {
       if (tp?.projectId) await recalculateProjectTeamFinancials(tp.projectId);
       if (existing) logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'expense', entityId: id, entityLabel: existing.description });
       logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'team_payment', entityId: linkedTeamPaymentId });
+      broadcast('expense', 'deleted', request.user.id, id);
 
       return { success: true };
     }
@@ -240,6 +247,7 @@ export default async function expenseRoutes(fastify: any) {
     const [existing] = await db.select({ description: expenses.description }).from(expenses).where(eq(expenses.id, id));
     await db.delete(expenses).where(eq(expenses.id, id));
     if (existing) logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'expense', entityId: id, entityLabel: existing.description });
+    broadcast('expense', 'deleted', request.user.id, id);
     return { success: true };
   });
 }

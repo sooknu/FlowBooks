@@ -82,12 +82,6 @@ export function fmtTime(d, opts = {}) {
   return new Date(d).toLocaleTimeString('en-US', { timeZone: TZ, hour: '2-digit', minute: '2-digit', ...opts });
 }
 
-/** Format date + time: "Feb 13, 2026, 7:51 PM" */
-export function fmtDateTime(d) {
-  if (!d) return '';
-  return `${fmtDate(d, { month: 'short', day: 'numeric', year: 'numeric' })} ${fmtTime(d)}`;
-}
-
 /** Get date parts in our timezone (for .getDate()/.getMonth() replacements) */
 export function tzDate(d) {
   if (!d) return new Date();

@@ -9,7 +9,6 @@ export function useNotifications() {
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => api.get('/notifications'),
-    refetchInterval: 30_000,
   });
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
