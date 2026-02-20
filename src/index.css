@@ -1347,8 +1347,9 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   }
   .dark .rpt-year-btn--active {
-    background: rgb(var(--surface-800));
-    color: #C8C6C2;
+    background: rgba(var(--surface-200) / 0.8);
+    color: rgb(var(--surface-900));
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   }
 
   /* Sections */
@@ -1591,6 +1592,134 @@
     border-top: 2px solid rgba(var(--surface-200) / 0.8);
     border-bottom: none;
     color: rgb(var(--surface-900));
+  }
+
+  /* ── Dashboard Cards ──────────────────── */
+
+  .dash-fin {
+    @apply min-w-0 h-full transition-colors;
+    padding: 14px 16px;
+  }
+  @screen sm { .dash-fin { padding: 16px 20px; } }
+
+  .dash-fin--green  { background: rgba(68,131,97,0.06); }
+  .dash-fin--red    { background: rgba(212,76,71,0.06); }
+  .dash-fin--neutral { background: rgba(55,53,47,0.03); }
+
+  .dash-fin__value {
+    @apply tabular-nums leading-none tracking-tight truncate font-bold;
+    font-size: clamp(1rem, 4vw, 2.25rem);
+    color: rgb(var(--surface-700));
+  }
+  .dash-fin__value--hero { font-weight: 800; }
+  .dash-fin__value--green { color: rgb(68,131,97); }
+  .dash-fin__value--red   { color: rgb(212,76,71); }
+
+  .dash-fin__label {
+    @apply font-medium uppercase truncate;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: rgb(var(--surface-400));
+    margin-top: 8px;
+  }
+  @screen sm { .dash-fin__label { font-size: 12px; margin-top: 10px; } }
+
+  .dash-fin__breakdown {
+    @apply flex gap-4;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgb(var(--surface-100));
+  }
+  .dash-fin__sub { @apply min-w-0; }
+  .dash-fin__sub-value {
+    @apply font-semibold tabular-nums truncate;
+    font-size: clamp(11px, 2.5vw, 14px);
+    color: rgb(var(--surface-600));
+  }
+  .dash-fin__sub-label {
+    @apply uppercase;
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    color: rgb(var(--surface-400));
+  }
+
+  .dash-stat {
+    @apply flex items-center gap-3 text-left;
+    padding: 14px 16px;
+  }
+  .dash-stat:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  .dash-stat__icon {
+    @apply shrink-0 flex items-center justify-center rounded-lg;
+    width: 36px;
+    height: 36px;
+    background: rgb(var(--surface-100));
+  }
+  .dash-stat__icon svg {
+    width: 18px;
+    height: 18px;
+    color: rgb(var(--surface-400));
+  }
+  .dash-stat__body { @apply min-w-0; }
+  .dash-stat__value {
+    @apply text-xl font-bold tabular-nums leading-none;
+  }
+  .dash-stat__label {
+    @apply text-muted-foreground;
+    font-size: 11px;
+    margin-top: 4px;
+  }
+
+  .dash-section {
+    @apply flex items-center justify-between;
+    margin-bottom: 8px;
+  }
+  .dash-section__title {
+    @apply text-xs font-semibold uppercase text-muted-foreground;
+    letter-spacing: 0.1em;
+  }
+  .dash-section__action {
+    @apply flex items-center gap-1 text-muted-foreground transition-colors;
+    font-size: 11px;
+  }
+  .dash-section__action:hover { color: rgb(var(--surface-800)); }
+
+  .dash-doc-row {
+    @apply w-full flex items-center gap-3 text-left transition-colors rounded-lg;
+    padding: 10px 8px;
+  }
+  .dash-doc-row:hover { background: rgb(var(--surface-100)); }
+  .dash-doc-row__number {
+    @apply text-xs font-mono text-muted-foreground shrink-0;
+  }
+  .dash-doc-row__name {
+    @apply text-sm truncate flex-1 min-w-0;
+  }
+  .dash-doc-row__status {
+    @apply shrink-0 font-medium px-1.5 py-0.5 rounded capitalize;
+    font-size: 10px;
+    background: rgb(var(--surface-100));
+  }
+  .dash-doc-row__total {
+    @apply shrink-0 text-sm font-semibold tabular-nums;
+  }
+  .dash-doc-row__arrow {
+    @apply shrink-0 text-muted-foreground opacity-0 transition-opacity;
+    width: 14px; height: 14px;
+  }
+  .dash-doc-row:hover .dash-doc-row__arrow { opacity: 1; }
+
+  .dash-salary-row {
+    @apply text-left transition-opacity;
+  }
+  .dash-salary-row:hover { opacity: 0.7; }
+  .dash-salary-row__value {
+    @apply text-lg font-bold tabular-nums leading-none;
+    color: rgb(212,76,71);
+  }
+  .dash-salary-row__name {
+    @apply text-muted-foreground;
+    font-size: 10px;
+    margin-top: 4px;
   }
 
   /* ── Event Card Row ─────────────────── */

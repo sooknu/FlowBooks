@@ -12,7 +12,6 @@ const INVALIDATION_MAP = {
   product:            [['products']],
   expense:            [['expenses'], ['stats']],
   expense_category:   [['expense-categories']],
-  vendor:             [['vendors']],
   recurring_expense:  [['recurring-expenses']],
   credit:             [['credits'], ['stats']],
   team_member:        [['team']],

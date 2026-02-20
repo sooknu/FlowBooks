@@ -20,7 +20,7 @@ import { useTheme } from '@/hooks/useTheme';
 
 const NAV_ITEMS = [
   { type: 'item', path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { type: 'item', path: '/projects', label: 'Projects', icon: FolderKanban },
+  { type: 'item', path: '/projects', label: 'Projects', icon: FolderKanban, permission: 'view_projects' },
   { type: 'item', path: '/calendar', label: 'Calendar', icon: CalendarDays },
   { type: 'section', label: 'Sales', collapsible: true },
   { type: 'item', path: '/quotes', label: 'Quotes', icon: FileText },
@@ -115,11 +115,11 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
       ]
     : [
         ...NAV_ITEMS.filter(i => !i.permission || can(i.permission)),
-        ...(can('view_team') || can('access_settings') ? [SYSTEM_SECTION] : []),
+        ...(can('view_team') || can('access_settings') || can('view_activity_log') ? [SYSTEM_SECTION] : []),
         ...(can('view_team') ? [TEAM_ITEM] : []),
-        ...(can('access_settings') || isAdmin ? [PERMISSIONS_ITEM] : []),
-        ...(can('access_settings') || isAdmin ? [ACTIVITY_ITEM] : []),
-        ...(can('access_settings') || isAdmin ? [SETTINGS_ITEM] : []),
+        ...(can('manage_permissions') ? [PERMISSIONS_ITEM] : []),
+        ...(can('view_activity_log') ? [ACTIVITY_ITEM] : []),
+        ...(can('access_settings') ? [SETTINGS_ITEM] : []),
       ];
 
   // Derive current page label from pathname

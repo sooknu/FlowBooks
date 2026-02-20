@@ -10,6 +10,7 @@ import {
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { useAppData } from '@/hooks/useAppData';
 
 const ENTITY_TYPES = [
   { value: '', label: 'All' },
@@ -92,6 +93,8 @@ function formatTimestamp(dateString) {
 export default function ActivityLogViewer() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { can } = useAppData();
+  const canClear = can('clear_activity_log');
   const [entityTypeFilter, setEntityTypeFilter] = useState('');
   const [timeRange, setTimeRange] = useState('');
   const [page, setPage] = useState(0);
@@ -200,7 +203,7 @@ export default function ActivityLogViewer() {
           ))}
         </div>
 
-        {entityTypeFilter === 'error' && total > 0 && (
+        {canClear && entityTypeFilter === 'error' && total > 0 && (
           <>
             <div className="h-4 w-px bg-surface-200 hidden sm:block" />
             <button

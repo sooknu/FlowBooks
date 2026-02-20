@@ -1,7 +1,7 @@
 import { db } from '../db';
 import { appSettings } from '../db/schema';
 import { inArray } from 'drizzle-orm';
-import { requireAdmin } from '../lib/permissions';
+import { requirePermission } from '../lib/permissions';
 import { getSmtpSettings, createTransporter, buildFromAddress } from '../lib/mailer';
 import { emailQueue } from '../lib/queue';
 
@@ -41,7 +41,7 @@ export default async function emailRoutes(fastify: any) {
   });
 
   // POST /api/email/verify — test SMTP connection only (admin only)
-  fastify.post('/verify', { preHandler: [requireAdmin], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request: any, reply: any) => {
+  fastify.post('/verify', { preHandler: [requirePermission('manage_email_smtp')], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request: any, reply: any) => {
     const smtpSettings = await getSmtpSettings();
     if (!smtpSettings.smtp_host) {
       return reply.code(400).send({ error: 'SMTP host is not configured. Save your SMTP settings first.' });
@@ -57,7 +57,7 @@ export default async function emailRoutes(fastify: any) {
   });
 
   // POST /api/email/test (admin only)
-  fastify.post('/test', { preHandler: [requireAdmin], config: { rateLimit: { max: 3, timeWindow: '1 minute' } } }, async (request: any, reply: any) => {
+  fastify.post('/test', { preHandler: [requirePermission('manage_email_smtp')], config: { rateLimit: { max: 3, timeWindow: '1 minute' } } }, async (request: any, reply: any) => {
     const { testEmail } = request.body;
     if (!testEmail) {
       return reply.code(400).send({ error: 'testEmail is required' });

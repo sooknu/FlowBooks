@@ -1,4 +1,4 @@
-import { requireAdmin } from '../lib/permissions';
+import { requirePermission } from '../lib/permissions';
 
 // Representative ZIP code per state for API Ninjas lookups
 const STATE_ZIPS: Record<string, string> = {
@@ -21,7 +21,7 @@ function sleep(ms: number) {
 
 export default async function taxRatesRoutes(fastify: any) {
   // POST /api/tax-rates/fetch-api — bulk-fetch rates from API Ninjas (admin only)
-  fastify.post('/fetch-api', { preHandler: [requireAdmin] }, async (request: any, reply: any) => {
+  fastify.post('/fetch-api', { preHandler: [requirePermission('access_settings')] }, async (request: any, reply: any) => {
     const { apiKey } = request.body || {};
     if (!apiKey || typeof apiKey !== 'string') {
       return reply.code(400).send({ error: 'API key is required' });

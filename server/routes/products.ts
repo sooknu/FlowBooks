@@ -1,7 +1,7 @@
 import { db } from '../db';
 import { products } from '../db/schema';
 import { eq, ilike, and, asc as ascFn, desc as descFn, count, isNotNull, inArray } from 'drizzle-orm';
-import { requireAdmin } from '../lib/permissions';
+import { requirePermission } from '../lib/permissions';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
 import { broadcast } from '../lib/pubsub';
 
@@ -66,7 +66,7 @@ export default async function productRoutes(fastify: any) {
   });
 
   // GET /api/products/export (admin only)
-  fastify.get('/export', { preHandler: [requireAdmin] }, async (request: any) => {
+  fastify.get('/export', { preHandler: [requirePermission('manage_services')] }, async (request: any) => {
     const data = await db
       .select({
         name: products.name,
@@ -81,7 +81,7 @@ export default async function productRoutes(fastify: any) {
   });
 
   // POST /api/products (admin only)
-  fastify.post('/', { preHandler: [requireAdmin] }, async (request: any) => {
+  fastify.post('/', { preHandler: [requirePermission('manage_services')] }, async (request: any) => {
     const [data] = await db
       .insert(products)
       .values({ ...mapProductBody(request.body), userId: request.user.id })
@@ -92,7 +92,7 @@ export default async function productRoutes(fastify: any) {
   });
 
   // PUT /api/products/:id (admin only)
-  fastify.put('/:id', { preHandler: [requireAdmin] }, async (request: any) => {
+  fastify.put('/:id', { preHandler: [requirePermission('manage_services')] }, async (request: any) => {
     const [data] = await db
       .update(products)
       .set({ ...mapProductBody(request.body), updatedAt: new Date() })
@@ -104,7 +104,7 @@ export default async function productRoutes(fastify: any) {
   });
 
   // POST /api/products/upsert — bulk CSV import (admin only)
-  fastify.post('/upsert', { preHandler: [requireAdmin] }, async (request: any) => {
+  fastify.post('/upsert', { preHandler: [requirePermission('manage_services')] }, async (request: any) => {
     const { products: productList } = request.body;
     const userId = request.user.id;
     const results: any[] = [];
@@ -140,7 +140,7 @@ export default async function productRoutes(fastify: any) {
   });
 
   // DELETE /api/products/:id (admin only)
-  fastify.delete('/:id', { preHandler: [requireAdmin] }, async (request: any) => {
+  fastify.delete('/:id', { preHandler: [requirePermission('manage_services')] }, async (request: any) => {
     const [existing] = await db.select({ name: products.name }).from(products).where(eq(products.id, request.params.id));
     await db.delete(products).where(eq(products.id, request.params.id));
     if (existing) logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'product', entityId: request.params.id, entityLabel: existing.name });
@@ -149,7 +149,7 @@ export default async function productRoutes(fastify: any) {
   });
 
   // DELETE /api/products/bulk (admin only)
-  fastify.delete('/bulk', { preHandler: [requireAdmin] }, async (request: any) => {
+  fastify.delete('/bulk', { preHandler: [requirePermission('manage_services')] }, async (request: any) => {
     const { ids } = request.body;
     await db.delete(products).where(inArray(products.id, ids));
     logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'product', entityLabel: `${ids.length} products` });

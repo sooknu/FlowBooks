@@ -5,7 +5,7 @@ import { Loader2, Key, ChevronDown, ChevronUp, Camera, CheckCircle2, XCircle } f
 import PasswordInput from '@/components/ui/PasswordInput';
 import StickySettingsBar from '@/components/ui/StickySettingsBar';
 import { useUpdateSettings } from '@/hooks/useMutations';
-import { useSettings } from '@/hooks/useAppData';
+import { useSettings, useAppData } from '@/hooks/useAppData';
 import { formatPhoneInput } from '@/lib/utils';
 import { US_STATES } from '@/lib/usStates';
 
@@ -117,6 +117,7 @@ const DEFAULTS = {
 
 const BrandingManager = () => {
   const { data: fetchedSettings, isLoading: loading } = useSettings();
+  const { isAdmin } = useAppData();
   const updateSettings = useUpdateSettings();
   const [settings, setSettings] = useState({ ...DEFAULTS });
   const [showApiKeys, setShowApiKeys] = useState(false);
@@ -222,6 +223,7 @@ const BrandingManager = () => {
 
       <PhotographySettings settings={settings} handleInputChange={handleInputChange} />
 
+      {isAdmin && (
       <div className="glass-card p-6">
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-xl font-bold">API Keys</h3>
@@ -254,6 +256,7 @@ const BrandingManager = () => {
           </div>
         )}
       </div>
+      )}
 
       <StickySettingsBar isDirty={isDirty} onSave={handleSave} isPending={updateSettings.isPending} />
     </motion.div>

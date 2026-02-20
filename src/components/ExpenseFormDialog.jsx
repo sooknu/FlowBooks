@@ -121,7 +121,6 @@ const ExpenseFormDialog = ({
   open,
   onOpenChange,
   categories,
-  vendors = [],
   onSave,
   onSaveRecurring,
   isPending,
@@ -136,7 +135,6 @@ const ExpenseFormDialog = ({
     expenseDate: toDateInput(new Date()),
     categoryId: '',
     projectId: '',
-    vendorId: '',
     notes: '',
     isRecurring: false,
     frequency: 'monthly',
@@ -162,7 +160,6 @@ const ExpenseFormDialog = ({
           expenseDate: recurringExpense.startDate ? toDateInput(recurringExpense.startDate) : toDateInput(new Date()),
           categoryId: recurringExpense.categoryId || '',
           projectId: recurringExpense.projectId || '',
-          vendorId: recurringExpense.vendorId || '',
           notes: recurringExpense.notes || '',
           isRecurring: true,
           frequency: recurringExpense.frequency || 'monthly',
@@ -176,7 +173,6 @@ const ExpenseFormDialog = ({
           expenseDate: expense.expenseDate ? toDateInput(expense.expenseDate) : toDateInput(new Date()),
           categoryId: expense.categoryId || '',
           projectId: fixedProjectId || expense.projectId || '',
-          vendorId: expense.vendorId || '',
           notes: expense.notes || '',
           isRecurring: false,
           frequency: 'monthly',
@@ -190,7 +186,6 @@ const ExpenseFormDialog = ({
           expenseDate: defaultDate ? toDateInput(defaultDate) : toDateInput(new Date()),
           categoryId: '',
           projectId: fixedProjectId || '',
-          vendorId: '',
           notes: '',
           isRecurring: false,
           frequency: 'monthly',
@@ -219,7 +214,6 @@ const ExpenseFormDialog = ({
       type: form.type,
       categoryId: form.categoryId || null,
       projectId: fixedProjectId || form.projectId || null,
-      vendorId: form.vendorId || null,
       notes: form.notes || null,
     };
 
@@ -303,41 +297,25 @@ const ExpenseFormDialog = ({
             )}
           </div>
 
-          {/* Category + Vendor — side by side, hidden for team payment linked */}
+          {/* Category — hidden for team payment linked */}
           {!isTeamPaymentLinked && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-surface-600 mb-1 block">Category</label>
-                <TypeaheadInput
-                  items={categories}
-                  value={form.categoryId}
-                  onChange={id => setForm({ ...form, categoryId: id })}
-                  placeholder="Type to search..."
-                  queryKeyToInvalidate={queryKeys.expenseCategories.all}
-                  onCreateItem={async (name) => {
-                    const res = await api.post('/expense-categories', { name, color: 'slate', sortOrder: categories.length });
-                    return res.data;
-                  }}
-                  renderItem={(item) => {
-                    const colors = COLOR_PALETTE[item.color] || COLOR_PALETTE.slate;
-                    return (<><span className={cn('w-2 h-2 rounded-full shrink-0', colors.dot)} />{item.name}</>);
-                  }}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-surface-600 mb-1 block">Vendor</label>
-                <TypeaheadInput
-                  items={vendors}
-                  value={form.vendorId}
-                  onChange={id => setForm({ ...form, vendorId: id })}
-                  placeholder={isCredit ? 'Who paid you?' : 'Who was paid?'}
-                  queryKeyToInvalidate={queryKeys.vendors.all}
-                  onCreateItem={async (name) => {
-                    const res = await api.post('/vendors', { name, sortOrder: vendors.length });
-                    return res.data;
-                  }}
-                />
-              </div>
+            <div>
+              <label className="text-xs font-medium text-surface-600 mb-1 block">Category *</label>
+              <TypeaheadInput
+                items={categories}
+                value={form.categoryId}
+                onChange={id => setForm({ ...form, categoryId: id })}
+                placeholder="Type to search..."
+                queryKeyToInvalidate={queryKeys.expenseCategories.all}
+                onCreateItem={async (name) => {
+                  const res = await api.post('/expense-categories', { name, color: 'slate', sortOrder: categories.length });
+                  return res.data;
+                }}
+                renderItem={(item) => {
+                  const colors = COLOR_PALETTE[item.color] || COLOR_PALETTE.slate;
+                  return (<><span className={cn('w-2 h-2 rounded-full shrink-0', colors.dot)} />{item.name}</>);
+                }}
+              />
             </div>
           )}
 

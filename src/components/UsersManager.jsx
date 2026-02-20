@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from '@/components/ui/use-toast';
 import api from '@/lib/apiClient';
+import { authClient } from '@/lib/authClient';
 import { fmtDate } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppData } from '@/hooks/useAppData';
+
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { useCreateUser, useUpdateUser, useDeleteUser, useVerifyUser, useResendVerification, useApproveUser, useRejectUser } from '@/hooks/useMutations';
 import { Edit2, Trash2, Shield, User, Loader2, Send, KeyRound, CheckCircle2, AlertCircle, Mail, ShieldCheck, Clock, UserCheck, UserX, LogIn } from 'lucide-react';
-import { authClient } from '@/lib/authClient';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import PasswordInput from '@/components/ui/PasswordInput';
 
@@ -21,6 +23,8 @@ const TEAM_ROLES = [
 
 const UsersManager = () => {
   const { user: currentUser } = useAuth();
+  const { can, isAdmin } = useAppData();
+  const canImpersonate = can('impersonate_users');
   const { data: users = [], isLoading: loading } = useQuery({
     queryKey: queryKeys.users.list(),
     queryFn: () => api.get('/users').then(r => r.data),
@@ -49,13 +53,14 @@ const UsersManager = () => {
 
   const handleImpersonate = async (userId) => {
     setImpersonatingId(userId);
-    const { error } = await authClient.admin.impersonateUser({ userId });
-    if (error) {
-      toast({ title: 'Failed to impersonate', description: error.message || 'Something went wrong', variant: 'destructive' });
+    try {
+      const { error } = await authClient.admin.impersonateUser({ userId });
+      if (error) throw error;
+      window.location.href = '/dashboard';
+    } catch (err) {
+      toast({ title: 'Failed to impersonate', description: err?.message || 'Something went wrong', variant: 'destructive' });
       setImpersonatingId(null);
-      return;
     }
-    window.location.href = '/dashboard';
   };
 
   const handleSubmit = async (e) => {
@@ -159,9 +164,9 @@ const UsersManager = () => {
               <input type="text" placeholder="Display Name" value={formData.displayName} onChange={(e) => setFormData({ ...formData, displayName: e.target.value })} className="glass-input w-full py-1.5" />
               <input type="email" placeholder="Email *" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="glass-input w-full py-1.5" required disabled={editingUser} />
               <PasswordInput placeholder={editingUser ? "New Password (optional)" : "Password *"} value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="glass-input w-full py-1.5 pr-9" />
-              <select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="glass-input w-full py-1.5" disabled={editingUser?.id === currentUser.id}>
+              <select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="glass-input w-full py-1.5" disabled={editingUser?.id === currentUser.id || !isAdmin}>
                 <option value="user">User</option>
-                <option value="admin">Admin</option>
+                {isAdmin && <option value="admin">Admin</option>}
               </select>
             </div>
             <div className="flex justify-end gap-2 pt-2">
@@ -347,7 +352,7 @@ const UsersManager = () => {
             </div>
             <div className="border border-border rounded-lg overflow-hidden">
               {approvedUsers.map((u, index) => {
-                const canModify = !u.isSuperAdmin && u.id !== currentUser.id;
+                const canModify = !u.isSuperAdmin && u.id !== currentUser.id && (isAdmin || u.role !== 'admin');
                 const iconBg = u.isSuperAdmin ? 'bg-amber-50' : u.role === 'admin' ? 'bg-violet-50' : 'bg-surface-100';
                 const iconColor = u.isSuperAdmin ? 'text-amber-600' : u.role === 'admin' ? 'text-violet-600' : 'text-surface-400';
                 return (
@@ -389,12 +394,12 @@ const UsersManager = () => {
                           </button>
                         </>
                       )}
-                      {canModify && (
+                      {canImpersonate && canModify && u.role !== 'admin' && (
                         <button onClick={() => handleImpersonate(u.id)} disabled={impersonatingId === u.id} className="user-row__action user-row__action--warning" title="Login as user">
                           {impersonatingId === u.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogIn className="w-3.5 h-3.5" />}
                         </button>
                       )}
-                      {!u.isSuperAdmin && (
+                      {canModify && (
                         <button onClick={() => handleEdit(u)} className="user-row__action" title="Edit user">
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>

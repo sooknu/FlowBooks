@@ -1,19 +1,26 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useMemo } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Settings as SettingsIcon, CreditCard, Mail, Loader2, Layers, HardDrive } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAppData } from '@/hooks/useAppData';
 
-const tabs = [
-  { path: '/settings/general', label: 'General', icon: SettingsIcon },
-  { path: '/settings/categories', label: 'Categories', icon: Layers },
-  { path: '/settings/payments', label: 'Payments & Auth', icon: CreditCard },
-  { path: '/settings/email', label: 'Email', icon: Mail },
-  { path: '/settings/backup', label: 'Backup', icon: HardDrive },
+const ALL_TABS = [
+  { path: '/settings/general', label: 'General', icon: SettingsIcon, permission: 'access_settings' },
+  { path: '/settings/categories', label: 'Categories', icon: Layers, permission: 'manage_categories' },
+  { path: '/settings/payments', label: 'Payments & Auth', icon: CreditCard, permission: 'manage_payment_settings' },
+  { path: '/settings/email', label: 'Email', icon: Mail, permissions: ['manage_email_smtp', 'manage_email_templates'] },
+  { path: '/settings/backup', label: 'Backup', icon: HardDrive, permission: 'manage_backups' },
 ];
 
 const SettingsLayout = () => {
   const location = useLocation();
+  const { can } = useAppData();
+
+  const tabs = useMemo(() => ALL_TABS.filter(tab => {
+    if (tab.permissions) return tab.permissions.some(p => can(p));
+    return can(tab.permission);
+  }), [can]);
 
   return (
     <div className="space-y-5">

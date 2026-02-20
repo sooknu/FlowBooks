@@ -1,8 +1,8 @@
 import { db } from '../db';
-import { profiles, user, account, verification, teamMembers } from '../db/schema';
+import { profiles, user, account, verification, teamMembers, session } from '../db/schema';
 import { eq, and, count } from 'drizzle-orm';
 import { auth } from '../auth';
-import { requireAdmin, clearRoleCache, isSuperAdmin, SUPER_ADMIN_EMAIL } from '../lib/permissions';
+import { requireAdmin, requirePermission, clearRoleCache, isSuperAdmin, SUPER_ADMIN_EMAIL, isAdmin } from '../lib/permissions';
 import {
   getSmtpSettings,
   createTransporter,
@@ -50,7 +50,7 @@ export default async function userRoutes(fastify: any) {
   });
 
   // GET /api/users/pending-count — count of users awaiting approval (admin only)
-  fastify.get('/pending-count', { preHandler: [requireAdmin] }, async () => {
+  fastify.get('/pending-count', { preHandler: [requirePermission('approve_users')] }, async () => {
     const [{ total }] = await db
       .select({ total: count() })
       .from(profiles)
@@ -59,7 +59,7 @@ export default async function userRoutes(fastify: any) {
   });
 
   // GET /api/users — all profiles (admin only)
-  fastify.get('/', { preHandler: [requireAdmin] }, async (request: any) => {
+  fastify.get('/', { preHandler: [requirePermission('approve_users')] }, async (request: any) => {
     const rows = await db.query.profiles.findMany({
       with: {
         user: { columns: { email: true, emailVerified: true, createdAt: true } },
@@ -182,9 +182,14 @@ export default async function userRoutes(fastify: any) {
     return { success: true };
   });
 
-  // POST /api/users — create new user (admin only)
-  fastify.post('/', { preHandler: [requireAdmin] }, async (request: any) => {
+  // POST /api/users — create new user
+  fastify.post('/', { preHandler: [requirePermission('approve_users')] }, async (request: any) => {
     const { email, password, name, role } = request.body;
+
+    // Only admins can create admin accounts
+    if (role === 'admin' && !(await isAdmin(request.user.id))) {
+      return request.server.httpErrors.forbidden('Only admins can create admin accounts');
+    }
 
     // Use Better Auth admin API to create user
     // This triggers databaseHooks.user.create.after which creates the profile
@@ -218,14 +223,27 @@ export default async function userRoutes(fastify: any) {
     return { data: result?.user || null };
   });
 
-  // PUT /api/users/:id — update user (admin only)
-  fastify.put('/:id', { preHandler: [requireAdmin] }, async (request: any, reply: any) => {
+  // PUT /api/users/:id — update user
+  fastify.put('/:id', { preHandler: [requirePermission('approve_users')] }, async (request: any, reply: any) => {
     const { role, firstName, lastName, displayName, password } = request.body;
 
     // Protect super admin from demotion
     if (await isSuperAdmin(request.params.id)) {
       if (role && role !== 'admin') {
         return reply.code(403).send({ error: 'Cannot change super admin role' });
+      }
+    }
+
+    // Non-admin callers cannot modify admin accounts
+    const callerIsAdmin = await isAdmin(request.user.id);
+    if (!callerIsAdmin) {
+      const [target] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, request.params.id));
+      if (target?.role === 'admin') {
+        return reply.code(403).send({ error: 'Cannot modify admin accounts' });
+      }
+      // Non-admins cannot grant admin role
+      if (role === 'admin') {
+        return reply.code(403).send({ error: 'Cannot grant admin role' });
       }
     }
 
@@ -271,8 +289,8 @@ export default async function userRoutes(fastify: any) {
     return { data };
   });
 
-  // PUT /api/users/:id/verify — manually verify a user's email (admin only)
-  fastify.put('/:id/verify', { preHandler: [requireAdmin] }, async (request: any, reply: any) => {
+  // PUT /api/users/:id/verify — manually verify a user's email
+  fastify.put('/:id/verify', { preHandler: [requirePermission('approve_users')] }, async (request: any, reply: any) => {
     const [existing] = await db.select({ id: user.id }).from(user).where(eq(user.id, request.params.id));
     if (!existing) {
       return reply.code(404).send({ error: 'User not found' });
@@ -285,8 +303,8 @@ export default async function userRoutes(fastify: any) {
     return { success: true };
   });
 
-  // PUT /api/users/:id/send-verification — resend verification email (admin only)
-  fastify.put('/:id/send-verification', { preHandler: [requireAdmin] }, async (request: any, reply: any) => {
+  // PUT /api/users/:id/send-verification — resend verification email
+  fastify.put('/:id/send-verification', { preHandler: [requirePermission('approve_users')] }, async (request: any, reply: any) => {
     const [targetUser] = await db.select().from(user).where(eq(user.id, request.params.id));
     if (!targetUser) {
       return reply.code(404).send({ error: 'User not found' });
@@ -348,8 +366,8 @@ export default async function userRoutes(fastify: any) {
     }
   });
 
-  // PUT /api/users/:id/approve — approve a user with optional team role (admin only)
-  fastify.put('/:id/approve', { preHandler: [requireAdmin] }, async (request: any, reply: any) => {
+  // PUT /api/users/:id/approve — approve a user with optional team role
+  fastify.put('/:id/approve', { preHandler: [requirePermission('approve_users')] }, async (request: any, reply: any) => {
     const { teamRole, linkTeamMemberId } = request.body || {};
     const targetId = request.params.id;
 
@@ -392,8 +410,8 @@ export default async function userRoutes(fastify: any) {
     return { success: true };
   });
 
-  // PUT /api/users/:id/reject — reject and delete a pending user (admin only)
-  fastify.put('/:id/reject', { preHandler: [requireAdmin] }, async (request: any, reply: any) => {
+  // PUT /api/users/:id/reject — reject and delete a pending user
+  fastify.put('/:id/reject', { preHandler: [requirePermission('approve_users')] }, async (request: any, reply: any) => {
     const targetId = request.params.id;
 
     // Cannot reject super admin
@@ -412,13 +430,76 @@ export default async function userRoutes(fastify: any) {
     return { success: true };
   });
 
-  // DELETE /api/users/:id — delete user and clean up related data (admin only)
-  fastify.delete('/:id', { preHandler: [requireAdmin] }, async (request: any, reply: any) => {
+  // POST /api/users/:id/impersonate — log in as another user
+  fastify.post('/:id/impersonate', { preHandler: [requirePermission('impersonate_users')] }, async (request: any, reply: any) => {
+    const targetId = request.params.id;
+
+    if (targetId === request.user.id) {
+      return reply.code(400).send({ error: 'Cannot impersonate yourself' });
+    }
+
+    // Block impersonating admin-role users
+    const [target] = await db.select({ id: profiles.id, role: profiles.role, email: profiles.email, displayName: profiles.displayName })
+      .from(profiles).where(eq(profiles.id, targetId));
+    if (!target) {
+      return reply.code(404).send({ error: 'User not found' });
+    }
+    if (target.role === 'admin') {
+      return reply.code(403).send({ error: 'Cannot impersonate admin accounts' });
+    }
+
+    // Create session via Better Auth's internal adapter
+    const authCtx = await auth.$context;
+    const newSession = await authCtx.internalAdapter.createSession(
+      targetId,
+      false,
+      { ipAddress: request.ip, userAgent: request.headers['user-agent'] || '' },
+    );
+
+    // Set impersonatedBy on the new session
+    await db.update(session)
+      .set({ impersonatedBy: request.user.id })
+      .where(eq(session.id, newSession.id));
+
+    // Sign and set session cookie
+    const { getWebcryptoSubtle } = await import('@better-auth/utils');
+    const algorithm = { name: 'HMAC', hash: 'SHA-256' };
+    const secretBuf = new TextEncoder().encode(authCtx.secret);
+    const key = await getWebcryptoSubtle().importKey('raw', secretBuf, algorithm, false, ['sign']);
+    const signature = await getWebcryptoSubtle().sign('HMAC', key, new TextEncoder().encode(newSession.token));
+    const base64Sig = btoa(String.fromCharCode(...new Uint8Array(signature)));
+    const signedValue = encodeURIComponent(`${newSession.token}.${base64Sig}`);
+
+    const { name: cookieName, attributes: cookieAttrs } = authCtx.authCookies.sessionToken;
+    const parts = [
+      `${cookieName}=${signedValue}`,
+      `Path=${cookieAttrs.path || '/'}`,
+      'HttpOnly',
+      `SameSite=${cookieAttrs.sameSite || 'lax'}`,
+      `Max-Age=${cookieAttrs.maxAge || 604800}`,
+    ];
+    if (cookieAttrs.secure) parts.push('Secure');
+    reply.header('set-cookie', parts.join('; '));
+
+    logActivity({ ...actorFromRequest(request), action: 'impersonated', entityType: 'user', entityId: targetId, entityLabel: target.email || target.displayName });
+    return { success: true };
+  });
+
+  // DELETE /api/users/:id — delete user and clean up related data
+  fastify.delete('/:id', { preHandler: [requirePermission('approve_users')] }, async (request: any, reply: any) => {
     if (request.params.id === request.user.id) {
       return reply.code(400).send({ error: 'Cannot delete your own account' });
     }
     if (await isSuperAdmin(request.params.id)) {
       return reply.code(403).send({ error: 'Cannot delete super admin' });
+    }
+
+    // Non-admin callers cannot delete admin accounts
+    if (!(await isAdmin(request.user.id))) {
+      const [target] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, request.params.id));
+      if (target?.role === 'admin') {
+        return reply.code(403).send({ error: 'Cannot delete admin accounts' });
+      }
     }
 
     const [target] = await db.select({ email: profiles.email, displayName: profiles.displayName }).from(profiles).where(eq(profiles.id, request.params.id));

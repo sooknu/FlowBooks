@@ -4,12 +4,13 @@ import { eq, asc } from 'drizzle-orm';
 import { requirePermission } from '../lib/permissions';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
 
-const guard = requirePermission('manage_expenses');
+const readGuard = requirePermission('manage_expenses');
+const writeGuard = requirePermission('manage_categories');
 
 export default async function vendorRoutes(fastify: any) {
 
   // GET / — list all vendors ordered by sortOrder
-  fastify.get('/', { preHandler: [guard] }, async () => {
+  fastify.get('/', { preHandler: [readGuard] }, async () => {
     const data = await db
       .select()
       .from(vendors)
@@ -18,7 +19,7 @@ export default async function vendorRoutes(fastify: any) {
   });
 
   // POST / — create a vendor
-  fastify.post('/', { preHandler: [guard] }, async (request: any) => {
+  fastify.post('/', { preHandler: [writeGuard] }, async (request: any) => {
     const { name, sortOrder } = request.body;
     const [data] = await db
       .insert(vendors)
@@ -29,7 +30,7 @@ export default async function vendorRoutes(fastify: any) {
   });
 
   // PUT /reorder — bulk reorder
-  fastify.put('/reorder', { preHandler: [guard] }, async (request: any) => {
+  fastify.put('/reorder', { preHandler: [writeGuard] }, async (request: any) => {
     const { ids } = request.body as { ids: string[] };
     await Promise.all(
       ids.map((id: string, i: number) =>
@@ -40,7 +41,7 @@ export default async function vendorRoutes(fastify: any) {
   });
 
   // PUT /:id — update a vendor
-  fastify.put('/:id', { preHandler: [guard] }, async (request: any) => {
+  fastify.put('/:id', { preHandler: [writeGuard] }, async (request: any) => {
     const { name, sortOrder } = request.body;
     const [data] = await db
       .update(vendors)
@@ -52,7 +53,7 @@ export default async function vendorRoutes(fastify: any) {
   });
 
   // DELETE /:id — delete a vendor (expenses get vendorId = null via ON DELETE SET NULL)
-  fastify.delete('/:id', { preHandler: [guard] }, async (request: any) => {
+  fastify.delete('/:id', { preHandler: [writeGuard] }, async (request: any) => {
     const [existing] = await db.select({ name: vendors.name }).from(vendors).where(eq(vendors.id, request.params.id));
     await db.delete(vendors).where(eq(vendors.id, request.params.id));
     if (existing) logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'vendor', entityId: request.params.id, entityLabel: existing.name });

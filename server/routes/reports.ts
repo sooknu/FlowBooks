@@ -1,6 +1,6 @@
 import { db } from '../db';
-import { invoices, expenses, expenseCategories, projects, projectTypes, clients, teamPayments, teamSalary } from '../db/schema';
-import { eq, and, gte, lt, sql, ne, desc, asc as ascFn, count, isNull } from 'drizzle-orm';
+import { invoices, expenses, expenseCategories, projects, teamPayments, teamSalary, teamMembers } from '../db/schema';
+import { eq, and, gte, lt, sql, desc, count, isNull } from 'drizzle-orm';
 import { requirePermission } from '../lib/permissions';
 
 export default async function reportsRoutes(fastify: any) {
@@ -91,18 +91,6 @@ export default async function reportsRoutes(fastify: any) {
     });
     const totalCredits = revMonths.reduce((s: number, m: any) => s + m.creditRevenue, 0);
 
-    // ── Cash Flow ─────────────────────────────────────
-    // Money in = credit expenses (revenue received for projects)
-    // Money out = business expenses + team payments + salary
-    const cfMonths = plMonths.map((m: any) => {
-      const credit = creditByMonth.find((c: any) => c.month === m.month);
-      const moneyIn = (parseFloat(credit?.credits as any) || 0) + m.revenue;
-      const moneyOut = m.expenses + m.teamCosts + m.salary;
-      return { month: m.month, moneyIn, moneyOut };
-    });
-    const totalIn = cfMonths.reduce((s: number, m: any) => s + m.moneyIn, 0);
-    const totalOut = cfMonths.reduce((s: number, m: any) => s + m.moneyOut, 0);
-
     // ── Revenue by Project Type ───────────────────────
     const revenueByType = await db.execute(sql`
       SELECT
@@ -119,76 +107,6 @@ export default async function reportsRoutes(fastify: any) {
       GROUP BY p.project_type_id, pt.label, pt.color
       ORDER BY revenue DESC
     `);
-
-    // ── Top Clients ───────────────────────────────────
-    const topClients = await db.select({
-      clientId: invoices.clientId,
-      firstName: clients.firstName,
-      lastName: clients.lastName,
-      company: clients.company,
-      totalInvoiced: sql<number>`COALESCE(SUM(${invoices.total}), 0)`,
-      totalPaid: sql<number>`COALESCE(SUM(${invoices.paidAmount}), 0)`,
-      projectCount: sql<number>`COUNT(DISTINCT ${invoices.id})`,
-    })
-      .from(invoices)
-      .leftJoin(clients, eq(invoices.clientId, clients.id))
-      .where(and(inPeriod(invoices.createdAt), sql`${invoices.clientId} IS NOT NULL`))
-      .groupBy(invoices.clientId, clients.firstName, clients.lastName, clients.company)
-      .orderBy(desc(sql`COALESCE(SUM(${invoices.paidAmount}), 0)`))
-      .limit(20);
-
-    // ── Client Profitability ──────────────────────────
-    // Revenue per client minus expenses linked to their projects
-    const clientProfit = await db.execute(sql`
-      WITH client_rev AS (
-        SELECT i.client_id, COALESCE(SUM(i.paid_amount), 0) AS revenue
-        FROM invoices i
-        WHERE i.created_at >= ${startIso}::timestamptz AND i.created_at < ${endIso}::timestamptz
-          AND i.client_id IS NOT NULL
-        GROUP BY i.client_id
-      ),
-      client_exp AS (
-        SELECT p.client_id, COALESCE(SUM(e.amount), 0) AS expenses
-        FROM expenses e
-        JOIN projects p ON e.project_id = p.id
-        WHERE e.expense_date >= ${startIso}::timestamptz AND e.expense_date < ${endIso}::timestamptz
-          AND e.type = 'expense'
-          AND p.client_id IS NOT NULL
-        GROUP BY p.client_id
-      )
-      SELECT
-        cr.client_id AS "clientId",
-        c.first_name AS "firstName", c.last_name AS "lastName", c.company,
-        cr.revenue::float,
-        COALESCE(ce.expenses, 0)::float AS expenses,
-        (cr.revenue - COALESCE(ce.expenses, 0))::float AS profit
-      FROM client_rev cr
-      LEFT JOIN client_exp ce ON cr.client_id = ce.client_id
-      LEFT JOIN clients c ON cr.client_id = c.id
-      ORDER BY profit DESC
-      LIMIT 20
-    `);
-
-    // ── Repeat Client Rate ────────────────────────────
-    const clientProjectCounts = await db.select({
-      clientId: projects.clientId,
-      firstName: clients.firstName,
-      lastName: clients.lastName,
-      company: clients.company,
-      projectCount: count(),
-    })
-      .from(projects)
-      .leftJoin(clients, eq(projects.clientId, clients.id))
-      .where(and(
-        sql`${projects.clientId} IS NOT NULL`,
-        ne(projects.status, sql`'archived'`),
-      ))
-      .groupBy(projects.clientId, clients.firstName, clients.lastName, clients.company);
-
-    const totalClients = clientProjectCounts.length;
-    const repeatClientsList = clientProjectCounts.filter((c: any) => parseInt(c.projectCount) > 1);
-    const oneTimeList = clientProjectCounts.filter((c: any) => parseInt(c.projectCount) <= 1);
-    const repeatRate = totalClients > 0 ? Math.round((repeatClientsList.length / totalClients) * 100) : 0;
 
     // ── Income Summary ────────────────────────────────
     // Already have revMonths from revenue trend
@@ -207,39 +125,42 @@ export default async function reportsRoutes(fastify: any) {
       .groupBy(expenses.categoryId, expenseCategories.name, expenseCategories.color)
       .orderBy(desc(sql`COALESCE(SUM(${expenses.amount}), 0)`));
 
-    // ── Outstanding Balances ──────────────────────────
-    const unpaidInvoices = await db.select({
-      id: invoices.id,
-      invoiceNumber: invoices.invoiceNumber,
-      clientId: invoices.clientId,
-      firstName: clients.firstName,
-      lastName: clients.lastName,
-      company: clients.company,
-      total: invoices.total,
-      paidAmount: invoices.paidAmount,
-      createdAt: invoices.createdAt,
+    // ── Team Payment Breakdown ──────────────────────────
+    const tpPaid = eq(teamPayments.status, sql`'paid'`);
+
+    const tpByMember = await db.select({
+      name: teamMembers.name,
+      role: teamMembers.role,
+      totalPaid: sql<number>`COALESCE(SUM(${teamPayments.amount}), 0)`,
+      jobCount: count(),
     })
-      .from(invoices)
-      .leftJoin(clients, eq(invoices.clientId, clients.id))
-      .where(ne(invoices.status, sql`'paid'`))
-      .orderBy(ascFn(invoices.createdAt));
+      .from(teamPayments)
+      .innerJoin(teamMembers, eq(teamPayments.teamMemberId, teamMembers.id))
+      .where(and(tpPaid, inPeriod(teamPayments.paymentDate)))
+      .groupBy(teamMembers.name, teamMembers.role)
+      .orderBy(desc(sql`COALESCE(SUM(${teamPayments.amount}), 0)`));
 
-    const projectBalances = await db.execute(sql`
-      SELECT
-        p.id, p.title, p.project_price AS "projectPrice",
-        COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.project_id = p.id AND e.type = 'credit'), 0)::float AS received,
-        (p.project_price - COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.project_id = p.id AND e.type = 'credit'), 0))::float AS remaining
-      FROM projects p
-      WHERE p.project_price IS NOT NULL AND p.project_price > 0
-        AND p.status != 'archived'
-        AND (p.project_price - COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.project_id = p.id AND e.type = 'credit'), 0)) > 0
-      ORDER BY remaining DESC
-    `);
+    const tpByMonth = await db.select({
+      month: sql<number>`EXTRACT(MONTH FROM ${teamPayments.paymentDate})::int`,
+      total: sql<number>`COALESCE(SUM(${teamPayments.amount}), 0)`,
+    })
+      .from(teamPayments)
+      .where(and(tpPaid, inPeriod(teamPayments.paymentDate)))
+      .groupBy(sql`EXTRACT(MONTH FROM ${teamPayments.paymentDate})`);
 
-    const fmtClient = (r: any) => r.company || [r.firstName, r.lastName].filter(Boolean).join(' ') || 'Unknown';
+    const tpByMethod = await db.select({
+      method: teamPayments.paymentMethod,
+      total: sql<number>`COALESCE(SUM(${teamPayments.amount}), 0)`,
+    })
+      .from(teamPayments)
+      .where(and(tpPaid, inPeriod(teamPayments.paymentDate)))
+      .groupBy(teamPayments.paymentMethod)
+      .orderBy(desc(sql`COALESCE(SUM(${teamPayments.amount}), 0)`));
 
-    const outstandingInvoiceTotal = unpaidInvoices.reduce((s, i: any) => s + (parseFloat(i.total) || 0) - (parseFloat(i.paidAmount) || 0), 0);
-    const outstandingProjectTotal = (projectBalances.rows || projectBalances).reduce((s: number, p: any) => s + (parseFloat(p.remaining) || 0), 0);
+    const tpTotal = tpByMember.reduce((s: number, m: any) => s + (parseFloat(m.totalPaid as any) || 0), 0);
+    const tpMonthMap: Record<number, number> = {};
+    for (let m = 1; m <= 12; m++) tpMonthMap[m] = 0;
+    for (const r of tpByMonth) tpMonthMap[r.month] = parseFloat(r.total as any) || 0;
 
     return {
       period: { start: periodStart.toISOString(), end: periodEnd.toISOString() },
@@ -259,12 +180,6 @@ export default async function reportsRoutes(fastify: any) {
         totalWithCredits: totalIncome,
         byMonth: revMonths,
       },
-      cashFlow: {
-        totalIn,
-        totalOut,
-        net: totalIn - totalOut,
-        byMonth: cfMonths,
-      },
       revenueByType: ((revenueByType.rows || revenueByType) as any[]).map((r: any) => ({
         typeId: r.typeId,
         typeLabel: r.typeLabel || 'Uncategorized',
@@ -272,27 +187,6 @@ export default async function reportsRoutes(fastify: any) {
         revenue: parseFloat(r.revenue) || 0,
         count: parseInt(r.count) || 0,
       })),
-      topClients: (topClients as any[]).map(r => ({
-        clientId: r.clientId,
-        name: fmtClient(r),
-        totalInvoiced: parseFloat(r.totalInvoiced as any) || 0,
-        totalPaid: parseFloat(r.totalPaid as any) || 0,
-        projectCount: parseInt(r.projectCount as any) || 0,
-      })),
-      clientProfitability: ((clientProfit.rows || clientProfit) as any[]).map((r: any) => ({
-        clientId: r.clientId,
-        name: fmtClient(r),
-        revenue: parseFloat(r.revenue) || 0,
-        expenses: parseFloat(r.expenses) || 0,
-        profit: parseFloat(r.profit) || 0,
-      })),
-      repeatClients: {
-        total: totalClients,
-        repeat: repeatClientsList.length,
-        rate: repeatRate,
-        repeatList: repeatClientsList.map((c: any) => ({ name: fmtClient(c), projectCount: parseInt(c.projectCount) })),
-        oneTimeList: oneTimeList.map((c: any) => ({ name: fmtClient(c) })),
-      },
       incomeSummary: {
         total: totalIncome,
         byMonth: revMonths.map(m => ({ month: m.month, amount: m.invoiceRevenue + m.creditRevenue })),
@@ -303,23 +197,20 @@ export default async function reportsRoutes(fastify: any) {
         color: r.color || '#94a3b8',
         total: parseFloat(r.total as any) || 0,
       })),
-      outstanding: {
-        total: outstandingInvoiceTotal + outstandingProjectTotal,
-        invoices: unpaidInvoices.map((i: any) => ({
-          id: i.id,
-          invoiceNumber: i.invoiceNumber,
-          clientName: fmtClient(i),
-          total: parseFloat(i.total) || 0,
-          paid: parseFloat(i.paidAmount) || 0,
-          remaining: (parseFloat(i.total) || 0) - (parseFloat(i.paidAmount) || 0),
-          daysOutstanding: Math.floor((Date.now() - new Date(i.createdAt).getTime()) / 86400000),
+      teamPaymentBreakdown: {
+        totalPaid: tpTotal,
+        memberCount: tpByMember.length,
+        byMember: tpByMember.map((m: any) => ({
+          name: m.name || 'Unknown',
+          role: m.role || 'crew',
+          totalPaid: parseFloat(m.totalPaid as any) || 0,
+          jobCount: parseInt(m.jobCount as any) || 0,
+          avgPerJob: (parseFloat(m.totalPaid as any) || 0) / (parseInt(m.jobCount as any) || 1),
         })),
-        projects: ((projectBalances.rows || projectBalances) as any[]).map((p: any) => ({
-          id: p.id,
-          title: p.title,
-          price: parseFloat(p.projectPrice) || 0,
-          received: parseFloat(p.received) || 0,
-          remaining: parseFloat(p.remaining) || 0,
+        byMonth: Object.values(tpMonthMap),
+        byMethod: tpByMethod.map((m: any) => ({
+          method: m.method || 'Unknown',
+          total: parseFloat(m.total as any) || 0,
         })),
       },
     };

@@ -2,7 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import DOMPurify from 'isomorphic-dompurify';
-import { requireAdmin } from '../lib/permissions';
+import { requirePermission } from '../lib/permissions';
 import { db } from '../db';
 import { projectDocuments } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -58,7 +58,7 @@ export default async function storageRoutes(fastify: any) {
   });
 
   // POST /api/storage/branding (admin only)
-  fastify.post('/branding', { preHandler: [requireAdmin] }, async (request: any, reply: any) => {
+  fastify.post('/branding', { preHandler: [requirePermission('access_settings')] }, async (request: any, reply: any) => {
     const data = await request.file();
     if (!data) {
       return fastify.httpErrors.badRequest('No file uploaded');

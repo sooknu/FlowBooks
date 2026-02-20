@@ -4,12 +4,13 @@ import { eq, asc } from 'drizzle-orm';
 import { requirePermission } from '../lib/permissions';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
 
-const guard = requirePermission('manage_expenses');
+const readGuard = requirePermission('manage_expenses');
+const writeGuard = requirePermission('manage_categories');
 
 export default async function expenseCategoryRoutes(fastify: any) {
 
   // GET / — list all categories ordered by sortOrder
-  fastify.get('/', { preHandler: [guard] }, async () => {
+  fastify.get('/', { preHandler: [readGuard] }, async () => {
     const data = await db
       .select()
       .from(expenseCategories)
@@ -18,7 +19,7 @@ export default async function expenseCategoryRoutes(fastify: any) {
   });
 
   // POST / — create a category
-  fastify.post('/', { preHandler: [guard] }, async (request: any) => {
+  fastify.post('/', { preHandler: [writeGuard] }, async (request: any) => {
     const { name, color, sortOrder } = request.body;
     const [data] = await db
       .insert(expenseCategories)
@@ -29,7 +30,7 @@ export default async function expenseCategoryRoutes(fastify: any) {
   });
 
   // PUT /reorder — bulk reorder
-  fastify.put('/reorder', { preHandler: [guard] }, async (request: any) => {
+  fastify.put('/reorder', { preHandler: [writeGuard] }, async (request: any) => {
     const { ids } = request.body as { ids: string[] };
     await Promise.all(
       ids.map((id: string, i: number) =>
@@ -40,7 +41,7 @@ export default async function expenseCategoryRoutes(fastify: any) {
   });
 
   // PUT /:id — update a category
-  fastify.put('/:id', { preHandler: [guard] }, async (request: any) => {
+  fastify.put('/:id', { preHandler: [writeGuard] }, async (request: any) => {
     const { name, color, sortOrder } = request.body;
     const [data] = await db
       .update(expenseCategories)
@@ -52,7 +53,7 @@ export default async function expenseCategoryRoutes(fastify: any) {
   });
 
   // DELETE /:id — delete a category (expenses get categoryId = null via ON DELETE SET NULL)
-  fastify.delete('/:id', { preHandler: [guard] }, async (request: any) => {
+  fastify.delete('/:id', { preHandler: [writeGuard] }, async (request: any) => {
     const [existing] = await db.select({ name: expenseCategories.name }).from(expenseCategories).where(eq(expenseCategories.id, request.params.id));
     await db.delete(expenseCategories).where(eq(expenseCategories.id, request.params.id));
     if (existing) logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'expense_category', entityId: request.params.id, entityLabel: existing.name });

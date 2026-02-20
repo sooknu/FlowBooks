@@ -4,13 +4,15 @@ import { Loader2, Mail, Plug, RotateCcw } from 'lucide-react';
 import PasswordInput from '@/components/ui/PasswordInput';
 import StickySettingsBar from '@/components/ui/StickySettingsBar';
 import { useUpdateSettings, useTestEmail, useVerifySmtp } from '@/hooks/useMutations';
-import { useSettings } from '@/hooks/useAppData';
+import { useSettings, useAppData } from '@/hooks/useAppData';
 
 const DEFAULT_QUOTE_TEMPLATE = 'Hi [client_name],\n\nThank you for your interest in working with us. Please find your quote attached for your review.\n\nIf you have any questions or would like to move forward, don\'t hesitate to reach out — we\'re happy to help.\n\nBest regards,\n[company_name]';
 const DEFAULT_INVOICE_TEMPLATE = 'Hi [client_name],\n\nPlease find your invoice attached. A summary of the charges is included above for your convenience.\n\nIf you have any questions regarding this invoice, feel free to contact us.\n\nThank you for your business,\n[company_name]';
 const DEFAULTS_EMAIL = { bg: '#1a1a2e', accent: '#8b5cf6', text: '#ffffff' };
 
 const EmailManager = () => {
+  const { can } = useAppData();
+  const canSmtp = can('manage_email_smtp');
   const { data: fetchedSettings, isLoading: loading } = useSettings();
   const updateSettings = useUpdateSettings();
   const testEmailMutation = useTestEmail();
@@ -130,7 +132,8 @@ const EmailManager = () => {
 
   return (
     <div className="space-y-5">
-      {/* SMTP Configuration */}
+      {/* SMTP Configuration — only visible with manage_email_smtp */}
+      {canSmtp && (
       <div className="glass-card p-6 space-y-4">
         <div>
           <h3 className="text-lg font-semibold text-surface-800">SMTP Configuration</h3>
@@ -222,6 +225,7 @@ const EmailManager = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* Email Header Customization */}
       <div className="glass-card p-6 space-y-5">

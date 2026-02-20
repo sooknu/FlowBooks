@@ -1,6 +1,6 @@
 import { db } from '../db';
-import { expenses, expenseCategories, vendors, projects, teamPayments } from '../db/schema';
-import { eq, and, ilike, or, desc, asc, count, sum, sql, gte, lte } from 'drizzle-orm';
+import { expenses, expenseCategories, projects, teamPayments } from '../db/schema';
+import { eq, and, ilike, or, desc, asc, count, sum, sql, gte, lte, isNull } from 'drizzle-orm';
 import { requirePermission } from '../lib/permissions';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
 import { parseDateInput } from '../lib/dates';
@@ -10,15 +10,30 @@ import { broadcast } from '../lib/pubsub';
 
 const guard = requirePermission('manage_expenses');
 
-function mapBody(body: any) {
+/** Find or create the "Uncategorized" expense category. */
+async function getOrCreateUncategorizedId(): Promise<string> {
+  const [existing] = await db
+    .select({ id: expenseCategories.id })
+    .from(expenseCategories)
+    .where(eq(expenseCategories.name, 'Uncategorized'))
+    .limit(1);
+  if (existing) return existing.id;
+  const [created] = await db
+    .insert(expenseCategories)
+    .values({ name: 'Uncategorized', color: 'slate', sortOrder: 9999 })
+    .returning({ id: expenseCategories.id });
+  return created.id;
+}
+
+async function mapBody(body: any) {
+  const categoryId = body.categoryId || await getOrCreateUncategorizedId();
   return {
-    categoryId: body.categoryId || null,
+    categoryId,
     projectId: body.projectId || null,
     description: body.description,
     amount: parseFloat(body.amount),
     type: body.type === 'credit' ? 'credit' as const : 'expense' as const,
     expenseDate: parseDateInput(body.expenseDate) ?? new Date(),
-    vendorId: body.vendorId || null,
     notes: body.notes || null,
   };
 }
@@ -46,7 +61,6 @@ export default async function expenseRoutes(fastify: any) {
     if (search) {
       conditions.push(or(
         ilike(expenses.description, `%${search}%`),
-        ilike(vendors.name, `%${search}%`),
         ilike(projects.title, `%${search}%`),
       ));
     }
@@ -66,8 +80,6 @@ export default async function expenseRoutes(fastify: any) {
         description: expenses.description,
         amount: expenses.amount,
         expenseDate: expenses.expenseDate,
-        vendorId: expenses.vendorId,
-        vendorName: vendors.name,
         notes: expenses.notes,
         categoryId: expenses.categoryId,
         categoryName: expenseCategories.name,
@@ -80,7 +92,6 @@ export default async function expenseRoutes(fastify: any) {
       })
         .from(expenses)
         .leftJoin(expenseCategories, eq(expenses.categoryId, expenseCategories.id))
-        .leftJoin(vendors, eq(expenses.vendorId, vendors.id))
         .leftJoin(projects, eq(expenses.projectId, projects.id))
         .where(where)
         .orderBy(orderFn)
@@ -88,7 +99,6 @@ export default async function expenseRoutes(fastify: any) {
         .offset(skip),
       db.select({ total: count() })
         .from(expenses)
-        .leftJoin(vendors, eq(expenses.vendorId, vendors.id))
         .leftJoin(projects, eq(expenses.projectId, projects.id))
         .where(where),
     ]);
@@ -104,6 +114,7 @@ export default async function expenseRoutes(fastify: any) {
 
     // Expenses only (exclude credits which are revenue tracking)
     const expenseOnly = eq(expenses.type, sql`'expense'`);
+    const notTeamPayment = isNull(expenses.teamPaymentId);
     const expenseSum = sql<number>`COALESCE(SUM(${expenses.amount}), 0)`;
 
     const [
@@ -116,16 +127,16 @@ export default async function expenseRoutes(fastify: any) {
       // Total all time
       db.select({ totalAllTime: expenseSum })
         .from(expenses)
-        .where(expenseOnly),
+        .where(and(expenseOnly, notTeamPayment)),
       // Total this year
       db.select({ totalThisYear: expenseSum })
         .from(expenses)
-        .where(and(expenseOnly, gte(expenses.expenseDate, yearStart))),
+        .where(and(expenseOnly, notTeamPayment, gte(expenses.expenseDate, yearStart))),
       // Total this month
       db.select({ totalThisMonth: expenseSum })
         .from(expenses)
-        .where(and(expenseOnly, gte(expenses.expenseDate, monthStart))),
-      // By category
+        .where(and(expenseOnly, notTeamPayment, gte(expenses.expenseDate, monthStart))),
+      // By category (exclude team-payment-linked expenses — tracked in Finance tab)
       db.select({
         categoryId: expenses.categoryId,
         name: expenseCategories.name,
@@ -134,7 +145,7 @@ export default async function expenseRoutes(fastify: any) {
       })
         .from(expenses)
         .leftJoin(expenseCategories, eq(expenses.categoryId, expenseCategories.id))
-        .where(and(expenseOnly, gte(expenses.expenseDate, yearStart)))
+        .where(and(expenseOnly, notTeamPayment, gte(expenses.expenseDate, yearStart)))
         .groupBy(expenses.categoryId, expenseCategories.name, expenseCategories.color)
         .orderBy(desc(expenseSum)),
       // By month (current year)
@@ -143,7 +154,7 @@ export default async function expenseRoutes(fastify: any) {
         total: expenseSum,
       })
         .from(expenses)
-        .where(and(expenseOnly, gte(expenses.expenseDate, yearStart)))
+        .where(and(expenseOnly, notTeamPayment, gte(expenses.expenseDate, yearStart)))
         .groupBy(sql`EXTRACT(MONTH FROM ${expenses.expenseDate})`),
     ]);
 
@@ -160,7 +171,7 @@ export default async function expenseRoutes(fastify: any) {
   fastify.post('/', { preHandler: [guard] }, async (request: any) => {
     const [data] = await db
       .insert(expenses)
-      .values({ ...mapBody(request.body), userId: request.user.id })
+      .values({ ...await mapBody(request.body), userId: request.user.id })
       .returning();
     logActivity({ ...actorFromRequest(request), action: 'created', entityType: 'expense', entityId: data.id, entityLabel: data.description });
     broadcast('expense', 'created', request.user.id, data.id);
@@ -210,7 +221,7 @@ export default async function expenseRoutes(fastify: any) {
     // Regular expense update
     const [data] = await db
       .update(expenses)
-      .set({ ...mapBody(request.body), updatedAt: new Date() })
+      .set({ ...await mapBody(request.body), updatedAt: new Date() })
       .where(eq(expenses.id, id))
       .returning();
     if (data) logActivity({ ...actorFromRequest(request), action: 'updated', entityType: 'expense', entityId: data.id, entityLabel: data.description });

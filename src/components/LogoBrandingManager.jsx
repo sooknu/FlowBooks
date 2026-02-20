@@ -6,9 +6,10 @@ import api from '@/lib/apiClient';
 import StickySettingsBar from '@/components/ui/StickySettingsBar';
 import PasswordInput from '@/components/ui/PasswordInput';
 import { useUpdateSettings, useUploadBranding } from '@/hooks/useMutations';
-import { useSettings } from '@/hooks/useAppData';
+import { useSettings, useAppData } from '@/hooks/useAppData';
 
 const LogoBrandingManager = () => {
+  const { isAdmin } = useAppData();
   const { data: fetchedSettings, isLoading: loading } = useSettings();
   const updateSettings = useUpdateSettings();
   const uploadBranding = useUploadBranding();
@@ -219,8 +220,8 @@ const LogoBrandingManager = () => {
         </div>
       </div>
 
-      {/* Login Background */}
-      <div className="glass-card p-6">
+      {/* Login Background — admin only */}
+      {isAdmin && <div className="glass-card p-6">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-9 h-9 bg-surface-100 rounded-xl flex items-center justify-center">
             <Camera className="w-5 h-5 text-surface-400" />
@@ -327,7 +328,7 @@ const LogoBrandingManager = () => {
             </button>
           </div>
         </div>
-      </div>
+      </div>}
 
       <div className="pb-16" />
       <StickySettingsBar isDirty={isDirty} onSave={handleSave} isPending={updateSettings.isPending} />

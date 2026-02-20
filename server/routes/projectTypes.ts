@@ -12,7 +12,7 @@ export default async function projectTypeRoutes(fastify: any) {
   });
 
   // POST /api/project-types — create (admin only)
-  fastify.post('/', { preHandler: [requirePermission('access_settings')] }, async (request: any) => {
+  fastify.post('/', { preHandler: [requirePermission('manage_categories')] }, async (request: any) => {
     const { slug, label, color, sortOrder } = request.body;
     const [data] = await db.insert(projectTypes).values({
       slug,
@@ -26,7 +26,7 @@ export default async function projectTypeRoutes(fastify: any) {
   });
 
   // PUT /api/project-types/:id — update (admin only)
-  fastify.put('/:id', { preHandler: [requirePermission('access_settings')] }, async (request: any) => {
+  fastify.put('/:id', { preHandler: [requirePermission('manage_categories')] }, async (request: any) => {
     const { slug, label, color, sortOrder } = request.body;
     const updates: any = { updatedAt: new Date() };
     if (slug !== undefined) updates.slug = slug;
@@ -44,7 +44,7 @@ export default async function projectTypeRoutes(fastify: any) {
 
   // DELETE /api/project-types/:id — delete (admin only)
   // FK onDelete: set null handles referencing projects/quotes/invoices
-  fastify.delete('/:id', { preHandler: [requirePermission('access_settings')] }, async (request: any) => {
+  fastify.delete('/:id', { preHandler: [requirePermission('manage_categories')] }, async (request: any) => {
     const [existing] = await db.select({ label: projectTypes.label })
       .from(projectTypes).where(eq(projectTypes.id, request.params.id));
     if (!existing) throw new Error('Project type not found');

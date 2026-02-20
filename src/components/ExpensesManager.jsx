@@ -76,17 +76,19 @@ const MonthlyTrend = ({ byMonth }) => {
   const currentMonth = new Date().getMonth();
 
   return (
-    <div className="flex items-end gap-1 h-20">
+    <div className="flex gap-1" style={{ height: 80 }}>
       {data.map((val, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1">
-          <div
-            className={cn(
-              'w-full rounded-t transition-all',
-              i === currentMonth ? 'bg-surface-700' : 'bg-surface-200',
-            )}
-            style={{ height: `${Math.max((val / max) * 100, 2)}%` }}
-          />
-          <span className={cn('text-[9px]', i === currentMonth ? 'font-bold text-surface-700' : 'text-surface-400')}>
+        <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+          <div className="flex-1 w-full relative">
+            <div
+              className={cn(
+                'absolute bottom-0 inset-x-0 rounded-t transition-all',
+                i === currentMonth ? 'bg-surface-700' : 'bg-surface-200',
+              )}
+              style={{ height: `${Math.max((val / max) * 100, 2)}%` }}
+            />
+          </div>
+          <span className={cn('text-[9px] leading-none', i === currentMonth ? 'font-bold text-surface-700' : 'text-surface-400')}>
             {MONTHS[i].charAt(0)}
           </span>
         </div>
@@ -143,7 +145,6 @@ const ExpenseRow = React.memo(({ expense, onEdit, onDelete }) => {
           </div>
           <div className="flex items-center justify-between mt-1">
             <div className="flex items-center gap-2 text-xs text-surface-400">
-              {expense.vendorName && <span className="truncate">{expense.vendorName}</span>}
               {expense.projectTitle && (
                 <span className="flex items-center gap-1 truncate">
                   <FolderKanban className="w-3 h-3" />
@@ -203,12 +204,6 @@ const RecurringExpenseCard = React.memo(({ item, onEdit, onToggle, onDelete }) =
               <span className="shrink-0">{FREQUENCY_LABELS[item.frequency] || item.frequency}</span>
               <span className="shrink-0">·</span>
               <span className="shrink-0">Next: {nextDueStr}</span>
-              {item.vendorName && (
-                <>
-                  <span className="shrink-0">·</span>
-                  <span className="truncate">{item.vendorName}</span>
-                </>
-              )}
             </div>
             <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
               <button onClick={() => onToggle(item)} className="icon-button !p-1.5" title={item.isActive ? 'Pause' : 'Resume'}>
@@ -260,13 +255,6 @@ const ExpensesManager = () => {
     queryFn: () => api.get('/expense-categories'),
   });
   const categories = categoriesData?.data || [];
-
-  // Vendors
-  const { data: vendorsData } = useQuery({
-    queryKey: queryKeys.vendors.list(),
-    queryFn: () => api.get('/vendors'),
-  });
-  const vendorsList = vendorsData?.data || [];
 
   // Stats
   const { data: stats } = useQuery({
@@ -487,8 +475,8 @@ const ExpensesManager = () => {
       )}
 
       {/* Filters */}
-      <div className="flex items-center gap-3">
-        <div className="flex-1 relative">
+      <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
           <input
             type="text"
@@ -503,26 +491,28 @@ const ExpensesManager = () => {
             </button>
           )}
         </div>
-        <select
-          value={filterCategoryId}
-          onChange={e => setFilterCategoryId(e.target.value)}
-          className="glass-input text-sm w-auto"
-        >
-          <option value="">All Categories</option>
-          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select
-          value={sortBy}
-          onChange={e => setSortBy(e.target.value)}
-          className="glass-input text-sm w-auto"
-        >
-          <option value="expenseDate-desc">Date (Newest)</option>
-          <option value="expenseDate-asc">Date (Oldest)</option>
-          <option value="amount-desc">Amount (High→Low)</option>
-          <option value="amount-asc">Amount (Low→High)</option>
-          <option value="createdAt-desc">Added (Newest)</option>
-          <option value="createdAt-asc">Added (Oldest)</option>
-        </select>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <select
+            value={filterCategoryId}
+            onChange={e => setFilterCategoryId(e.target.value)}
+            className="glass-input text-sm flex-1 sm:flex-none sm:w-auto"
+          >
+            <option value="">All Categories</option>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value)}
+            className="glass-input text-sm flex-1 sm:flex-none sm:w-auto"
+          >
+            <option value="expenseDate-desc">Date (Newest)</option>
+            <option value="expenseDate-asc">Date (Oldest)</option>
+            <option value="amount-desc">Amount (High→Low)</option>
+            <option value="amount-asc">Amount (Low→High)</option>
+            <option value="createdAt-desc">Added (Newest)</option>
+            <option value="createdAt-asc">Added (Oldest)</option>
+          </select>
+        </div>
       </div>
 
       {/* List */}
@@ -572,7 +562,6 @@ const ExpensesManager = () => {
           setIsFormOpen(open);
         }}
         categories={categories}
-        vendors={vendorsList}
         onSave={handleSave}
         onSaveRecurring={handleSaveRecurring}
         isPending={

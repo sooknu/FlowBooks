@@ -69,7 +69,7 @@ async function syncSessions(projectId: string, sessions: any[]) {
 
 export default async function projectRoutes(fastify: any) {
   // GET /api/projects
-  fastify.get('/', async (request: any) => {
+  fastify.get('/', { preHandler: [requirePermission('view_projects')] }, async (request: any) => {
     const {
       search,
       clientId,
@@ -124,8 +124,9 @@ export default async function projectRoutes(fastify: any) {
       conditions.push(eq(projects.projectTypeId, typeId));
     }
 
-    // Filter to only projects where current user is assigned as team member
-    if (request.query.mine === 'true' && request.teamMemberId) {
+    // Crew users can only see projects they're assigned to
+    const isCrew = request.teamRole === 'crew';
+    if ((request.query.mine === 'true' || isCrew) && request.teamMemberId) {
       conditions.push(
         exists(
           db.select({ one: sql`1` })
@@ -202,7 +203,16 @@ export default async function projectRoutes(fastify: any) {
   });
 
   // GET /api/projects/:id
-  fastify.get('/:id', async (request: any) => {
+  fastify.get('/:id', { preHandler: [requirePermission('view_projects')] }, async (request: any, reply: any) => {
+    // Crew can only view projects they're assigned to
+    if (request.teamRole === 'crew' && request.teamMemberId) {
+      const [assigned] = await db.select({ id: projectAssignments.id })
+        .from(projectAssignments)
+        .where(and(eq(projectAssignments.projectId, request.params.id), eq(projectAssignments.teamMemberId, request.teamMemberId)))
+        .limit(1);
+      if (!assigned) return reply.code(404).send({ error: 'Not found' });
+    }
+
     const data = await db.query.projects.findFirst({
       where: eq(projects.id, request.params.id),
       with: {
@@ -237,7 +247,7 @@ export default async function projectRoutes(fastify: any) {
   });
 
   // POST /api/projects
-  fastify.post('/', async (request: any) => {
+  fastify.post('/', { preHandler: [requirePermission('manage_projects')] }, async (request: any) => {
     const clientId = getClientId(request.body) || null;
 
     const [data] = await db
@@ -265,7 +275,7 @@ export default async function projectRoutes(fastify: any) {
   });
 
   // PUT /api/projects/:id
-  fastify.put('/:id', async (request: any, reply: any) => {
+  fastify.put('/:id', { preHandler: [requirePermission('manage_projects')] }, async (request: any, reply: any) => {
     const privilegedRoles = ['owner', 'manager'];
     const isPrivileged = privilegedRoles.includes(request.teamRole);
 

@@ -58,8 +58,9 @@ function memberDisplay(m) {
 }
 
 const TeamManager = () => {
-  const { teamRole, teamMemberId, isPrivileged } = useAppData();
+  const { teamRole, teamMemberId, isPrivileged, can } = useAppData();
   const isOwner = teamRole === 'owner';
+  const canApproveUsers = can('approve_users');
 
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'members');
@@ -97,9 +98,9 @@ const TeamManager = () => {
   // Tabs config
   const tabs = useMemo(() => {
     const t = [{ key: 'members', label: 'Team Members', icon: Users }];
-    if (isOwner) t.push({ key: 'accounts', label: 'User Accounts', icon: Shield });
+    if (canApproveUsers) t.push({ key: 'accounts', label: 'User Accounts', icon: Shield });
     return t;
-  }, [isOwner]);
+  }, [canApproveUsers]);
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
@@ -312,7 +313,7 @@ const TeamManager = () => {
             </>
           )}
 
-          {activeTab === 'accounts' && isOwner && (
+          {activeTab === 'accounts' && canApproveUsers && (
             <Suspense fallback={
               <div className="flex justify-center items-center h-64">
                 <Loader2 className="w-8 h-8 animate-spin text-surface-400" />

@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { clients, quotes, invoices, projects, projectTypes, teamMembers, projectAssignments, teamPayments, teamAdvances, teamSalary, expenses, user } from '../db/schema';
-import { count, sum, eq, ne, and, desc, asc, sql, inArray, or, gte, isNull } from 'drizzle-orm';
+import { count, sum, eq, ne, and, desc, asc, sql, inArray, or, gte, isNull, isNotNull } from 'drizzle-orm';
 
 export default async function statsRoutes(fastify: any) {
   // GET /api/stats/dashboard — unified, permission-gated
@@ -97,8 +97,20 @@ export default async function statsRoutes(fastify: any) {
       queries.totalExpenses = db.select({ val: sum(expenses.amount) })
         .from(expenses).where(ne(expenses.type, 'credit'));
 
+      queries.businessExpenses = db.select({ val: sum(expenses.amount) })
+        .from(expenses).where(and(ne(expenses.type, 'credit'), isNull(expenses.teamPaymentId)));
+
+      queries.teamPaymentExpenses = db.select({ val: sum(expenses.amount) })
+        .from(expenses).where(and(ne(expenses.type, 'credit'), isNotNull(expenses.teamPaymentId)));
+
       queries.totalCredits = db.select({ val: sum(expenses.amount) })
         .from(expenses).where(eq(expenses.type, 'credit'));
+
+      queries.customerPayments = db.select({ val: sum(expenses.amount) })
+        .from(expenses).where(and(eq(expenses.type, 'credit'), isNotNull(expenses.projectId)));
+
+      queries.otherIncome = db.select({ val: sum(expenses.amount) })
+        .from(expenses).where(and(eq(expenses.type, 'credit'), isNull(expenses.projectId)));
 
       queries.totalPaidSalary = db.select({ val: sum(teamSalary.amount) })
         .from(teamSalary).where(eq(teamSalary.type, 'paid'));
@@ -214,7 +226,11 @@ export default async function statsRoutes(fastify: any) {
       result.totalRevenue = parseFloat(d.totalRevenue?.[0]?.val as string) || 0;
       result.grossSales = parseFloat(d.grossSales?.[0]?.val as string) || 0;
       result.totalExpenses = parseFloat(d.totalExpenses?.[0]?.val as string) || 0;
+      result.businessExpenses = parseFloat(d.businessExpenses?.[0]?.val as string) || 0;
+      result.teamPaymentExpenses = parseFloat(d.teamPaymentExpenses?.[0]?.val as string) || 0;
       result.totalCredits = parseFloat(d.totalCredits?.[0]?.val as string) || 0;
+      result.customerPayments = parseFloat(d.customerPayments?.[0]?.val as string) || 0;
+      result.otherIncome = parseFloat(d.otherIncome?.[0]?.val as string) || 0;
       result.totalPaidSalary = parseFloat(d.totalPaidSalary?.[0]?.val as string) || 0;
       const projectBalancesOwed = parseFloat(d.projectBalancesOwed?.rows?.[0]?.val as string ?? d.projectBalancesOwed?.[0]?.val as string) || 0;
       const invoicePending = parseFloat(d.pendingPayments?.[0]?.val as string) || 0;

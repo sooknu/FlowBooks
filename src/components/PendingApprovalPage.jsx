@@ -4,13 +4,19 @@ import { LogOut, ShieldCheck } from 'lucide-react';
 import api from '@/lib/apiClient';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
+import { useTheme } from '@/hooks/useTheme';
 
 const PendingApprovalPage = ({ appSettings, onSignOut, onApproved }) => {
   const appName = appSettings?.app_name || 'QuoteFlow';
   const loginLogoUrl = appSettings?.login_logo_url || '';
+  const loginLogoDarkUrl = appSettings?.login_logo_dark_url || '';
   const headerLogoUrl = appSettings?.header_logo_url || '';
   const loginLogoSize = appSettings?.login_logo_size || '64';
-  const hasLogo = loginLogoUrl || headerLogoUrl;
+  const { resolvedTheme } = useTheme();
+  const effectiveLogo = resolvedTheme === 'dark'
+    ? (loginLogoDarkUrl || loginLogoUrl || headerLogoUrl)
+    : (loginLogoUrl || headerLogoUrl);
+  const hasLogo = !!effectiveLogo;
 
   const { data: isApproved } = useQuery({
     queryKey: queryKeys.profile.approvalStatus(),
@@ -43,7 +49,7 @@ const PendingApprovalPage = ({ appSettings, onSignOut, onApproved }) => {
         <div className="text-center mb-6 flex flex-col justify-center items-center">
           {hasLogo ? (
             <img
-              src={loginLogoUrl || headerLogoUrl}
+              src={effectiveLogo}
               alt={`${appName} Logo`}
               className="mx-auto"
               style={{ height: `${parseInt(loginLogoSize, 10) || 64}px`, objectFit: 'contain' }}

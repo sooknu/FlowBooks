@@ -118,11 +118,6 @@ export const queryKeys = {
     list: () => [...queryKeys.expenseCategories.all, 'list'],
   },
 
-  vendors: {
-    all: ['vendors'],
-    list: () => [...queryKeys.vendors.all, 'list'],
-  },
-
   recurringExpenses: {
     all: ['recurring-expenses'],
     list: () => [...queryKeys.recurringExpenses.all, 'list'],

@@ -3,17 +3,45 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
-  TrendingUp, DollarSign, Users, Receipt,
+  TrendingUp, DollarSign, Users,
   PieChart, ArrowUpRight, ChevronLeft,
-  RefreshCw, Briefcase, UserCheck, Wallet,
+  RefreshCw, Briefcase,
   ArrowRight,
 } from 'lucide-react';
 import api from '@/lib/apiClient';
 import { cn } from '@/lib/utils';
 
 const currentYear = new Date().getFullYear();
-const YEARS = [currentYear - 1, currentYear, currentYear + 1];
 const ML = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const FILTERS = [
+  { id: 'all', label: 'All Time' },
+  { id: 'last-year', label: 'Last Year' },
+  { id: 'ytd', label: 'Year to Date' },
+];
+
+function getDateParams(filter) {
+  switch (filter) {
+    case 'all':
+      return { startDate: '2000-01-01', endDate: '2100-01-01' };
+    case 'last-year':
+      return { year: currentYear - 1 };
+    case 'ytd':
+    default: {
+      const today = new Date();
+      today.setDate(today.getDate() + 1);
+      return { startDate: `${currentYear}-01-01`, endDate: today.toISOString().slice(0, 10) };
+    }
+  }
+}
+
+// Map Tailwind color names (stored in DB) to hex for inline styles
+const COLOR_HEX = {
+  pink: '#ec4899', blue: '#3b82f6', emerald: '#10b981', violet: '#8b5cf6',
+  amber: '#f59e0b', rose: '#f43f5e', sky: '#0ea5e9', teal: '#14b8a6',
+  orange: '#f97316', slate: '#64748b', indigo: '#6366f1', cyan: '#06b6d4',
+};
+const toHex = (c) => (c && COLOR_HEX[c]) || c || null;
 
 const fmt = (n) => {
   if (!n && n !== 0) return '$0';
@@ -32,33 +60,26 @@ const pct = (n) => `${(n || 0).toFixed(0)}%`;
 const REPORTS = [
   { id: 'profit-loss', title: 'Profit & Loss', icon: TrendingUp, accent: '#10b981', section: 'Financial' },
   { id: 'revenue-trend', title: 'Revenue Trend', icon: ArrowUpRight, accent: '#3b82f6', section: 'Financial' },
-  { id: 'cash-flow', title: 'Cash Flow', icon: Wallet, accent: '#14b8a6', section: 'Financial' },
   { id: 'revenue-by-type', title: 'Revenue by Type', icon: Briefcase, accent: '#6366f1', section: 'Financial' },
-  { id: 'top-clients', title: 'Top Clients', icon: Users, accent: '#3b82f6', section: 'Clients' },
-  { id: 'client-profitability', title: 'Client Profitability', icon: TrendingUp, accent: '#10b981', section: 'Clients' },
-  { id: 'repeat-clients', title: 'Repeat Clients', icon: UserCheck, accent: '#8b5cf6', section: 'Clients' },
   { id: 'income-summary', title: 'Income Summary', icon: DollarSign, accent: '#22c55e', section: 'Tax & Summary' },
   { id: 'expenses-by-category', title: 'Expenses by Category', icon: PieChart, accent: '#f59e0b', section: 'Tax & Summary' },
-  { id: 'outstanding-balances', title: 'Outstanding Balances', icon: Receipt, accent: '#ef4444', section: 'Tax & Summary' },
+
+  { id: 'team-payments', title: 'Team Payments', icon: Users, accent: '#f97316', section: 'Team' },
 ];
-const SECTIONS = ['Financial', 'Clients', 'Tax & Summary'];
+const SECTIONS = ['Financial', 'Tax & Summary', 'Team'];
 
 // ── Card Data Extractors ─────────────────────────────
 function cardData(id, r) {
   const pl = r.profitLoss || {};
   const rt = r.revenueTrend || {};
-  const cf = r.cashFlow || {};
   switch (id) {
     case 'profit-loss': return { headline: fmt(pl.netProfit), label: 'Net Profit', sub: `${fmt(pl.totalRevenue)} rev · ${fmt((pl.totalExpenses||0)+(pl.totalTeamCosts||0)+(pl.totalSalary||0))} costs` };
     case 'revenue-trend': return { headline: fmt(rt.totalWithCredits), label: 'Total Income', sub: `${fmt(rt.total)} invoices · ${fmt((rt.totalWithCredits||0)-(rt.total||0))} credits` };
-    case 'cash-flow': return { headline: fmt(cf.net), label: 'Net Cash Flow', sub: `${fmt(cf.totalIn)} in · ${fmt(cf.totalOut)} out` };
     case 'revenue-by-type': { const t = (r.revenueByType||[])[0]; return { headline: t?.typeLabel || '—', label: 'Top Type', sub: t ? `${fmt(t.revenue)} · ${t.count} projects` : 'No data' }; }
-    case 'top-clients': { const c = (r.topClients||[])[0]; return { headline: c?.name || '—', label: 'Top Client', sub: c ? `${fmt(c.totalPaid)} paid` : 'No data' }; }
-    case 'client-profitability': { const c = (r.clientProfitability||[])[0]; return { headline: c?.name || '—', label: 'Most Profitable', sub: c ? `${fmt(c.profit)} profit` : 'No data' }; }
-    case 'repeat-clients': return { headline: `${r.repeatClients?.rate||0}%`, label: 'Repeat Rate', sub: `${r.repeatClients?.repeat||0} of ${r.repeatClients?.total||0} clients` };
     case 'income-summary': return { headline: fmt(r.incomeSummary?.total), label: 'Total Income', sub: 'Invoices + project credits' };
     case 'expenses-by-category': { const cats = r.expensesByCategory||[]; return { headline: fmt(cats.reduce((s,c)=>s+c.total,0)), label: 'Total Expenses', sub: `${cats.length} categories` }; }
-    case 'outstanding-balances': return { headline: fmt(r.outstanding?.total), label: 'Total Outstanding', sub: `${r.outstanding?.invoices?.length||0} invoices · ${r.outstanding?.projects?.length||0} projects` };
+
+    case 'team-payments': { const tp = r.teamPaymentBreakdown||{}; return { headline: fmt(tp.totalPaid), label: 'Total Paid', sub: `${tp.memberCount||0} members · ${(tp.byMember||[]).reduce((s,m)=>s+m.jobCount,0)} jobs` }; }
     default: return { headline: '—', label: '', sub: '' };
   }
 }
@@ -155,22 +176,14 @@ function CardChart({ id, r, accent }) {
       return <ChartDualBars a={pl.map(m=>m.revenue)} b={pl.map(m=>m.expenses+m.teamCosts+m.salary)} colorA="#10b981" colorB="#f87171" />;
     case 'revenue-trend':
       return <ChartLine data={(r.revenueTrend?.byMonth||[]).map(m=>m.invoiceRevenue+m.creditRevenue)} color="#3b82f6" />;
-    case 'cash-flow':
-      return <ChartDualBars a={(r.cashFlow?.byMonth||[]).map(m=>m.moneyIn)} b={(r.cashFlow?.byMonth||[]).map(m=>m.moneyOut)} colorA="#14b8a6" colorB="#f87171" />;
     case 'revenue-by-type':
-      return <ChartHBars items={(r.revenueByType||[]).map(t=>({ value: t.revenue, color: t.color || accent }))} />;
-    case 'top-clients':
-      return <ChartHBars items={(r.topClients||[]).slice(0,4).map((c,i)=>({ value: c.totalPaid, color: ['#3b82f6','#60a5fa','#93c5fd','#bfdbfe'][i] }))} />;
-    case 'client-profitability':
-      return <ChartHBars items={(r.clientProfitability||[]).slice(0,4).map((c,i)=>({ value: Math.max(c.profit,0), color: ['#10b981','#34d399','#6ee7b7','#a7f3d0'][i] }))} />;
-    case 'repeat-clients':
-      return <ChartDonut value={r.repeatClients?.rate||0} color="#8b5cf6" />;
+      return <ChartHBars items={(r.revenueByType||[]).map(t=>({ value: t.revenue, color: toHex(t.color) || accent }))} />;
     case 'income-summary':
       return <ChartBars data={(r.incomeSummary?.byMonth||[]).map(m=>m.amount)} color="#22c55e" />;
     case 'expenses-by-category':
-      return <ChartHBars items={(r.expensesByCategory||[]).map(c=>({ value: c.total, color: c.color || accent }))} />;
-    case 'outstanding-balances':
-      return null;
+      return <ChartHBars items={(r.expensesByCategory||[]).map(c=>({ value: c.total, color: toHex(c.color) || accent }))} />;
+    case 'team-payments':
+      return <ChartBars data={r.teamPaymentBreakdown?.byMonth||[]} color="#f97316" />;
     default: return null;
   }
 }
@@ -238,28 +251,6 @@ function DetailContent({ id, r, accent }) {
         </>
       );
     }
-    case 'cash-flow': {
-      const cf = r.cashFlow || {};
-      const months = (cf.byMonth || []).filter(m => m.moneyIn || m.moneyOut);
-      let running = 0;
-      return (
-        <>
-          <div className="rpt-detail__metrics">
-            <Metric value={fmtD(cf.totalIn)} label="Total In" accent={accent} />
-            <Metric value={fmtD(cf.totalOut)} label="Total Out" accent={accent} />
-            <Metric value={fmtD(cf.net)} label="Net Cash Flow" accent={accent} />
-          </div>
-          <DataTable
-            headers={['Month', 'Money In', 'Money Out', 'Net', 'Running']}
-            rows={months.map(m => {
-              running += m.moneyIn - m.moneyOut;
-              return [ML[m.month-1], fmtD(m.moneyIn), fmtD(m.moneyOut), fmtD(m.moneyIn-m.moneyOut), fmtD(running)];
-            })}
-            footer={['Total', fmtD(cf.totalIn), fmtD(cf.totalOut), fmtD(cf.net), '']}
-          />
-        </>
-      );
-    }
     case 'revenue-by-type': {
       const types = r.revenueByType || [];
       const total = types.reduce((s,t) => s + t.revenue, 0);
@@ -275,11 +266,11 @@ function DetailContent({ id, r, accent }) {
               {types.map((t, i) => (
                 <div key={i} className="rpt-detail__hbar-row">
                   <div className="rpt-detail__hbar-label">
-                    <span className="rpt-detail__hbar-dot" style={{ background: t.color || accent }} />
+                    <span className="rpt-detail__hbar-dot" style={{ background: toHex(t.color) || accent }} />
                     <span>{t.typeLabel}</span>
                   </div>
                   <div className="rpt-detail__hbar-track">
-                    <div className="rpt-detail__hbar-fill" style={{ width: `${Math.max((t.revenue / (types[0]?.revenue || 1)) * 100, 3)}%`, background: t.color || accent }} />
+                    <div className="rpt-detail__hbar-fill" style={{ width: `${Math.max((t.revenue / (types[0]?.revenue || 1)) * 100, 3)}%`, background: toHex(t.color) || accent }} />
                   </div>
                   <div className="rpt-detail__hbar-value">{fmtD(t.revenue)}</div>
                 </div>
@@ -290,88 +281,6 @@ function DetailContent({ id, r, accent }) {
             headers={['Project Type', 'Revenue', 'Projects', 'Avg / Project']}
             rows={types.map(t => [t.typeLabel, fmtD(t.revenue), t.count, fmtD(t.count > 0 ? t.revenue / t.count : 0)])}
           />
-        </>
-      );
-    }
-    case 'top-clients': {
-      const clients = r.topClients || [];
-      return (
-        <>
-          {clients.length > 0 && (
-            <div className="rpt-detail__hbars">
-              {clients.slice(0, 10).map((c, i) => (
-                <div key={i} className="rpt-detail__hbar-row">
-                  <div className="rpt-detail__hbar-label"><span>{c.name}</span></div>
-                  <div className="rpt-detail__hbar-track">
-                    <div className="rpt-detail__hbar-fill" style={{ width: `${Math.max((c.totalPaid / (clients[0]?.totalPaid || 1)) * 100, 3)}%`, background: accent }} />
-                  </div>
-                  <div className="rpt-detail__hbar-value">{fmtD(c.totalPaid)}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          <DataTable
-            headers={['Client', 'Invoiced', 'Paid', 'Invoices']}
-            rows={clients.map(c => [c.name, fmtD(c.totalInvoiced), fmtD(c.totalPaid), c.projectCount])}
-          />
-        </>
-      );
-    }
-    case 'client-profitability': {
-      const clients = r.clientProfitability || [];
-      return (
-        <>
-          {clients.length > 0 && (
-            <div className="rpt-detail__hbars">
-              {clients.slice(0, 10).map((c, i) => (
-                <div key={i} className="rpt-detail__hbar-row">
-                  <div className="rpt-detail__hbar-label"><span>{c.name}</span></div>
-                  <div className="rpt-detail__hbar-track">
-                    <div className="rpt-detail__hbar-fill" style={{ width: `${Math.max((Math.max(c.profit,0) / (Math.max(clients[0]?.profit,1) || 1)) * 100, 3)}%`, background: accent }} />
-                  </div>
-                  <div className="rpt-detail__hbar-value">{fmtD(c.profit)}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          <DataTable
-            headers={['Client', 'Revenue', 'Expenses', 'Profit', 'Margin']}
-            rows={clients.map(c => [c.name, fmtD(c.revenue), fmtD(c.expenses), fmtD(c.profit), c.revenue > 0 ? pct((c.profit/c.revenue)*100) : '—'])}
-          />
-        </>
-      );
-    }
-    case 'repeat-clients': {
-      const rc = r.repeatClients || {};
-      return (
-        <>
-          <div className="rpt-detail__metrics">
-            <Metric value={String(rc.total || 0)} label="Total Clients" accent={accent} />
-            <Metric value={String(rc.repeat || 0)} label="Repeat Clients" accent={accent} />
-            <Metric value={`${rc.rate || 0}%`} label="Repeat Rate" accent={accent} />
-          </div>
-          <div className="rpt-detail__donut-wrap">
-            <svg viewBox="0 0 120 120" className="rpt-detail__donut">
-              <circle cx="60" cy="60" r="48" fill="none" stroke="rgb(var(--surface-100))" strokeWidth="12" />
-              <circle cx="60" cy="60" r="48" fill="none" stroke={accent} strokeWidth="12" opacity="0.7"
-                strokeDasharray={`${(Math.min(rc.rate||0,100)/100)*2*Math.PI*48} ${2*Math.PI*48}`}
-                strokeLinecap="round" transform="rotate(-90 60 60)" />
-              <text x="60" y="55" textAnchor="middle" dominantBaseline="middle" fill="rgb(var(--surface-800))" fontSize="28" fontWeight="700">{rc.rate||0}%</text>
-              <text x="60" y="75" textAnchor="middle" fill="rgb(var(--surface-400))" fontSize="11">repeat rate</text>
-            </svg>
-          </div>
-          {(rc.repeatList||[]).length > 0 && (
-            <div>
-              <h3 className="rpt-detail__section-title">Repeat Clients ({rc.repeatList.length})</h3>
-              <DataTable headers={['Client', 'Projects']} rows={rc.repeatList.map(c => [c.name, c.projectCount])} />
-            </div>
-          )}
-          {(rc.oneTimeList||[]).length > 0 && (
-            <div>
-              <h3 className="rpt-detail__section-title">One-Time Clients ({rc.oneTimeList.length})</h3>
-              <DataTable headers={['Client']} rows={rc.oneTimeList.map(c => [c.name])} />
-            </div>
-          )}
         </>
       );
     }
@@ -406,11 +315,11 @@ function DetailContent({ id, r, accent }) {
               {cats.map((c, i) => (
                 <div key={i} className="rpt-detail__hbar-row">
                   <div className="rpt-detail__hbar-label">
-                    <span className="rpt-detail__hbar-dot" style={{ background: c.color || '#94a3b8' }} />
+                    <span className="rpt-detail__hbar-dot" style={{ background: toHex(c.color) || '#94a3b8' }} />
                     <span>{c.name}</span>
                   </div>
                   <div className="rpt-detail__hbar-track">
-                    <div className="rpt-detail__hbar-fill" style={{ width: `${Math.max((c.total / (cats[0]?.total || 1)) * 100, 3)}%`, background: c.color || '#94a3b8' }} />
+                    <div className="rpt-detail__hbar-fill" style={{ width: `${Math.max((c.total / (cats[0]?.total || 1)) * 100, 3)}%`, background: toHex(c.color) || '#94a3b8' }} />
                   </div>
                   <div className="rpt-detail__hbar-value">{fmtD(c.total)}</div>
                 </div>
@@ -421,7 +330,7 @@ function DetailContent({ id, r, accent }) {
             headers={['Category', 'Total', '% of Total']}
             rows={cats.map(c => [
               <span key={c.categoryId} className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c.color || '#94a3b8' }} />{c.name}
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: toHex(c.color) || '#94a3b8' }} />{c.name}
               </span>,
               fmtD(c.total), total > 0 ? pct((c.total/total)*100) : '—',
             ])}
@@ -430,30 +339,47 @@ function DetailContent({ id, r, accent }) {
         </>
       );
     }
-    case 'outstanding-balances': {
-      const o = r.outstanding || {};
+    case 'team-payments': {
+      const tp = r.teamPaymentBreakdown || {};
+      const members = tp.byMember || [];
+      const methods = tp.byMethod || [];
+      const totalJobs = members.reduce((s, m) => s + m.jobCount, 0);
+      const methodTotal = methods.reduce((s, m) => s + m.total, 0);
       return (
         <>
           <div className="rpt-detail__metrics">
-            <Metric value={fmtD(o.total)} label="Total Outstanding" accent={accent} />
-            <Metric value={String((o.invoices||[]).length)} label="Unpaid Invoices" accent={accent} />
-            <Metric value={String((o.projects||[]).length)} label="Projects with Balance" accent={accent} />
+            <Metric value={fmtD(tp.totalPaid)} label="Total Paid" accent={accent} />
+            <Metric value={String(tp.memberCount || 0)} label="Team Members" accent={accent} />
+            <Metric value={String(totalJobs)} label="Total Jobs" accent={accent} />
+            <Metric value={fmtD(totalJobs > 0 ? tp.totalPaid / totalJobs : 0)} label="Avg per Job" accent={accent} />
           </div>
-          {(o.invoices||[]).length > 0 && (
-            <div>
-              <h3 className="rpt-detail__section-title">Unpaid Invoices</h3>
-              <DataTable
-                headers={['Invoice', 'Client', 'Total', 'Paid', 'Remaining', 'Days']}
-                rows={o.invoices.map(i => [i.invoiceNumber||'—', i.clientName, fmtD(i.total), fmtD(i.paid), fmtD(i.remaining), i.daysOutstanding])}
-              />
+          {members.length > 0 && (
+            <div className="rpt-detail__hbars">
+              {members.map((m, i) => (
+                <div key={i} className="rpt-detail__hbar-row">
+                  <div className="rpt-detail__hbar-label">
+                    <span>{m.name}</span>
+                  </div>
+                  <div className="rpt-detail__hbar-track">
+                    <div className="rpt-detail__hbar-fill" style={{ width: `${Math.max((m.totalPaid / (members[0]?.totalPaid || 1)) * 100, 3)}%`, background: accent }} />
+                  </div>
+                  <div className="rpt-detail__hbar-value">{fmtD(m.totalPaid)}</div>
+                </div>
+              ))}
             </div>
           )}
-          {(o.projects||[]).length > 0 && (
+          <DataTable
+            headers={['Member', 'Role', 'Total Paid', 'Jobs', 'Avg / Job']}
+            rows={members.map(m => [m.name, m.role, fmtD(m.totalPaid), m.jobCount, fmtD(m.avgPerJob)])}
+            footer={['Total', '', fmtD(tp.totalPaid), totalJobs, fmtD(totalJobs > 0 ? tp.totalPaid / totalJobs : 0)]}
+          />
+          {methods.length > 0 && (
             <div>
-              <h3 className="rpt-detail__section-title">Project Balances</h3>
+              <h3 className="rpt-detail__section-title">By Payment Method</h3>
               <DataTable
-                headers={['Project', 'Price', 'Received', 'Remaining']}
-                rows={o.projects.map(p => [p.title, fmtD(p.price), fmtD(p.received), fmtD(p.remaining)])}
+                headers={['Method', 'Total', '% of Total']}
+                rows={methods.map(m => [m.method, fmtD(m.total), methodTotal > 0 ? pct((m.total / methodTotal) * 100) : '—'])}
+                footer={['Total', fmtD(methodTotal), '100%']}
               />
             </div>
           )}
@@ -464,17 +390,17 @@ function DetailContent({ id, r, accent }) {
   }
 }
 
-// ── Year Picker ──────────────────────────────────────
-const YearPicker = ({ year, setYear }) => (
+// ── Filter Picker ────────────────────────────────────
+const FilterPicker = ({ filter, setFilter }) => (
   <div className="rpt-year-picker">
-    {YEARS.map(y => (
-      <button key={y} onClick={() => setYear(y)} className={cn('rpt-year-btn', year === y && 'rpt-year-btn--active')}>{y}</button>
+    {FILTERS.map(f => (
+      <button key={f.id} onClick={() => setFilter(f.id)} className={cn('rpt-year-btn', filter === f.id && 'rpt-year-btn--active')}>{f.label}</button>
     ))}
   </div>
 );
 
 // ── Report Card ──────────────────────────────────────
-function ReportCard({ report, data, year, index }) {
+function ReportCard({ report, data, filter, index }) {
   const navigate = useNavigate();
   const { headline, label, sub } = cardData(report.id, data);
   const Icon = report.icon;
@@ -483,7 +409,7 @@ function ReportCard({ report, data, year, index }) {
     <motion.button
       className="rpt-card"
       style={{ '--card-accent': report.accent, '--card-accent-bg': report.accent + '0a' }}
-      onClick={() => navigate(`/reports/${report.id}?year=${year}`)}
+      onClick={() => navigate(`/reports/${report.id}?filter=${filter}`)}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.04 }}
@@ -508,7 +434,7 @@ function ReportCard({ report, data, year, index }) {
 }
 
 // ── Detail Page ──────────────────────────────────────
-function ReportDetailPage({ reportId, data, year, setYear }) {
+function ReportDetailPage({ reportId, data, filter, setFilter }) {
   const navigate = useNavigate();
   const report = REPORTS.find(r => r.id === reportId);
   if (!report) return <p className="text-center py-8 text-surface-400">Report not found.</p>;
@@ -521,11 +447,11 @@ function ReportDetailPage({ reportId, data, year, setYear }) {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}>
         {/* Header */}
         <div className="rpt-detail__header">
-          <button className="rpt-detail__back" onClick={() => navigate(`/reports?year=${year}`)}>
+          <button className="rpt-detail__back" onClick={() => navigate(`/reports?filter=${filter}`)}>
             <ChevronLeft className="w-4 h-4" />
             <span>Reports</span>
           </button>
-          <YearPicker year={year} setYear={setYear} />
+          <FilterPicker filter={filter} setFilter={setFilter} />
         </div>
 
         {/* Hero */}
@@ -548,7 +474,7 @@ function ReportDetailPage({ reportId, data, year, setYear }) {
 }
 
 // ── Overview Page ────────────────────────────────────
-function ReportOverview({ data, year, setYear }) {
+function ReportOverview({ data, filter, setFilter }) {
   return (
     <div className="rpt-page">
       <div className="rpt-page__header">
@@ -556,7 +482,7 @@ function ReportOverview({ data, year, setYear }) {
           <h1 className="rpt-page__title">Reports</h1>
           <p className="rpt-page__subtitle">Financial insights & analytics</p>
         </div>
-        <YearPicker year={year} setYear={setYear} />
+        <FilterPicker filter={filter} setFilter={setFilter} />
       </div>
 
       {SECTIONS.map(section => {
@@ -566,7 +492,7 @@ function ReportOverview({ data, year, setYear }) {
             <h2 className="rpt-section__label">{section}</h2>
             <div className="rpt-grid">
               {reports.map((report, i) => (
-                <ReportCard key={report.id} report={report} data={data} year={year} index={i} />
+                <ReportCard key={report.id} report={report} data={data} filter={filter} index={i} />
               ))}
             </div>
           </div>
@@ -580,12 +506,12 @@ function ReportOverview({ data, year, setYear }) {
 export default function ReportsManager() {
   const { reportId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const year = parseInt(searchParams.get('year')) || currentYear;
-  const setYear = (y) => setSearchParams({ year: y }, { replace: true });
+  const filter = searchParams.get('filter') || 'ytd';
+  const setFilter = (f) => setSearchParams({ filter: f }, { replace: true });
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['reports', year],
-    queryFn: () => api.get('/reports', { year }),
+    queryKey: ['reports', filter],
+    queryFn: () => api.get('/reports', getDateParams(filter)),
   });
 
   if (error) {
@@ -611,8 +537,8 @@ export default function ReportsManager() {
   }
 
   if (reportId) {
-    return <ReportDetailPage reportId={reportId} data={data} year={year} setYear={setYear} />;
+    return <ReportDetailPage reportId={reportId} data={data} filter={filter} setFilter={setFilter} />;
   }
 
-  return <ReportOverview data={data} year={year} setYear={setYear} />;
+  return <ReportOverview data={data} filter={filter} setFilter={setFilter} />;
 }

@@ -46,28 +46,22 @@ const card = 'content-card p-5 sm:p-6';
 
 // ── Subcomponents ────────────────────────────────────────────────
 
-const BigNumber = ({ value, label, size = 'default', tint, colorClass }) => {
-  const sizes = {
-    hero: 'text-[clamp(1rem,4vw,2.25rem)] font-extrabold',
-    compact: 'text-[clamp(1rem,4vw,2rem)] font-bold',
-    default: 'text-[clamp(1rem,4vw,2.25rem)] font-bold',
-  };
-  const tints = {
-    green: 'bg-[rgba(68,131,97,0.06)]',
-    red: 'bg-[rgba(212,76,71,0.06)]',
-    neutral: 'bg-[rgba(55,53,47,0.03)]',
-  };
-  const colors = {
-    green: 'text-[rgb(68,131,97)]',
-    red: 'text-[rgb(212,76,71)]',
-  };
-  return (
-    <div className={cn('min-w-0 h-full px-4 py-3.5 sm:px-5 sm:py-4 transition-colors', tints[tint] || '')}>
-      <p className={cn('tabular-nums leading-none tracking-tight truncate', sizes[size], colors[colorClass] || 'text-surface-700')}>{value}</p>
-      <p className="text-[10px] sm:text-xs font-medium uppercase tracking-[0.08em] text-surface-400 mt-2 sm:mt-2.5 truncate">{label}</p>
-    </div>
-  );
-};
+const BigNumber = ({ value, label, size = 'default', tint, colorClass, breakdown }) => (
+  <div className={cn('dash-fin', tint && `dash-fin--${tint}`)}>
+    <p className={cn('dash-fin__value', size === 'hero' && 'dash-fin__value--hero', colorClass && `dash-fin__value--${colorClass}`)}>{value}</p>
+    <p className="dash-fin__label">{label}</p>
+    {breakdown && (
+      <div className="dash-fin__breakdown">
+        {breakdown.map((item, i) => (
+          <div key={i} className="dash-fin__sub">
+            <p className="dash-fin__sub-value">{item.value}</p>
+            <p className="dash-fin__sub-label">{item.label}</p>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+);
 
 const STAT_ICONS = {
   Projects: Briefcase, Clients: Users, Quotes: FileText, Invoices: Receipt,
@@ -76,16 +70,11 @@ const STAT_ICONS = {
 const StatCard = ({ label, value, onClick }) => {
   const Icon = STAT_ICONS[label] || Briefcase;
   return (
-    <button
-      onClick={onClick}
-      className="group flex items-center gap-3 content-card px-4 py-3.5 hover:shadow-sm transition-all text-left"
-    >
-      <div className="w-9 h-9 rounded-lg bg-surface-100 flex items-center justify-center shrink-0">
-        <Icon className="w-[18px] h-[18px] text-surface-400" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xl font-bold tabular-nums leading-none">{value}</p>
-        <p className="text-[11px] text-muted-foreground mt-1">{label}</p>
+    <button onClick={onClick} className="content-card dash-stat">
+      <div className="dash-stat__icon"><Icon /></div>
+      <div className="dash-stat__body">
+        <p className="dash-stat__value">{value}</p>
+        <p className="dash-stat__label">{label}</p>
       </div>
     </button>
   );
@@ -179,32 +168,29 @@ const GigCard = ({ gig, onClick, getTypeColor }) => {
 };
 
 const DocRow = ({ number, clientName, total, status, onClick }) => (
-  <button
-    onClick={onClick}
-    className="w-full flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-surface-100 transition-colors text-left group"
-  >
-    <span className="text-xs font-mono text-muted-foreground shrink-0">#{String(number).padStart(5, '0')}</span>
-    <span className="text-sm truncate flex-1 min-w-0">{clientName || 'No Client'}</span>
+  <button onClick={onClick} className="dash-doc-row group">
+    <span className="dash-doc-row__number">#{String(number).padStart(5, '0')}</span>
+    <span className="dash-doc-row__name">{clientName || 'No Client'}</span>
     {status && (
       <span className={cn(
-        'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-surface-100 capitalize',
+        'dash-doc-row__status',
         status === 'paid' ? 'text-emerald-400' : status === 'partial' ? 'text-amber-400' : 'text-orange-400',
       )}>{status}</span>
     )}
-    <span className="shrink-0 text-sm font-semibold tabular-nums">${parseFloat(total).toFixed(2)}</span>
-    <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+    <span className="dash-doc-row__total">${parseFloat(total).toFixed(2)}</span>
+    <ArrowUpRight className="dash-doc-row__arrow" />
   </button>
 );
 
 const SectionLabel = ({ children, action }) => (
-  <div className="flex items-center justify-between mb-2">
-    <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">{children}</h3>
+  <div className="dash-section">
+    <h3 className="dash-section__title">{children}</h3>
     {action}
   </div>
 );
 
 const ViewAllLink = ({ onClick }) => (
-  <button onClick={onClick} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 group/link">
+  <button onClick={onClick} className="dash-section__action group/link">
     View all <ArrowRight className="w-3 h-3 group-hover/link:translate-x-0.5 transition-transform" />
   </button>
 );
@@ -476,7 +462,11 @@ const Dashboard = () => {
   const grossSales = stats?.grossSales || 0;
   const pendingPayments = stats?.pendingPayments || 0;
   const totalExpenses = stats?.totalExpenses || 0;
+  const businessExpenses = stats?.businessExpenses || 0;
+  const teamPaymentExpenses = stats?.teamPaymentExpenses || 0;
   const totalCredits = stats?.totalCredits || 0;
+  const customerPayments = stats?.customerPayments || 0;
+  const otherIncome = stats?.otherIncome || 0;
   const totalPaidSalary = stats?.totalPaidSalary || 0;
   const profit = (totalRevenue + totalCredits) - totalExpenses - totalPaidSalary;
   const salaryByMember = stats?.salaryByMember || [];
@@ -562,7 +552,12 @@ const Dashboard = () => {
               <BigNumber
                 value={fmtFull(totalCredits)}
                 label="Revenue collected"
-                tint="neutral"
+                tint="green"
+                colorClass="green"
+                breakdown={[
+                  { value: fmtFull(customerPayments), label: 'Payments' },
+                  { value: fmtFull(otherIncome), label: 'Other' },
+                ]}
               />
             </div>
             <div className="content-card">
@@ -571,6 +566,10 @@ const Dashboard = () => {
                 label="Total expenses"
                 tint={totalExpenses > 0 ? 'red' : 'neutral'}
                 colorClass={totalExpenses > 0 ? 'red' : ''}
+                breakdown={[
+                  { value: fmtFull(businessExpenses), label: 'Expenses' },
+                  { value: fmtFull(teamPaymentExpenses), label: 'Team' },
+                ]}
               />
             </div>
           </div>
@@ -585,9 +584,9 @@ const Dashboard = () => {
           </SectionLabel>
           <div className="flex flex-wrap items-baseline gap-x-8 gap-y-3 mt-3">
             {salaryByMember.map(m => (
-              <button key={m.name} onClick={() => navigate('/salary')} className="hover:opacity-70 transition-opacity text-left">
-                <p className="text-lg font-bold tabular-nums leading-none text-[rgb(212,76,71)]">{fmtFull(m.owed)}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">{m.name}</p>
+              <button key={m.name} onClick={() => navigate('/salary')} className="dash-salary-row">
+                <p className="dash-salary-row__value">{fmtFull(m.owed)}</p>
+                <p className="dash-salary-row__name">{m.name}</p>
               </button>
             ))}
           </div>

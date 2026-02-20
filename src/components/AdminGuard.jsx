@@ -13,7 +13,9 @@ const AdminGuard = () => {
     );
   }
 
-  if (!isAdmin && !can('access_settings')) return <Navigate to="/dashboard" replace />;
+  // Allow access if user has any system-level permission
+  const hasSystemAccess = isAdmin || can('access_settings') || can('manage_permissions') || can('view_activity_log');
+  if (!hasSystemAccess) return <Navigate to="/dashboard" replace />;
 
   return <Outlet />;
 };

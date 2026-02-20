@@ -195,13 +195,14 @@ const ProjectsManager = () => {
   const archiveProject = useArchiveProject();
   const restoreProject = useRestoreProject();
   const deleteProject = useDeleteProjectPermanently();
-  const { isPrivileged, can } = useAppData();
+  const { isPrivileged, can, teamRole } = useAppData();
+  const isCrew = teamRole === 'crew';
   const { user } = useAuth();
 
   const { types: projectTypes, getTypeColor } = useProjectTypes();
   const [searchTerm, setSearchTerm] = useState('');
   const statusFilter = searchParams.get('status') || '';
-  const mineFilter = searchParams.get('mine') === 'true';
+  const mineFilter = isCrew || searchParams.get('mine') === 'true';
   const yearFilter = searchParams.get('year') || '';
   const typeFilter = searchParams.get('typeId') || '';
   const financialFilter = searchParams.get('financial') || ''; // 'balanceOwed' | 'profit' | ''
@@ -351,13 +352,15 @@ const ProjectsManager = () => {
             <ArrowUpDown className="action-btn__icon" />
             <span className="hidden sm:inline">{currentSort.label}</span>
           </button>
-          <button
-            onClick={() => navigate('/projects/new')}
-            className="action-btn"
-          >
-            <Plus className="action-btn__icon" />
-            <span className="hidden md:inline">New Project</span>
-          </button>
+          {can('manage_projects') && (
+            <button
+              onClick={() => navigate('/projects/new')}
+              className="action-btn"
+            >
+              <Plus className="action-btn__icon" />
+              <span className="hidden md:inline">New Project</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -378,6 +381,7 @@ const ProjectsManager = () => {
             </button>
           )}
         </div>
+        {!isCrew && (
         <div className="flex gap-0.5 p-1 bg-surface-100 rounded-lg flex-shrink-0">
           <button
             onClick={() => { if (mineFilter) setSearchParams(prev => { const next = new URLSearchParams(prev); next.delete('mine'); return next; }); }}
@@ -394,6 +398,7 @@ const ProjectsManager = () => {
             )}
           >Mine</button>
         </div>
+        )}
       </div>
 
       {/* Filter bar — status tabs + stacking filters */}
@@ -602,7 +607,7 @@ const ProjectsManager = () => {
           <p className="text-xs text-surface-400">{totalCount} project{totalCount !== 1 ? 's' : ''}</p>
           <div className="space-y-2">
             {projects.map(p => (
-              <ProjectRow key={p.id} project={p} onEdit={handleEdit} onArchive={handleArchive} onRestore={handleRestore} onDelete={handleDelete} onContextMenu={handleContextMenu} canEdit={isPrivileged || p.userId === user?.id} canDelete={can('delete_projects')} getTypeColor={getTypeColor} backTo={`/projects${location.search}`} financialMode={financialFilter} />
+              <ProjectRow key={p.id} project={p} onEdit={handleEdit} onArchive={handleArchive} onRestore={handleRestore} onDelete={handleDelete} onContextMenu={handleContextMenu} canEdit={can('manage_projects')} canDelete={can('delete_projects')} getTypeColor={getTypeColor} backTo={`/projects${location.search}`} financialMode={financialFilter} />
             ))}
           </div>
           <div ref={sentinelRef} className="h-1" />

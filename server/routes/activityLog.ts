@@ -1,12 +1,12 @@
 import { db } from '../db';
 import { activityLog } from '../db/schema';
 import { eq, and, desc, count, gte, lte, SQL } from 'drizzle-orm';
-import { requireAdmin } from '../lib/permissions';
+import { requirePermission } from '../lib/permissions';
 import { parseDateInput } from '../lib/dates';
 
 export default async function activityLogRoutes(fastify: any) {
-  // GET /api/activity-log — paginated log entries (admin only)
-  fastify.get('/', { preHandler: [requireAdmin] }, async (request: any) => {
+  // GET /api/activity-log — paginated log entries
+  fastify.get('/', { preHandler: [requirePermission('view_activity_log')] }, async (request: any) => {
     const {
       page = '0',
       pageSize = '50',
@@ -45,8 +45,8 @@ export default async function activityLogRoutes(fastify: any) {
     return { data, count: total };
   });
 
-  // DELETE /api/activity-log/errors — clear all error entries (admin only)
-  fastify.delete('/errors', { preHandler: [requireAdmin] }, async () => {
+  // DELETE /api/activity-log/errors — clear all error entries
+  fastify.delete('/errors', { preHandler: [requirePermission('clear_activity_log')] }, async () => {
     const result = await db.delete(activityLog).where(eq(activityLog.entityType, 'error'));
     return { deleted: result.rowCount ?? 0 };
   });

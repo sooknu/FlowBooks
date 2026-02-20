@@ -147,21 +147,22 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
   const totalCosts = expenses.filter(e => e.type !== 'credit').reduce((sum, e) => sum + (e.amount || 0), 0);
 
   const hasProjectPrice = project.projectPrice != null;
+  const projectPrice = hasProjectPrice ? project.projectPrice : totalInvoiced;
   const openBalance = hasProjectPrice
     ? project.projectPrice - totalCredits
     : totalInvoiced - totalPaid;
   const totalIncome = hasProjectPrice ? project.projectPrice : totalInvoiced + totalCredits;
-  const profit = totalIncome - totalCosts;
+  const shootDatePassed = project.shootStartDate && new Date(project.shootStartDate) <= new Date();
+  const profit = shootDatePassed ? totalIncome - totalCosts : 0;
 
   return (
     <div className="space-y-5">
       {/* Financial Summary — privileged only */}
       {isPrivileged && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <FinancialCard label="Profit" value={formatCurrency(profit)} icon={TrendingUp} delay={0} />
-          <FinancialCard label="Total Income" value={formatCurrency(totalIncome)} icon={Receipt} delay={0.05} />
-          <FinancialCard label="Total Paid" value={formatCurrency(hasProjectPrice ? totalCredits : totalPaid)} icon={DollarSign} delay={0.1} />
-          <FinancialCard label="Open Balance" value={formatCurrency(openBalance)} icon={CreditCard} delay={0.15} />
+        <div className="grid grid-cols-3 gap-3">
+          <FinancialCard label="Project Price" value={formatCurrency(projectPrice)} icon={DollarSign} delay={0} />
+          <FinancialCard label="Open Balance" value={formatCurrency(openBalance)} icon={CreditCard} delay={0.05} />
+          <FinancialCard label="Profit" value={formatCurrency(profit)} icon={TrendingUp} delay={0.1} />
         </div>
       )}
 
@@ -1712,9 +1713,7 @@ const ProjectDetail = () => {
     ? `${project.client.firstName || ''} ${project.client.lastName || ''}`.trim()
     : '—';
 
-  const isOwnProject = project.userId === user?.id;
-  const isManager = ['owner', 'manager'].includes(teamRole);
-  const canEdit = isManager || isOwnProject;
+  const canEdit = can('manage_projects');
 
   const handleStatusChange = (newStatus) => {
     updateProject.mutate({ id: project.id, status: newStatus });
