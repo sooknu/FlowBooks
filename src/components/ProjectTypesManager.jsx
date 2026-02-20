@@ -50,7 +50,7 @@ const ColorPicker = ({ value, onChange }) => {
               )}
               title={COLOR_LABELS[name]}
             >
-              {value === name && <Check className="w-3 h-3 text-white" />}
+              {value === name && <Check className="w-3 h-3 text-[#C8C6C2]" />}
             </button>
           ))}
         </div>

@@ -1,6 +1,6 @@
 import { db } from '../db';
-import { projects, clients, projectTypes, projectAssignments } from '../db/schema';
-import { eq, and, or, ne, gte, lte, isNotNull, inArray } from 'drizzle-orm';
+import { projects, clients, projectTypes, projectAssignments, projectSessions } from '../db/schema';
+import { eq, and, or, ne, gte, lte, isNotNull, inArray, asc as ascFn } from 'drizzle-orm';
 import { parseDateInput } from '../lib/dates';
 
 export default async function calendarRoutes(fastify: any) {
@@ -42,6 +42,8 @@ export default async function calendarRoutes(fastify: any) {
       status: projects.status,
       shootStartDate: projects.shootStartDate,
       shootEndDate: projects.shootEndDate,
+      shootStartTime: projects.shootStartTime,
+      shootEndTime: projects.shootEndTime,
       location: projects.location,
       clientFirstName: clients.firstName,
       clientLastName: clients.lastName,
@@ -67,7 +69,7 @@ export default async function calendarRoutes(fastify: any) {
         .leftJoin(projectTypes, eq(projects.projectTypeId, projectTypes.id))
         .where(and(baseCondition, inArray(projects.id, myProjectIds)));
 
-      return { data: formatProjects(data) };
+      return { data: formatProjects(await attachSessions(data)) };
     }
 
     // Privileged: see all, optionally filter by teamMemberId
@@ -92,8 +94,24 @@ export default async function calendarRoutes(fastify: any) {
       .leftJoin(projectTypes, eq(projects.projectTypeId, projectTypes.id))
       .where(where);
 
-    return { data: formatProjects(data) };
+    return { data: formatProjects(await attachSessions(data)) };
   });
+}
+
+async function attachSessions(projectRows: any[]) {
+  const ids = projectRows.map(r => r.id);
+  if (ids.length === 0) return projectRows;
+  const sessions = await db
+    .select()
+    .from(projectSessions)
+    .where(inArray(projectSessions.projectId, ids))
+    .orderBy(ascFn(projectSessions.sortOrder));
+  const sessionMap: Record<string, any[]> = {};
+  for (const s of sessions) {
+    if (!sessionMap[s.projectId]) sessionMap[s.projectId] = [];
+    sessionMap[s.projectId].push(s);
+  }
+  return projectRows.map(p => ({ ...p, sessions: sessionMap[p.id] || [] }));
 }
 
 function formatProjects(rows: any[]) {

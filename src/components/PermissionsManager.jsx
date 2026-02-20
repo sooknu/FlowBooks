@@ -49,7 +49,7 @@ function ThreeStateToggle({ value, onChange }) {
         onClick={() => onChange('inherit')}
         className={cn(
           "px-2 py-0.5 text-xs rounded-md transition-all",
-          value === 'inherit' ? "bg-white text-surface-700 shadow-sm font-medium" : "text-surface-400 hover:text-surface-600"
+          value === 'inherit' ? "bg-[rgb(var(--glass-bg))] text-surface-700 shadow-sm font-medium" : "text-surface-400 hover:text-surface-600"
         )}
       >
         Inherit
@@ -59,7 +59,7 @@ function ThreeStateToggle({ value, onChange }) {
         onClick={() => onChange('grant')}
         className={cn(
           "px-2 py-0.5 text-xs rounded-md transition-all",
-          value === 'grant' ? "bg-emerald-500 text-white shadow-sm font-medium" : "text-surface-400 hover:text-surface-600"
+          value === 'grant' ? "bg-emerald-500 text-[#C8C6C2] shadow-sm font-medium" : "text-surface-400 hover:text-surface-600"
         )}
       >
         Grant
@@ -69,7 +69,7 @@ function ThreeStateToggle({ value, onChange }) {
         onClick={() => onChange('deny')}
         className={cn(
           "px-2 py-0.5 text-xs rounded-md transition-all",
-          value === 'deny' ? "bg-red-500 text-white shadow-sm font-medium" : "text-surface-400 hover:text-surface-600"
+          value === 'deny' ? "bg-red-500 text-[#C8C6C2] shadow-sm font-medium" : "text-surface-400 hover:text-surface-600"
         )}
       >
         Deny
@@ -282,7 +282,7 @@ export default function PermissionsManager() {
               className={cn(
                 "px-3 py-1.5 text-sm rounded-lg transition-all",
                 selectedRole === role
-                  ? "bg-surface-800 text-white font-medium shadow-sm"
+                  ? "bg-surface-800 text-[#C8C6C2] dark:text-surface-100 font-medium shadow-sm"
                   : "bg-surface-100 text-surface-500 hover:bg-surface-200"
               )}
             >
@@ -449,9 +449,9 @@ export default function PermissionsManager() {
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
-                className="absolute z-20 mt-1 w-full bg-white border border-surface-200 rounded-xl shadow-lg max-h-60 overflow-y-auto"
+                className="absolute z-20 mt-1 w-full bg-[rgb(var(--glass-bg))] border border-surface-200 rounded-xl shadow-lg max-h-60 overflow-y-auto"
               >
-                {teamMembers.filter(m => m.role !== 'owner').map(m => (
+                {teamMembers.filter(m => m.role !== 'owner' && m.userId).map(m => (
                   <button
                     key={m.userId}
                     onClick={() => handleUserSelect(m.userId)}
@@ -468,7 +468,7 @@ export default function PermissionsManager() {
                     </span>
                   </button>
                 ))}
-                {teamMembers.filter(m => m.role !== 'owner').length === 0 && (
+                {teamMembers.filter(m => m.role !== 'owner' && m.userId).length === 0 && (
                   <div className="px-4 py-3 text-sm text-surface-400">No team members to configure</div>
                 )}
               </motion.div>

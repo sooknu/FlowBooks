@@ -44,4 +44,10 @@ export default async function activityLogRoutes(fastify: any) {
 
     return { data, count: total };
   });
+
+  // DELETE /api/activity-log/errors — clear all error entries (admin only)
+  fastify.delete('/errors', { preHandler: [requireAdmin] }, async () => {
+    const result = await db.delete(activityLog).where(eq(activityLog.entityType, 'error'));
+    return { deleted: result.rowCount ?? 0 };
+  });
 }

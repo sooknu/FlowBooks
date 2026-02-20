@@ -280,7 +280,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
             <img src={effectiveHeaderLogo} alt="Logo" className={cn("object-contain flex-shrink-0", collapsed && "lg:hidden")} style={{ height: `${parseInt(headerLogoSize, 10) || 28}px` }} />
           ) : (
             <div className={cn("w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0", collapsed && faviconUrl && "lg:hidden")}>
-              <span className="text-white text-xs font-bold">{(appName || 'Q')[0]}</span>
+              <span className="text-[#C8C6C2] text-xs font-bold">{(appName || 'Q')[0]}</span>
             </div>
           )}
         </div>
@@ -299,7 +299,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
             )}>
               <Avatar className="h-6 w-6 flex-shrink-0">
                 <AvatarImage src={userProfile?.avatarUrl || userProfile?.avatar_url} alt="User" />
-                <AvatarFallback className="text-[9px] font-semibold bg-gradient-to-br from-blue-500 to-indigo-600 text-white">{initials}</AvatarFallback>
+                <AvatarFallback className="text-[9px] font-semibold bg-gradient-to-br from-blue-500 to-indigo-600 text-[#C8C6C2]">{initials}</AvatarFallback>
               </Avatar>
               <span className={cn("text-[12.5px] font-medium text-surface-700 truncate", collapsed && "lg:hidden")}>{displayName}</span>
             </button>
@@ -326,7 +326,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
               >
                 <Bell className="w-[15px] h-[15px]" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[14px] h-3.5 px-0.5 rounded-full bg-red-500 text-white text-[8px] font-bold leading-none">
+                  <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[14px] h-3.5 px-0.5 rounded-full bg-red-500 text-[#C8C6C2] text-[8px] font-bold leading-none">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
@@ -415,7 +415,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
                   <button className="relative p-1.5 rounded-lg text-surface-500 hover:text-surface-800 hover:bg-surface-100/80 transition-colors flex-shrink-0" title="Notifications">
                     <Bell className="w-[22px] h-[22px]" />
                     {unreadCount > 0 && (
-                      <span className="absolute top-0.5 right-0.5 flex items-center justify-center min-w-[13px] h-3 px-0.5 rounded-full bg-red-500 text-white text-[7px] font-bold leading-none">
+                      <span className="absolute top-0.5 right-0.5 flex items-center justify-center min-w-[13px] h-3 px-0.5 rounded-full bg-red-500 text-[#C8C6C2] text-[7px] font-bold leading-none">
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </span>
                     )}
@@ -431,7 +431,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
                   <button className="p-0.5 rounded-lg hover:bg-surface-100/80 transition-colors flex-shrink-0">
                     <Avatar className="h-6 w-6">
                       <AvatarImage src={userProfile?.avatarUrl || userProfile?.avatar_url} alt="User" />
-                      <AvatarFallback className="text-[8px] font-semibold bg-gradient-to-br from-blue-500 to-indigo-600 text-white">{initials}</AvatarFallback>
+                      <AvatarFallback className="text-[8px] font-semibold bg-gradient-to-br from-blue-500 to-indigo-600 text-[#C8C6C2]">{initials}</AvatarFallback>
                     </Avatar>
                   </button>
                 </DropdownMenuTrigger>

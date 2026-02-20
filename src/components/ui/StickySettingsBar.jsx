@@ -16,7 +16,7 @@ const StickySettingsBar = ({ isDirty, onSave, isPending }) => {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 72, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-          className="fixed bottom-0 left-0 right-0 z-50 border-t border-surface-200 bg-white/95 backdrop-blur-sm shadow-[0_-2px_12px_rgba(0,0,0,0.06)]"
+          className="fixed bottom-0 left-0 right-0 z-50 border-t border-surface-200 bg-[rgb(var(--glass-bg)_/_0.95)] backdrop-blur-sm shadow-[0_-2px_12px_rgba(0,0,0,0.06)]"
         >
           <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between">
             <span className="text-sm text-surface-500">Unsaved changes</span>

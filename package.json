@@ -60,6 +60,7 @@
     "framer-motion": "^10.16.4",
     "googleapis": "^171.4.0",
     "ioredis": "^5.9.2",
+    "isomorphic-dompurify": "^2.36.0",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.285.0",
     "nodemailer": "^8.0.0",

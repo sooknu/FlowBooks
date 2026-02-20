@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from '@/components/ui/use-toast';
-import { Loader2, Upload, Image as ImageIcon, X, Camera, ExternalLink, RefreshCw } from 'lucide-react';
+import { Loader2, Upload, Image as ImageIcon, X, Camera, ExternalLink, RefreshCw, Sun, Moon } from 'lucide-react';
 import api from '@/lib/apiClient';
 import StickySettingsBar from '@/components/ui/StickySettingsBar';
 import PasswordInput from '@/components/ui/PasswordInput';
@@ -16,7 +16,9 @@ const LogoBrandingManager = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [settings, setSettings] = useState({
     login_logo_url: '',
+    login_logo_dark_url: '',
     header_logo_url: '',
+    header_logo_dark_url: '',
     favicon_url: '',
     secondary_logo_url: '',
     login_logo_size: 64,
@@ -38,7 +40,9 @@ const LogoBrandingManager = () => {
     if (fetchedSettings) {
       setSettings({
         login_logo_url: fetchedSettings.login_logo_url || '',
+        login_logo_dark_url: fetchedSettings.login_logo_dark_url || '',
         header_logo_url: fetchedSettings.header_logo_url || '',
+        header_logo_dark_url: fetchedSettings.header_logo_dark_url || '',
         favicon_url: fetchedSettings.favicon_url || '',
         secondary_logo_url: fetchedSettings.secondary_logo_url || '',
         login_logo_size: parseInt(fetchedSettings.login_logo_size, 10) || 64,
@@ -62,7 +66,9 @@ const LogoBrandingManager = () => {
       const publicUrl = `${result.data.publicUrl}?v=${Date.now()}`;
       const typeToKey = {
         login_logo: 'login_logo_url',
+        login_logo_dark: 'login_logo_dark_url',
         header_logo: 'header_logo_url',
+        header_logo_dark: 'header_logo_dark_url',
         favicon: 'favicon_url',
         secondary_logo: 'secondary_logo_url',
       };
@@ -75,7 +81,9 @@ const LogoBrandingManager = () => {
   const isDirty = useMemo(() => {
     if (!fetchedSettings) return false;
     return settings.login_logo_url !== (fetchedSettings.login_logo_url || '') ||
+      settings.login_logo_dark_url !== (fetchedSettings.login_logo_dark_url || '') ||
       settings.header_logo_url !== (fetchedSettings.header_logo_url || '') ||
+      settings.header_logo_dark_url !== (fetchedSettings.header_logo_dark_url || '') ||
       settings.favicon_url !== (fetchedSettings.favicon_url || '') ||
       settings.secondary_logo_url !== (fetchedSettings.secondary_logo_url || '') ||
       settings.login_logo_size !== (parseInt(fetchedSettings.login_logo_size, 10) || 64) ||
@@ -100,23 +108,19 @@ const LogoBrandingManager = () => {
     return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 animate-spin" /></div>;
   }
 
-  const logos = [
-    { id: 'login_logo', label: 'Login Logo', hint: 'Shown on the login page.', urlKey: 'login_logo_url', sizeKey: 'login_logo_size' },
-    { id: 'header_logo', label: 'Header Logo', hint: 'Shown in the app header.', urlKey: 'header_logo_url', sizeKey: 'header_logo_size' },
-    { id: 'secondary_logo', label: 'Invoice / Email Logo', hint: 'Used on PDFs and emails.', urlKey: 'secondary_logo_url' },
-    { id: 'favicon', label: 'Favicon', hint: 'ICO or PNG, 32x32px.', urlKey: 'favicon_url' },
-  ];
-
-  const UploadSlot = ({ uploadType, urlKey, previewHeight }) => {
+  const UploadSlot = ({ uploadType, urlKey, previewHeight, previewBg }) => {
     const url = settings[urlKey];
     const fileName = url ? decodeURIComponent(url.split('/').pop()?.split('?')[0] || '') : null;
+    const bgClass = previewBg === 'dark'
+      ? 'bg-[#1a1a1a] border border-surface-200/30'
+      : 'bg-white border border-surface-200/60';
     return (
-      <div className="flex flex-col items-center space-y-2">
-        <div className="glass-card item-row flex items-center justify-center p-2" style={{ height: previewHeight ? `${previewHeight + 16}px` : '80px', width: '100%', minWidth: '80px' }}>
+      <div className="flex flex-col items-center space-y-2 flex-1 min-w-0">
+        <div className={`rounded-xl flex items-center justify-center p-2 w-full ${bgClass}`} style={{ height: previewHeight ? `${previewHeight + 16}px` : '80px', minWidth: '80px' }}>
           {url ? (
             <img src={url} alt={`${uploadType} preview`} className="max-w-full object-contain" style={previewHeight ? { height: `${previewHeight}px` } : { maxHeight: '64px' }} />
           ) : (
-            <ImageIcon className="w-8 h-8 text-surface-500" />
+            <ImageIcon className={`w-8 h-8 ${previewBg === 'dark' ? 'text-[#C8C6C2]/30' : 'text-surface-300'}`} />
           )}
         </div>
         {fileName && (
@@ -143,29 +147,72 @@ const LogoBrandingManager = () => {
     );
   };
 
+  // Logos with theme variants (login + header)
+  const themedLogos = [
+    { id: 'login_logo', label: 'Login Logo', hint: 'Shown on the login page.', urlKey: 'login_logo_url', darkUrlKey: 'login_logo_dark_url', sizeKey: 'login_logo_size' },
+    { id: 'header_logo', label: 'Header Logo', hint: 'Shown in the app header.', urlKey: 'header_logo_url', darkUrlKey: 'header_logo_dark_url', sizeKey: 'header_logo_size' },
+  ];
+
+  // Logos without theme variants
+  const simpleLogos = [
+    { id: 'secondary_logo', label: 'Invoice / Email Logo', hint: 'Used on PDFs and emails.', urlKey: 'secondary_logo_url' },
+    { id: 'favicon', label: 'Favicon', hint: 'ICO or PNG, 32x32px.', urlKey: 'favicon_url' },
+  ];
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
       <div className="glass-card p-6">
         <h3 className="text-xl font-bold mb-2">Logos</h3>
         <p className="text-sm text-surface-500 mb-6">Upload your logos for the app, login page, invoices, and browser tab.</p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {logos.map(type => (
+
+        {/* Themed logos (login + header) — light & dark slots */}
+        <div className="space-y-5 mb-5">
+          {themedLogos.map(type => (
+            <div key={type.id} className="glass-card item-row p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-surface-600">{type.label}</label>
+                {type.sizeKey && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-surface-500">Height</label>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={settings[type.sizeKey]}
+                      onChange={e => handleInputChange(type.sizeKey, parseInt(e.target.value, 10) || 0)}
+                      className="glass-input w-16 text-center text-xs py-1"
+                      min={1}
+                    />
+                    <span className="text-xs text-surface-400">px</span>
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5 justify-center">
+                    <Sun className="w-3 h-3 text-surface-400" />
+                    <span className="text-[11px] font-medium text-surface-500 uppercase tracking-wider">Light</span>
+                  </div>
+                  <UploadSlot uploadType={type.id} urlKey={type.urlKey} previewHeight={type.sizeKey ? settings[type.sizeKey] : undefined} previewBg="light" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5 justify-center">
+                    <Moon className="w-3 h-3 text-surface-400" />
+                    <span className="text-[11px] font-medium text-surface-500 uppercase tracking-wider">Dark</span>
+                  </div>
+                  <UploadSlot uploadType={`${type.id}_dark`} urlKey={type.darkUrlKey} previewHeight={type.sizeKey ? settings[type.sizeKey] : undefined} previewBg="dark" />
+                </div>
+              </div>
+              <p className="text-xs text-surface-400 text-center">{type.hint}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Simple logos (invoice/email + favicon) */}
+        <div className="grid grid-cols-2 gap-4">
+          {simpleLogos.map(type => (
             <div key={type.id} className="flex flex-col items-center text-center space-y-3 glass-card item-row p-4">
               <label className="block text-sm font-medium text-surface-600">{type.label}</label>
-              <UploadSlot uploadType={type.id} urlKey={type.urlKey} previewHeight={type.sizeKey ? settings[type.sizeKey] : undefined} />
-              {type.sizeKey && (
-                <div>
-                  <label className="text-xs text-surface-600 mb-1 block">Height (px)</label>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={settings[type.sizeKey]}
-                    onChange={e => handleInputChange(type.sizeKey, parseInt(e.target.value, 10) || 0)}
-                    className="glass-input w-20 text-center"
-                    min={1}
-                  />
-                </div>
-              )}
+              <UploadSlot uploadType={type.id} urlKey={type.urlKey} />
               <p className="text-xs text-surface-400">{type.hint}</p>
             </div>
           ))}
@@ -246,7 +293,7 @@ const LogoBrandingManager = () => {
               <div className="relative max-w-md rounded-lg overflow-hidden border border-surface-200">
                 <img src={preview.thumb || preview.url} alt="Current background" className="w-full h-36 object-cover" />
                 <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2">
-                  <span className="text-xs text-white/80">
+                  <span className="text-xs text-[#C8C6C2]/80">
                     Photo by {preview.creditName || 'Unknown'}
                   </span>
                 </div>

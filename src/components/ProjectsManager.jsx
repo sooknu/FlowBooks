@@ -1,12 +1,13 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback, memo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { motion, useMotionValue, animate } from 'framer-motion';
+import { motion, useMotionValue, animate, AnimatePresence } from 'framer-motion';
 import { cn, fmtDate, tzDate } from '@/lib/utils';
 import { useProjectTypes } from '@/lib/projectTypes';
 import {
   FolderKanban, Plus, Search, X, ArrowUpDown, Loader2, Camera,
-  Pencil, Archive, ArchiveRestore, Lock, Trash2,
+  Pencil, Archive, ArchiveRestore, Trash2, DollarSign, TrendingUp, ChevronDown,
+  Calendar, Tag, Filter, XCircle,
 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -39,11 +40,16 @@ const STATUS_COLORS = {
 /* Status border colors are now in BEM CSS via data-status attribute */
 
 const SORT_OPTIONS = [
-  { label: 'Newest First', orderBy: 'createdAt', asc: false },
-  { label: 'Oldest First', orderBy: 'createdAt', asc: true },
-  { label: 'Shoot Date ↑', orderBy: 'shootStartDate', asc: true },
-  { label: 'Shoot Date ↓', orderBy: 'shootStartDate', asc: false },
-  { label: 'Title A-Z', orderBy: 'title', asc: true },
+  { label: 'Newest First', orderBy: 'shootStartDate', asc: false },
+  { label: 'Oldest First', orderBy: 'shootStartDate', asc: true },
+];
+
+const currentYear = new Date().getFullYear();
+const YEAR_OPTIONS = [
+  { value: '', label: 'All' },
+  { value: String(currentYear - 1), label: String(currentYear - 1) },
+  { value: String(currentYear), label: String(currentYear) },
+  { value: String(currentYear + 1), label: String(currentYear + 1) },
 ];
 
 const STATUS_FILTERS = [
@@ -61,7 +67,12 @@ function formatDate(d) {
 
 const DELETE_THRESHOLD = -80;
 
-const ProjectRow = memo(({ project, onEdit, onArchive, onRestore, onDelete, onContextMenu, canEdit, canDelete, getTypeColor }) => {
+const fmtCurrency = (v) => {
+  if (v == null || isNaN(v)) return null;
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+};
+
+const ProjectRow = memo(({ project, onEdit, onArchive, onRestore, onDelete, onContextMenu, canEdit, canDelete, getTypeColor, backTo, financialMode }) => {
   const navigate = useNavigate();
   const x = useMotionValue(0);
   const isArchived = project.status === 'archived';
@@ -95,7 +106,6 @@ const ProjectRow = memo(({ project, onEdit, onArchive, onRestore, onDelete, onCo
         <div className="event-card-row__header">
           <span className="event-card-row__title">
             {project.title}
-            {project.lockedBy && <Lock className="w-3 h-3 text-amber-500 inline-block ml-1.5 flex-shrink-0" />}
           </span>
         </div>
 
@@ -113,6 +123,7 @@ const ProjectRow = memo(({ project, onEdit, onArchive, onRestore, onDelete, onCo
         <div className="event-card-row__date">
           <span className="event-card-row__date-month">{fmtDate(project.shootStartDate, { month: 'short' })}</span>
           <span className="event-card-row__date-day">{d.getDate()}</span>
+          <span className="event-card-row__date-year">{d.getFullYear()}</span>
         </div>
       ) : (
         <div className="event-card-row__date event-card-row__date--empty">
@@ -121,7 +132,13 @@ const ProjectRow = memo(({ project, onEdit, onArchive, onRestore, onDelete, onCo
       )}
 
       <div className="event-card-row__details">
-        {dateStr && <span className="event-card-row__date-text">{dateStr}</span>}
+        {financialMode === 'balanceOwed' && project.balanceOwed != null ? (
+          <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">{fmtCurrency(project.balanceOwed)}</span>
+        ) : financialMode === 'profit' && project.profit != null ? (
+          <span className={cn('text-xs font-semibold', project.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500')}>{fmtCurrency(project.profit)}</span>
+        ) : (
+          dateStr && <span className="event-card-row__date-text">{dateStr}</span>
+        )}
         <span className={cn('event-card-row__status', STATUS_COLORS[project.status])}>{project.status}</span>
       </div>
     </div>
@@ -129,7 +146,7 @@ const ProjectRow = memo(({ project, onEdit, onArchive, onRestore, onDelete, onCo
 
   if (!isSwipeable) {
     return (
-      <div onClick={() => navigate(`/projects/${project.id}`)}>
+      <div onClick={() => navigate(`/projects/${project.id}`, { state: { backTo } })}>
         {cardContent}
       </div>
     );
@@ -141,7 +158,7 @@ const ProjectRow = memo(({ project, onEdit, onArchive, onRestore, onDelete, onCo
         className={cn('absolute inset-0 flex items-center justify-end pr-6 rounded-xl', isArchived ? 'bg-red-500' : 'bg-amber-500')}
         onClick={(e) => { e.stopPropagation(); isArchived ? onDelete(project) : onArchive(project); }}
       >
-        {isArchived ? <Trash2 className="w-5 h-5 text-white" /> : <Archive className="w-5 h-5 text-white" />}
+        {isArchived ? <Trash2 className="w-5 h-5 text-[#C8C6C2]" /> : <Archive className="w-5 h-5 text-[#C8C6C2]" />}
       </div>
 
       <motion.div
@@ -159,7 +176,7 @@ const ProjectRow = memo(({ project, onEdit, onArchive, onRestore, onDelete, onCo
           }
         }}
         onClick={() => {
-          if (Math.abs(x.get()) < 5) navigate(`/projects/${project.id}`);
+          if (Math.abs(x.get()) < 5) navigate(`/projects/${project.id}`, { state: { backTo } });
         }}
       >
         {cardContent}
@@ -173,6 +190,7 @@ ProjectRow.displayName = 'ProjectRow';
 
 const ProjectsManager = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const archiveProject = useArchiveProject();
   const restoreProject = useRestoreProject();
@@ -180,10 +198,13 @@ const ProjectsManager = () => {
   const { isPrivileged, can } = useAppData();
   const { user } = useAuth();
 
-  const { getTypeColor } = useProjectTypes();
+  const { types: projectTypes, getTypeColor } = useProjectTypes();
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const statusFilter = searchParams.get('status') || '';
   const mineFilter = searchParams.get('mine') === 'true';
+  const yearFilter = searchParams.get('year') || '';
+  const typeFilter = searchParams.get('typeId') || '';
+  const financialFilter = searchParams.get('financial') || ''; // 'balanceOwed' | 'profit' | ''
   const [sortIndex, setSortIndex] = useState(0);
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -197,6 +218,10 @@ const ProjectsManager = () => {
   const contextMenuRef = useRef(null);
   const sentinelRef = useRef(null);
 
+  // When a financial sort is active, override the normal sort
+  const effectiveOrderBy = financialFilter || currentSort.orderBy;
+  const effectiveAsc = financialFilter ? false : currentSort.asc;
+
   const {
     data,
     isLoading,
@@ -204,16 +229,18 @@ const ProjectsManager = () => {
     hasNextPage,
     fetchNextPage,
   } = useInfiniteQuery({
-    queryKey: queryKeys.projects.list({ search: debouncedSearch, status: statusFilter, mine: mineFilter, orderBy: currentSort.orderBy, asc: currentSort.asc }),
+    queryKey: queryKeys.projects.list({ search: debouncedSearch, status: statusFilter, mine: mineFilter, year: yearFilter, typeId: typeFilter, orderBy: effectiveOrderBy, asc: effectiveAsc }),
     queryFn: async ({ pageParam = 0 }) => {
       return api.get('/projects', {
         search: debouncedSearch || undefined,
         status: statusFilter || undefined,
         mine: mineFilter || undefined,
+        year: yearFilter || undefined,
+        typeId: typeFilter || undefined,
         page: pageParam,
         pageSize: PAGE_SIZE,
-        orderBy: currentSort.orderBy,
-        asc: currentSort.asc,
+        orderBy: effectiveOrderBy,
+        asc: effectiveAsc,
       });
     },
     getNextPageParam: (lastPage, allPages) => {
@@ -334,79 +361,224 @@ const ProjectsManager = () => {
         </div>
       </div>
 
-      {/* Search + scope + status filter */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex gap-2 flex-1 min-w-0">
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-500" />
-            <input
-              type="text"
-              placeholder="Search projects..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="glass-input w-full pl-10 pr-9"
-            />
-            {searchTerm && (
-              <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-700 transition-colors">
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-          <div className="flex gap-0.5 p-1 bg-surface-100 rounded-lg flex-shrink-0">
-            <button
-              onClick={() => { if (mineFilter) setSearchParams({}); }}
-              className={cn(
-                "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                !mineFilter ? 'bg-white text-surface-800 shadow-sm' : 'text-surface-500 hover:text-surface-700'
-              )}
-            >All</button>
-            <button
-              onClick={() => { if (!mineFilter) setSearchParams({ mine: 'true' }); }}
-              className={cn(
-                "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                mineFilter ? 'bg-white text-surface-800 shadow-sm' : 'text-surface-500 hover:text-surface-700'
-              )}
-            >Mine</button>
-          </div>
+      {/* Search + scope */}
+      <div className="flex gap-2">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-500" />
+          <input
+            type="text"
+            placeholder="Search projects..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="glass-input w-full pl-10 pr-9"
+          />
+          {searchTerm && (
+            <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-700 transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
-        <div className="flex-shrink-0">
-          <div
-            ref={tabScrollRef}
-            className="flex gap-1 px-2 py-1 bg-surface-100 rounded-lg overflow-x-auto scrollbar-hide"
-            style={{ WebkitOverflowScrolling: 'touch' }}
-          >
-            {STATUS_FILTERS.map(f => (
+        <div className="flex gap-0.5 p-1 bg-surface-100 rounded-lg flex-shrink-0">
+          <button
+            onClick={() => { if (mineFilter) setSearchParams(prev => { const next = new URLSearchParams(prev); next.delete('mine'); return next; }); }}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+              !mineFilter ? 'bg-[rgb(var(--glass-bg))] text-surface-800 shadow-sm' : 'text-surface-500 hover:text-surface-700'
+            )}
+          >All</button>
+          <button
+            onClick={() => { if (!mineFilter) setSearchParams(prev => { const next = new URLSearchParams(prev); next.set('mine', 'true'); return next; }); }}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+              mineFilter ? 'bg-[rgb(var(--glass-bg))] text-surface-800 shadow-sm' : 'text-surface-500 hover:text-surface-700'
+            )}
+          >Mine</button>
+        </div>
+      </div>
+
+      {/* Filter bar — status tabs + stacking filters */}
+      <div className="project-filter-bar">
+        {/* Row 1: Status tabs */}
+        <div
+          ref={tabScrollRef}
+          className="project-filter-bar__status"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          {STATUS_FILTERS.map(f => (
+            <button
+              key={f.value}
+              onClick={(e) => {
+                setSearchParams(prev => {
+                  const next = new URLSearchParams(prev);
+                  if (f.value) next.set('status', f.value); else next.delete('status');
+                  return next;
+                });
+                e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+              }}
+              className={cn(
+                "project-filter-bar__status-btn",
+                statusFilter === f.value && 'project-filter-bar__status-btn--active'
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Row 2: Stacking filters */}
+        <div className="project-filter-bar__filters">
+          {/* Year selector */}
+          <div className="project-filter-bar__group">
+            {YEAR_OPTIONS.map(y => (
               <button
-                key={f.value}
-                onClick={(e) => {
-                  setStatusFilter(f.value);
-                  e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-                }}
+                key={y.value}
+                onClick={() => setSearchParams(prev => {
+                  const next = new URLSearchParams(prev);
+                  if (y.value) next.set('year', y.value); else next.delete('year');
+                  return next;
+                })}
                 className={cn(
-                  "px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap flex-shrink-0",
-                  statusFilter === f.value
-                    ? 'bg-white text-surface-800 shadow-sm'
-                    : 'text-surface-500 hover:text-surface-700'
+                  "project-filter-bar__year-btn",
+                  yearFilter === y.value && 'project-filter-bar__year-btn--active'
                 )}
               >
-                {f.label}
+                {y.label}
               </button>
             ))}
           </div>
-          {/* Dot indicators — mobile only */}
-          <div className="flex justify-center gap-1.5 pt-1.5 sm:hidden">
-            {STATUS_FILTERS.map(f => (
-              <button
-                key={f.value}
-                onClick={() => setStatusFilter(f.value)}
-                className={cn(
-                  "w-1.5 h-1.5 rounded-full transition-colors duration-200",
-                  statusFilter === f.value ? "bg-surface-500" : "bg-surface-200"
-                )}
-              />
-            ))}
+
+          <div className="project-filter-bar__divider" />
+
+          {/* Event type */}
+          <div className="relative">
+            <select
+              value={typeFilter}
+              onChange={e => setSearchParams(prev => {
+                const next = new URLSearchParams(prev);
+                if (e.target.value) next.set('typeId', e.target.value); else next.delete('typeId');
+                return next;
+              })}
+              className={cn(
+                "project-filter-bar__select",
+                typeFilter && 'project-filter-bar__select--active'
+              )}
+            >
+              <option value="">Event Type</option>
+              {projectTypes.map(t => (
+                <option key={t.id || t.value} value={t.id || t.value}>{t.label}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-50" />
           </div>
+
+          {/* Financial filters */}
+          <button
+            onClick={() => setSearchParams(prev => {
+              const next = new URLSearchParams(prev);
+              if (financialFilter === 'balanceOwed') next.delete('financial'); else next.set('financial', 'balanceOwed');
+              return next;
+            })}
+            className={cn(
+              "project-filter-bar__chip",
+              financialFilter === 'balanceOwed' && 'project-filter-bar__chip--balance'
+            )}
+          >
+            <DollarSign className="w-3.5 h-3.5" />
+            <span>Balance</span>
+          </button>
+
+          <button
+            onClick={() => setSearchParams(prev => {
+              const next = new URLSearchParams(prev);
+              if (financialFilter === 'profit') next.delete('financial'); else next.set('financial', 'profit');
+              return next;
+            })}
+            className={cn(
+              "project-filter-bar__chip",
+              financialFilter === 'profit' && 'project-filter-bar__chip--profit'
+            )}
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            <span>Profit</span>
+          </button>
+
+          {/* Clear all — only shows when any filter is active */}
+          <AnimatePresence>
+            {(yearFilter || typeFilter || financialFilter) && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.8, width: 0 }}
+                animate={{ opacity: 1, scale: 1, width: 'auto' }}
+                exit={{ opacity: 0, scale: 0.8, width: 0 }}
+                transition={{ duration: 0.15 }}
+                onClick={() => setSearchParams(prev => {
+                  const next = new URLSearchParams(prev);
+                  next.delete('year');
+                  next.delete('typeId');
+                  next.delete('financial');
+                  return next;
+                })}
+                className="project-filter-bar__clear"
+              >
+                <X className="w-3 h-3" />
+                <span>Clear</span>
+              </motion.button>
+            )}
+          </AnimatePresence>
         </div>
+
+        {/* Active filter summary chips */}
+        <AnimatePresence>
+          {(yearFilter || typeFilter || financialFilter) && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="project-filter-bar__active"
+            >
+              <span className="project-filter-bar__active-label">Showing:</span>
+              {yearFilter && (
+                <motion.span
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="project-filter-bar__active-chip project-filter-bar__active-chip--year"
+                >
+                  <Calendar className="w-3 h-3" />
+                  {yearFilter}
+                  <button onClick={() => setSearchParams(prev => { const n = new URLSearchParams(prev); n.delete('year'); return n; })} className="project-filter-bar__active-x"><X className="w-2.5 h-2.5" /></button>
+                </motion.span>
+              )}
+              {typeFilter && (
+                <motion.span
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="project-filter-bar__active-chip project-filter-bar__active-chip--type"
+                >
+                  <Tag className="w-3 h-3" />
+                  {projectTypes.find(t => (t.id || t.value) === typeFilter)?.label || typeFilter}
+                  <button onClick={() => setSearchParams(prev => { const n = new URLSearchParams(prev); n.delete('typeId'); return n; })} className="project-filter-bar__active-x"><X className="w-2.5 h-2.5" /></button>
+                </motion.span>
+              )}
+              {financialFilter && (
+                <motion.span
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className={cn('project-filter-bar__active-chip', financialFilter === 'balanceOwed' ? 'project-filter-bar__active-chip--balance' : 'project-filter-bar__active-chip--profit')}
+                >
+                  {financialFilter === 'balanceOwed' ? <DollarSign className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+                  {financialFilter === 'balanceOwed' ? 'Balance Owed' : 'Most Profitable'}
+                  <button onClick={() => setSearchParams(prev => { const n = new URLSearchParams(prev); n.delete('financial'); return n; })} className="project-filter-bar__active-x"><X className="w-2.5 h-2.5" /></button>
+                </motion.span>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* List */}
@@ -430,7 +602,7 @@ const ProjectsManager = () => {
           <p className="text-xs text-surface-400">{totalCount} project{totalCount !== 1 ? 's' : ''}</p>
           <div className="space-y-2">
             {projects.map(p => (
-              <ProjectRow key={p.id} project={p} onEdit={handleEdit} onArchive={handleArchive} onRestore={handleRestore} onDelete={handleDelete} onContextMenu={handleContextMenu} canEdit={isPrivileged || (p.userId === user?.id && !p.lockedBy)} canDelete={can('delete_projects')} getTypeColor={getTypeColor} />
+              <ProjectRow key={p.id} project={p} onEdit={handleEdit} onArchive={handleArchive} onRestore={handleRestore} onDelete={handleDelete} onContextMenu={handleContextMenu} canEdit={isPrivileged || p.userId === user?.id} canDelete={can('delete_projects')} getTypeColor={getTypeColor} backTo={`/projects${location.search}`} financialMode={financialFilter} />
             ))}
           </div>
           <div ref={sentinelRef} className="h-1" />
@@ -469,7 +641,7 @@ const ProjectsManager = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700 text-white">Delete</AlertDialogAction>
+            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700 text-[#C8C6C2]">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

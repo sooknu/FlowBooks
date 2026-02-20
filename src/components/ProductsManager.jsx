@@ -162,7 +162,7 @@ const ProductRow = React.memo(({ product, onEdit, onDelete, onDuplicate, onSelec
           <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => onDelete(product.id)}>Delete</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className={cn("list-card list-card-accent p-3 px-4 group", canManage && "cursor-pointer")} onClick={canManage ? () => onEdit(product) : undefined}>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className={cn("list-card list-card--accent p-3 px-4 group", canManage && "cursor-pointer")} onClick={canManage ? () => onEdit(product) : undefined}>
         <div className="flex items-center gap-3">
           <AnimatePresence>
             {isSelectionMode && (

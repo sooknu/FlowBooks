@@ -453,7 +453,7 @@ const QuoteEditor = ({ quote: initialQuote, onBack, onUpdate, appData, onSendEma
                     </>
                   )}
                   {!isEditing && selectedClient && navigate && (
-                    <Button variant="ghost" size="icon" className="shrink-0 text-surface-400 hover:text-white" title="View Client Profile" onClick={() => navigate('/clients/' + selectedClient)}>
+                    <Button variant="ghost" size="icon" className="shrink-0 text-surface-400 hover:text-[#C8C6C2]" title="View Client Profile" onClick={() => navigate('/clients/' + selectedClient)}>
                       <ExternalLink className="w-4 h-4" />
                     </Button>
                   )}
@@ -1255,24 +1255,24 @@ const QuotesManager = () => {
             onClick={() => { setActiveTab('all_quotes'); scrollToTabs(); }}
             className={cn(
               "nav-tab relative flex items-center gap-2 px-3 pb-2.5 text-sm whitespace-nowrap transition-colors duration-200",
-              activeTab === 'all_quotes' ? "nav-tab-active" : ""
+              activeTab === 'all_quotes' ? "nav-tab--active" : ""
             )}
           >
             All Quotes
             {activeTab === 'all_quotes' && (
-              <motion.div layoutId="quotes-tab-glass" className="nav-tab-glass" transition={{ type: "spring", stiffness: 380, damping: 32 }} />
+              <motion.div layoutId="quotes-tab-glass" className="nav-tab__glass" transition={{ type: "spring", stiffness: 380, damping: 32 }} />
             )}
           </button>
           <button
             onClick={() => { setActiveTab('quote_builder'); scrollToTabs(); }}
             className={cn(
               "nav-tab relative flex items-center gap-2 px-3 pb-2.5 text-sm whitespace-nowrap transition-colors duration-200",
-              activeTab === 'quote_builder' ? "nav-tab-active" : ""
+              activeTab === 'quote_builder' ? "nav-tab--active" : ""
             )}
           >
             Quote Builder
             {activeTab === 'quote_builder' && (
-              <motion.div layoutId="quotes-tab-glass" className="nav-tab-glass" transition={{ type: "spring", stiffness: 380, damping: 32 }} />
+              <motion.div layoutId="quotes-tab-glass" className="nav-tab__glass" transition={{ type: "spring", stiffness: 380, damping: 32 }} />
             )}
           </button>
         </div>

@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import PasswordInput from '@/components/ui/PasswordInput';
 import { authClient } from '@/lib/authClient';
+import { useTheme } from '@/hooks/useTheme';
 
 const LoginPage = ({ appSettings }) => {
   const { signIn, signUp } = useAuth();
@@ -44,12 +45,17 @@ const LoginPage = ({ appSettings }) => {
     return () => { cancelled = true; };
   }, [appSettings?.unsplash_enabled]);
 
+  const { resolvedTheme } = useTheme();
   const settings = {
     app_name: appSettings?.app_name || 'QuoteFlow',
     login_logo_url: appSettings?.login_logo_url || '',
+    login_logo_dark_url: appSettings?.login_logo_dark_url || '',
     header_logo_url: appSettings?.header_logo_url || '',
     login_logo_size: appSettings?.login_logo_size || '64',
   };
+  const effectiveLogo = resolvedTheme === 'dark'
+    ? (settings.login_logo_dark_url || settings.login_logo_url || settings.header_logo_url)
+    : (settings.login_logo_url || settings.header_logo_url);
   const oidcEnabled = appSettings?.oidc_enabled === 'true';
   const oidcProviderName = appSettings?.oidc_provider_name || '';
   const googleEnabled = appSettings?.google_enabled === 'true';
@@ -138,12 +144,12 @@ const LoginPage = ({ appSettings }) => {
     setIsSubmitting(false);
   };
 
-  const hasLogo = settings.login_logo_url || settings.header_logo_url;
+  const hasLogo = !!effectiveLogo;
   const hasSocialLogin = googleEnabled || (oidcEnabled && oidcProviderName);
   const hasBg = bg && bg.enabled;
 
   // Shared input classes
-  const inputCls = 'w-full h-12 md:h-10 px-4 md:px-3 rounded-xl md:rounded-lg bg-surface-50 md:bg-white border border-surface-150 md:border-surface-200 text-[15px] md:text-sm text-surface-800 placeholder:text-surface-400 outline-none focus:border-surface-400 focus:ring-1 focus:ring-surface-300 md:focus:border-blue-500 md:focus:ring-blue-500 transition-colors';
+  const inputCls = 'w-full h-12 md:h-10 px-4 md:px-3 rounded-xl md:rounded-lg bg-surface-50 md:bg-[rgb(var(--glass-bg))] border border-surface-150 md:border-surface-200 text-[15px] md:text-sm text-surface-800 placeholder:text-surface-400 outline-none focus:border-surface-400 focus:ring-1 focus:ring-surface-300 md:focus:border-blue-500 md:focus:ring-blue-500 transition-colors';
   const btnSocialCls = 'w-full flex items-center h-12 md:h-10 px-4 rounded-xl md:rounded-lg border border-surface-150 md:border-surface-200 hover:bg-surface-100 md:hover:bg-surface-50 active:scale-[0.98] transition-all text-[15px] md:text-sm font-medium text-surface-700';
 
   // ─── Form content (shared between mobile and desktop) ─────────────────────
@@ -306,7 +312,7 @@ const LoginPage = ({ appSettings }) => {
           type="submit"
           disabled={isSubmitting}
           whileTap={{ scale: 0.98 }}
-          className="w-full h-12 md:h-10 rounded-xl md:rounded-lg bg-surface-900 hover:bg-surface-800 text-white text-[15px] md:text-sm font-medium transition-colors disabled:opacity-60"
+          className="w-full h-12 md:h-10 rounded-xl md:rounded-lg bg-surface-900 hover:bg-surface-800 dark:bg-transparent dark:border dark:border-surface-200 dark:text-surface-700 dark:hover:bg-surface-100 text-[#C8C6C2] text-[15px] md:text-sm font-medium transition-all disabled:opacity-60"
         >
           {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (isSignUp ? 'Create Account' : 'Continue')}
         </motion.button>
@@ -315,7 +321,7 @@ const LoginPage = ({ appSettings }) => {
   );
 
   return (
-    <div className="min-h-screen min-h-[100dvh] flex flex-col relative">
+    <div className="h-[100dvh] flex flex-col relative overflow-auto">
 
       {/* ─── Desktop: Unsplash background ─── */}
       <div
@@ -334,13 +340,13 @@ const LoginPage = ({ appSettings }) => {
       </div>
 
       {/* ─── Mobile: Clean white background ─── */}
-      <div className="md:hidden absolute inset-0 bg-white" />
+      <div className="md:hidden absolute inset-0 bg-[rgb(var(--glass-bg))]" />
 
       {/* ─── Content ─── */}
       <div className="relative z-10 flex-1 flex flex-col">
 
         {/* ─── Mobile layout ─── */}
-        <div className="md:hidden flex-1 flex flex-col px-6 safe-area-inset">
+        <div className="md:hidden flex-1 flex flex-col px-6 safe-area-inset overflow-y-auto">
           {/* Logo area — generous top spacing */}
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -350,7 +356,7 @@ const LoginPage = ({ appSettings }) => {
           >
             {hasLogo ? (
               <img
-                src={settings.login_logo_url || settings.header_logo_url}
+                src={effectiveLogo}
                 alt={settings.app_name}
                 className="mx-auto"
                 style={{ height: `${Math.min(parseInt(settings.login_logo_size, 10) || 64, 80)}px`, objectFit: 'contain' }}
@@ -380,7 +386,7 @@ const LoginPage = ({ appSettings }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4 }}
-            className="py-8 text-center"
+            className="py-8 pb-[max(2rem,env(safe-area-inset-bottom,2rem))] text-center shrink-0"
           >
             <p className="text-[15px] text-surface-500">
               {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
@@ -400,13 +406,13 @@ const LoginPage = ({ appSettings }) => {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className={`w-full max-w-[400px] px-5 ${hasBg ? 'bg-white backdrop-blur-sm rounded-2xl shadow-xl p-8 mx-4' : ''}`}
+            className={`w-full max-w-[400px] px-5 ${hasBg ? 'bg-[rgb(var(--glass-bg))] backdrop-blur-sm rounded-2xl shadow-xl p-8 mx-4' : ''}`}
           >
             {/* Logo */}
             <div className="mb-8 text-center">
               {hasLogo ? (
                 <img
-                  src={settings.login_logo_url || settings.header_logo_url}
+                  src={effectiveLogo}
                   alt={settings.app_name}
                   className="mx-auto"
                   style={{ height: `${parseInt(settings.login_logo_size, 10) || 64}px`, objectFit: 'contain' }}

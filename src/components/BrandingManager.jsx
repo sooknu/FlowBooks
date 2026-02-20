@@ -1,13 +1,84 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from '@/components/ui/use-toast';
-import { Loader2, Key, ChevronDown, ChevronUp, Camera } from 'lucide-react';
+import { Loader2, Key, ChevronDown, ChevronUp, Camera, CheckCircle2, XCircle } from 'lucide-react';
 import PasswordInput from '@/components/ui/PasswordInput';
 import StickySettingsBar from '@/components/ui/StickySettingsBar';
 import { useUpdateSettings } from '@/hooks/useMutations';
 import { useSettings } from '@/hooks/useAppData';
 import { formatPhoneInput } from '@/lib/utils';
 import { US_STATES } from '@/lib/usStates';
+
+const GoogleMapsKeyField = ({ value, onChange }) => {
+  const [testState, setTestState] = useState(null); // null | 'loading' | 'ok' | 'error'
+  const [testError, setTestError] = useState('');
+
+  const testKey = () => {
+    if (!value || value === '********') return;
+    setTestState('loading');
+    setTestError('');
+
+    // Load the Maps JS API with a unique callback to test the key
+    const cbName = '__gmapsTest_' + Date.now();
+    const script = document.createElement('script');
+    const cleanup = () => { delete window[cbName]; script.remove(); };
+    const timeout = setTimeout(() => { cleanup(); setTestState('error'); setTestError('Timed out loading Google Maps.'); }, 10000);
+
+    window[cbName] = () => {
+      clearTimeout(timeout);
+      cleanup();
+      // If callback fires, the JS API loaded successfully — key works
+      setTestState('ok');
+    };
+
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(value)}&libraries=places&callback=${cbName}`;
+    script.async = true;
+    script.onerror = () => {
+      clearTimeout(timeout);
+      cleanup();
+      setTestState('error');
+      setTestError('Failed to load — check that the API key is valid and Maps JavaScript API is enabled.');
+    };
+    document.head.appendChild(script);
+  };
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-surface-600 mb-1">Google Maps</label>
+      <p className="text-xs text-surface-400 mb-2">
+        Enable address autocomplete and location photos.{' '}
+        Requires <strong>Places API</strong>, <strong>Maps JavaScript API</strong>, and <strong>Street View Static API</strong> in{' '}
+        <a href="https://console.cloud.google.com/apis/library" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Google Cloud Console</a>.
+      </p>
+      <div className="flex gap-2 items-start max-w-md">
+        <PasswordInput
+          value={value}
+          onChange={e => { onChange(e.target.value); setTestState(null); }}
+          className="glass-input w-full font-mono pr-9"
+          placeholder="AIzaSy..."
+        />
+        <button
+          type="button"
+          onClick={testKey}
+          disabled={!value || value === '********' || testState === 'loading'}
+          className="glass-button-secondary shrink-0 px-3 py-2 text-xs font-medium disabled:opacity-40"
+        >
+          {testState === 'loading' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Test'}
+        </button>
+      </div>
+      {testState === 'ok' && (
+        <p className="text-xs text-emerald-600 mt-1.5 flex items-center gap-1">
+          <CheckCircle2 className="w-3.5 h-3.5" /> API key is valid
+        </p>
+      )}
+      {testState === 'error' && (
+        <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
+          <XCircle className="w-3.5 h-3.5" /> {testError}
+        </p>
+      )}
+    </div>
+  );
+};
 
 const PhotographySettings = ({ settings, handleInputChange }) => (
   <div className="glass-card p-6 space-y-6">
@@ -40,7 +111,7 @@ const PhotographySettings = ({ settings, handleInputChange }) => (
 const DEFAULTS = {
   app_name: 'QuoteFlow', company_name: '', company_street: '', company_city: '',
   company_state: '', company_zip: '', company_phone: '', company_email: '', company_website: '',
-  tax_rate: '', tax_home_state: '', tax_api_key: '',
+  tax_rate: '', tax_home_state: '', tax_api_key: '', google_maps_api_key: '',
   travel_rate_per_mile: '0.67', deposit_percent: '25', terms_template: '',
 };
 
@@ -179,6 +250,7 @@ const BrandingManager = () => {
                 placeholder="Your API Ninjas key"
               />
             </div>
+            <GoogleMapsKeyField value={settings.google_maps_api_key} onChange={v => handleInputChange('google_maps_api_key', v)} />
           </div>
         )}
       </div>

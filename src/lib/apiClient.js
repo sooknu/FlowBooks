@@ -49,10 +49,10 @@ async function request(path, options = {}) {
 
 async function uploadFile(path, file, extraFields = {}) {
   const formData = new FormData();
-  formData.append('file', file);
   Object.entries(extraFields).forEach(([key, value]) => {
     formData.append(key, value);
   });
+  formData.append('file', file);
 
   const response = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
@@ -60,9 +60,17 @@ async function uploadFile(path, file, extraFields = {}) {
     body: formData,
   });
 
-  const data = await response.json();
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    if (!response.ok) {
+      throw new ApiError(`Upload failed (${response.status})`, response.status);
+    }
+    throw new ApiError('Invalid server response', response.status);
+  }
   if (!response.ok) {
-    throw new ApiError(data.message || 'Upload failed', response.status);
+    throw new ApiError(data.message || data.error || 'Upload failed', response.status, data.code);
   }
   return data;
 }

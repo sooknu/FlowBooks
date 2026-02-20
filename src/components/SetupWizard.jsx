@@ -309,7 +309,7 @@ const SetupWizard = () => {
             <button
               type="button"
               onClick={() => setStep('fresh-form')}
-              className="flex flex-col items-center gap-2 rounded-lg border border-surface-200 bg-white px-4 py-6 text-center transition-colors hover:bg-surface-100 cursor-pointer"
+              className="flex flex-col items-center gap-2 rounded-lg border border-surface-200 bg-[rgb(var(--glass-bg))] px-4 py-6 text-center transition-colors hover:bg-surface-100 cursor-pointer"
             >
               <div className="bg-surface-100 rounded-xl p-2.5">
                 <Sparkles className="w-5 h-5 text-surface-400" />
@@ -322,7 +322,7 @@ const SetupWizard = () => {
             <button
               type="button"
               onClick={() => setStep('provider')}
-              className="flex flex-col items-center gap-2 rounded-lg border border-surface-200 bg-white px-4 py-6 text-center transition-colors hover:bg-surface-100 cursor-pointer"
+              className="flex flex-col items-center gap-2 rounded-lg border border-surface-200 bg-[rgb(var(--glass-bg))] px-4 py-6 text-center transition-colors hover:bg-surface-100 cursor-pointer"
             >
               <div className="bg-surface-100 rounded-xl p-2.5">
                 <HardDrive className="w-5 h-5 text-surface-400" />
@@ -441,7 +441,7 @@ const SetupWizard = () => {
                     setTestResult(null);
                     setStep('credentials');
                   }}
-                  className="w-full flex items-center gap-3 rounded-lg border border-surface-200 bg-white px-4 py-4 text-left transition-colors hover:bg-surface-100 cursor-pointer"
+                  className="w-full flex items-center gap-3 rounded-lg border border-surface-200 bg-[rgb(var(--glass-bg))] px-4 py-4 text-left transition-colors hover:bg-surface-100 cursor-pointer"
                 >
                   <div className="bg-surface-100 rounded-xl p-2.5">
                     <Icon className="w-5 h-5 text-surface-400" />
@@ -681,7 +681,7 @@ const SetupWizard = () => {
                     className={`w-full text-left rounded-lg border px-4 py-3 transition-colors cursor-pointer ${
                       isSelected
                         ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
-                        : 'border-surface-200 bg-white hover:bg-surface-100'
+                        : 'border-surface-200 bg-[rgb(var(--glass-bg))] hover:bg-surface-100'
                     }`}
                   >
                     <div className="text-sm font-medium text-surface-700 truncate">

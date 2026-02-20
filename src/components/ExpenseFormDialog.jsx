@@ -85,7 +85,7 @@ const TypeaheadInput = ({ items, value, onChange, onCreateItem, renderItem, plac
         autoComplete="off"
       />
       {showList && (
-        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-surface-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-[rgb(var(--glass-bg))] border border-surface-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
           {filtered.map(item => (
             <button
               key={item.id}

@@ -48,7 +48,7 @@ function getMemberName(entry) {
 // ─── Stat Card ─────────────────────────────────────────────────────────────
 
 const StatCard = ({ label, value, icon: Icon, accent }) => (
-  <div className="flex items-center gap-3 rounded-xl border border-surface-200/60 bg-white px-4 py-3.5 flex-1 min-w-0">
+  <div className="flex items-center gap-3 rounded-xl border border-surface-200/60 bg-[rgb(var(--glass-bg))] px-4 py-3.5 flex-1 min-w-0">
     <div className="w-9 h-9 rounded-lg bg-surface-100 flex items-center justify-center shrink-0">
       <Icon className="w-[18px] h-[18px] text-surface-400" />
     </div>
@@ -112,7 +112,7 @@ const SalaryFormDialog = ({ open, onClose, editEntry, teamMemberId, type: defaul
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="fixed inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
+      <div className="relative w-full sm:max-w-md bg-[rgb(var(--glass-bg))] rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-surface-100">
           <h3 className="text-base font-semibold text-surface-800">
@@ -153,7 +153,7 @@ const SalaryFormDialog = ({ open, onClose, editEntry, teamMemberId, type: defaul
                   className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors ${
                     form.type === 'accrued'
                       ? 'border-blue-300 bg-blue-50 text-blue-700'
-                      : 'border-surface-200 bg-white text-surface-500 hover:bg-surface-50'
+                      : 'border-surface-200 bg-[rgb(var(--glass-bg))] text-surface-500 hover:bg-surface-50'
                   }`}
                 >
                   Accrued (owed)
@@ -164,7 +164,7 @@ const SalaryFormDialog = ({ open, onClose, editEntry, teamMemberId, type: defaul
                   className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors ${
                     form.type === 'paid'
                       ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                      : 'border-surface-200 bg-white text-surface-500 hover:bg-surface-50'
+                      : 'border-surface-200 bg-[rgb(var(--glass-bg))] text-surface-500 hover:bg-surface-50'
                   }`}
                 >
                   Paid
@@ -409,7 +409,7 @@ const SalaryManager = () => {
       {/* Crew: hero balance card for own salary */}
       {!canViewSalary && teamMemberId && (
         <div className="space-y-3">
-          <div className="rounded-2xl border border-surface-200/60 bg-white px-5 py-5 sm:px-6 sm:py-6">
+          <div className="rounded-2xl border border-surface-200/60 bg-[rgb(var(--glass-bg))] px-5 py-5 sm:px-6 sm:py-6">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-8 h-8 rounded-lg bg-surface-100 flex items-center justify-center">
                 <DollarSign className="w-4 h-4 text-surface-400" />
@@ -516,7 +516,7 @@ const SalaryManager = () => {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
-              className="bg-red-500 hover:bg-red-600 text-white"
+              className="bg-red-500 hover:bg-red-600 text-[#C8C6C2]"
             >
               {deleteSalary.isPending ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>

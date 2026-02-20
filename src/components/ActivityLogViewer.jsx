@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '@/lib/apiClient';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn, fmtDate, fmtTime } from '@/lib/utils';
 import {
   FileText, Receipt, Users, Package, Shield, Settings, DollarSign,
-  Loader2, Pencil, Bug, X, Copy, Check,
+  Loader2, Pencil, Bug, X, Copy, Check, Trash2,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -91,11 +91,20 @@ function formatTimestamp(dateString) {
 
 export default function ActivityLogViewer() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [entityTypeFilter, setEntityTypeFilter] = useState('');
   const [timeRange, setTimeRange] = useState('');
   const [page, setPage] = useState(0);
   const [errorDetail, setErrorDetail] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  const clearErrors = useMutation({
+    mutationFn: () => api.delete('/activity-log/errors'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.activityLog.all });
+      setPage(0);
+    },
+  });
 
   // Compute startDate from time range
   const startDate = useMemo(() => {
@@ -190,6 +199,20 @@ export default function ActivityLogViewer() {
             </button>
           ))}
         </div>
+
+        {entityTypeFilter === 'error' && total > 0 && (
+          <>
+            <div className="h-4 w-px bg-surface-200 hidden sm:block" />
+            <button
+              onClick={() => { if (confirm('Clear all error logs?')) clearErrors.mutate(); }}
+              disabled={clearErrors.isPending}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+            >
+              {clearErrors.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+              Clear Errors
+            </button>
+          </>
+        )}
       </div>
 
       {/* Table */}

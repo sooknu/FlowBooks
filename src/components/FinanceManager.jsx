@@ -799,7 +799,7 @@ const FinanceManager = () => {
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={() => { if (advDeleteTarget) deleteAdvance.mutate(advDeleteTarget.id, { onSuccess: () => setAdvDeleteTarget(null) }); }}
-                    className="bg-red-500 hover:bg-red-600 text-white"
+                    className="bg-red-500 hover:bg-red-600 text-[#C8C6C2]"
                   >
                     {deleteAdvance.isPending ? 'Deleting...' : 'Delete'}
                   </AlertDialogAction>
@@ -913,7 +913,7 @@ const FinanceManager = () => {
                         { onSuccess: () => setPayDeleteTarget(null) }
                       );
                     }}
-                    className="bg-red-500 hover:bg-red-600 text-white"
+                    className="bg-red-500 hover:bg-red-600 text-[#C8C6C2]"
                   >
                     {deletePayment.isPending ? 'Deleting...' : 'Delete'}
                   </AlertDialogAction>

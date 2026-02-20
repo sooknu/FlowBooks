@@ -554,7 +554,7 @@ const InvoiceEditor = ({ invoice: initialInvoice, onBack, onUpdate, appData, onS
                         </>
                     )}
                     {!isEditing && selectedClient && (
-                        <Button variant="ghost" size="icon" className="shrink-0 text-surface-400 hover:text-white" title="View Client Profile" onClick={() => navigate('/clients/' + selectedClient)}>
+                        <Button variant="ghost" size="icon" className="shrink-0 text-surface-400 hover:text-[#C8C6C2]" title="View Client Profile" onClick={() => navigate('/clients/' + selectedClient)}>
                             <ExternalLink className="w-4 h-4" />
                         </Button>
                     )}
@@ -1410,24 +1410,24 @@ const InvoicesManager = () => {
             onClick={() => { setActiveTab('all_invoices'); scrollToTabs(); }}
             className={cn(
               "nav-tab relative flex items-center gap-2 px-3 pb-2.5 text-sm whitespace-nowrap transition-colors duration-200",
-              activeTab === 'all_invoices' ? "nav-tab-active" : ""
+              activeTab === 'all_invoices' ? "nav-tab--active" : ""
             )}
           >
             All Invoices
             {activeTab === 'all_invoices' && (
-              <motion.div layoutId="invoices-tab-glass" className="nav-tab-glass" transition={{ type: "spring", stiffness: 380, damping: 32 }} />
+              <motion.div layoutId="invoices-tab-glass" className="nav-tab__glass" transition={{ type: "spring", stiffness: 380, damping: 32 }} />
             )}
           </button>
           <button
             onClick={() => { setActiveTab('invoice_builder'); scrollToTabs(); }}
             className={cn(
               "nav-tab relative flex items-center gap-2 px-3 pb-2.5 text-sm whitespace-nowrap transition-colors duration-200",
-              activeTab === 'invoice_builder' ? "nav-tab-active" : ""
+              activeTab === 'invoice_builder' ? "nav-tab--active" : ""
             )}
           >
             Invoice Builder
             {activeTab === 'invoice_builder' && (
-              <motion.div layoutId="invoices-tab-glass" className="nav-tab-glass" transition={{ type: "spring", stiffness: 380, damping: 32 }} />
+              <motion.div layoutId="invoices-tab-glass" className="nav-tab__glass" transition={{ type: "spring", stiffness: 380, damping: 32 }} />
             )}
           </button>
         </div>

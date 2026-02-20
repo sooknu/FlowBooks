@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
-  CalendarDays, ChevronLeft, ChevronRight, MapPin,
+  CalendarDays, ChevronLeft, ChevronRight, MapPin, Clock,
   Users as UsersIcon, Eye, Loader2, Plus,
 } from 'lucide-react';
 import {
@@ -32,6 +32,14 @@ const STATUS_TEXT = {
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEKDAYS_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
+function formatTime12(t) {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
 function getClientDisplay(p) {
   return p.clientName || p.clientCompany || [p.clientFirstName, p.clientLastName].filter(Boolean).join(' ') || '';
 }
@@ -41,15 +49,24 @@ function getClientDisplay(p) {
 function groupByDate(projects) {
   const map = {};
   for (const p of projects) {
-    if (!p.shootStartDate) continue;
-    const start = startOfDay(new Date(p.shootStartDate));
-    const end = p.shootEndDate ? startOfDay(new Date(p.shootEndDate)) : start;
-    let d = start;
-    while (d <= end) {
-      const key = format(d, 'yyyy-MM-dd');
-      if (!map[key]) map[key] = [];
-      map[key].push(p);
-      d = addDays(d, 1);
+    if (p.sessions?.length > 0) {
+      for (const s of p.sessions) {
+        if (!s.sessionDate) continue;
+        const key = format(startOfDay(new Date(s.sessionDate)), 'yyyy-MM-dd');
+        if (!map[key]) map[key] = [];
+        map[key].push({ ...p, _session: s });
+      }
+    } else {
+      if (!p.shootStartDate) continue;
+      const start = startOfDay(new Date(p.shootStartDate));
+      const end = p.shootEndDate ? startOfDay(new Date(p.shootEndDate)) : start;
+      let d = start;
+      while (d <= end) {
+        const key = format(d, 'yyyy-MM-dd');
+        if (!map[key]) map[key] = [];
+        map[key].push(p);
+        d = addDays(d, 1);
+      }
     }
   }
   return map;
@@ -101,7 +118,7 @@ const CalendarHeader = ({ currentDate, view, onViewChange, onNavigate, teamMembe
             className={cn(
               'px-3 py-1.5 text-xs font-medium capitalize transition-colors',
               view === v
-                ? 'bg-surface-800 text-white'
+                ? 'bg-surface-800 text-[#C8C6C2] dark:text-surface-100'
                 : 'text-surface-500 hover:bg-surface-100',
             )}
           >
@@ -169,7 +186,7 @@ const MonthView = ({ currentDate, projects, onDayClick, getTypeColor }) => {
               {/* Date number */}
               <div className={cn(
                 'text-[11px] sm:text-[12px] font-medium w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full mb-0.5',
-                today && 'bg-surface-800 text-white',
+                today && 'bg-surface-800 text-[#C8C6C2] dark:text-surface-100',
                 !today && inMonth && 'text-surface-700',
                 !today && !inMonth && 'text-surface-300',
               )}>
@@ -245,7 +262,7 @@ const WeekView = ({ currentDate, projects, onProjectClick, getTypeColor }) => {
                 </div>
                 <div className={cn(
                   'text-sm font-semibold mt-0.5 w-7 h-7 mx-auto flex items-center justify-center rounded-full',
-                  today ? 'bg-surface-800 text-white' : 'text-surface-700',
+                  today ? 'bg-surface-800 text-[#C8C6C2] dark:text-surface-100' : 'text-surface-700',
                 )}>
                   {format(day, 'd')}
                 </div>
@@ -303,7 +320,7 @@ const WeekView = ({ currentDate, projects, onProjectClick, getTypeColor }) => {
               <div className="flex items-center gap-2 mb-2">
                 <div className={cn(
                   'text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full',
-                  today ? 'bg-surface-800 text-white' : 'text-surface-600',
+                  today ? 'bg-surface-800 text-[#C8C6C2] dark:text-surface-100' : 'text-surface-600',
                 )}>
                   {format(day, 'd')}
                 </div>
@@ -384,7 +401,10 @@ const DayView = ({ currentDate, projects, onProjectClick, getTypeColor }) => {
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-sm font-semibold text-surface-800 truncate">{p.title}</h3>
+                  <h3 className="text-sm font-semibold text-surface-800 truncate">
+                    {p.title}
+                    {p._session?.label && <span className="text-surface-400 font-normal"> — {p._session.label}</span>}
+                  </h3>
                   {p.status && (
                     <span className={cn('text-[10px] font-medium capitalize', STATUS_TEXT[p.status])}>
                       {STATUS_LABELS[p.status]}
@@ -416,6 +436,12 @@ const DayView = ({ currentDate, projects, onProjectClick, getTypeColor }) => {
                   {multi && (
                     <span className="text-[10px] text-surface-400">
                       {format(new Date(p.shootStartDate), 'MMM d')} – {format(new Date(p.shootEndDate), 'MMM d')}
+                    </span>
+                  )}
+                  {!multi && (p._session?.startTime || p.shootStartTime) && (
+                    <span className="text-xs text-surface-400 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {formatTime12(p._session?.startTime || p.shootStartTime)}{(p._session?.endTime || p.shootEndTime) ? ` – ${formatTime12(p._session?.endTime || p.shootEndTime)}` : ''}
                     </span>
                   )}
                 </div>

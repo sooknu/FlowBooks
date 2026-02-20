@@ -193,7 +193,7 @@ const UsersManager = () => {
                   <motion.div key={u.id}
                     initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="rounded-xl border border-amber-200 bg-white p-4 space-y-3"
+                    className="rounded-xl border border-amber-200 bg-[rgb(var(--glass-bg))] p-4 space-y-3"
                   >
                     {/* User info */}
                     <div className="flex items-center gap-3">
@@ -254,7 +254,7 @@ const UsersManager = () => {
                     {/* Action buttons */}
                     <div className="flex gap-2">
                       <button onClick={() => handleApprove(u.id)} disabled={approveUser.isPending}
-                        className="flex-1 flex items-center justify-center gap-1.5 h-11 rounded-lg text-[14px] font-semibold bg-surface-900 text-white active:bg-surface-800 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-1.5 h-11 rounded-lg text-[14px] font-semibold bg-surface-900 text-[#C8C6C2] active:bg-surface-800 transition-colors"
                       >
                         {approveUser.isPending && approveUser.variables?.id === u.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><UserCheck className="w-4 h-4" /> Approve</>}
                       </button>
@@ -323,7 +323,7 @@ const UsersManager = () => {
                         </select>
                       )}
                       <button onClick={() => handleApprove(u.id)} disabled={approveUser.isPending}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-surface-900 text-white hover:bg-surface-800 transition-colors"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-surface-900 text-[#C8C6C2] hover:bg-surface-800 transition-colors"
                       >
                         {approveUser.isPending && approveUser.variables?.id === u.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <><UserCheck className="w-3 h-3" /> Approve</>}
                       </button>

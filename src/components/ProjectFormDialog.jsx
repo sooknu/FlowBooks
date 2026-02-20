@@ -458,7 +458,7 @@ const ProjectFormDialog = ({ open, onOpenChange, project, defaultValues }) => {
                               <select
                                 value={a.role}
                                 onChange={e => updateMemberRole(a.teamMemberId, e.target.value)}
-                                className="text-[11px] font-medium bg-white border border-surface-200 rounded-md px-1.5 py-1 text-surface-600 focus:outline-none focus:ring-1 focus:ring-teal-300 flex-shrink-0"
+                                className="text-[11px] font-medium bg-[rgb(var(--glass-bg))] border border-surface-200 rounded-md px-1.5 py-1 text-surface-600 focus:outline-none focus:ring-1 focus:ring-teal-300 flex-shrink-0"
                               >
                                 <option value="">Role...</option>
                                 {assignmentRoles.map(r => <option key={r.label} value={r.label}>{r.label}</option>)}

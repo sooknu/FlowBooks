@@ -37,7 +37,7 @@ function formatCompact(n) {
 // ─── Stat Card ─────────────────────────────────────────────────────────────
 
 const StatCard = ({ label, value, icon: Icon }) => (
-  <div className="flex items-center gap-3 rounded-xl border border-surface-200/60 bg-white px-4 py-3.5 min-w-[calc(50%-6px)] shrink-0 sm:min-w-0 sm:shrink">
+  <div className="flex items-center gap-3 rounded-xl border border-surface-200/60 bg-[rgb(var(--glass-bg))] px-4 py-3.5 min-w-[calc(50%-6px)] shrink-0 sm:min-w-0 sm:shrink">
     <div className="w-9 h-9 rounded-lg bg-surface-100 flex items-center justify-center shrink-0">
       <Icon className="w-[18px] h-[18px] text-surface-400" />
     </div>
@@ -107,7 +107,7 @@ const ExpenseRow = React.memo(({ expense, onEdit, onDelete }) => {
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="list-card list-card-accent p-3 px-4 group cursor-pointer"
+      className="list-card list-card--accent p-3 px-4 group cursor-pointer"
       onClick={() => onEdit(expense)}
     >
       <div className="flex items-center gap-3">
@@ -178,7 +178,7 @@ const RecurringExpenseCard = React.memo(({ item, onEdit, onToggle, onDelete }) =
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={cn('list-card list-card-accent p-3 px-4 group cursor-pointer', !item.isActive && 'opacity-50')}
+      className={cn('list-card list-card--accent p-3 px-4 group cursor-pointer', !item.isActive && 'opacity-50')}
       onClick={() => onEdit(item)}
     >
       <div className="flex items-center gap-3">
@@ -596,7 +596,7 @@ const ExpensesManager = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 text-white">Delete</AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 text-[#C8C6C2]">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -612,7 +612,7 @@ const ExpensesManager = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteRecurring} className="bg-red-500 hover:bg-red-600 text-white">Delete</AlertDialogAction>
+            <AlertDialogAction onClick={handleDeleteRecurring} className="bg-red-500 hover:bg-red-600 text-[#C8C6C2]">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

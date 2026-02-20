@@ -40,6 +40,7 @@ const SalaryManager = React.lazy(() => import('@/components/SalaryManager'));
 const PermissionsManager = React.lazy(() => import('@/components/PermissionsManager'));
 const BackupManager = React.lazy(() => import('@/components/BackupManager'));
 const SetupWizard = React.lazy(() => import('@/components/SetupWizard'));
+const ReportsManager = React.lazy(() => import('@/components/ReportsManager'));
 
 const LazyFallback = () => (
   <div className="flex items-center justify-center py-20">
@@ -88,7 +89,8 @@ function App() {
           {/* Finance */}
           <Route path="/finance" element={<Lazy><FinanceManager /></Lazy>} />
           <Route path="/salary" element={<Lazy><SalaryManager /></Lazy>} />
-          <Route path="/reports" element={<ComingSoon title="Reports" icon={BarChart3} description="Revenue reports, tax summaries, and business insights." />} />
+          <Route path="/reports" element={<Lazy><ReportsManager /></Lazy>} />
+          <Route path="/reports/:reportId" element={<Lazy><ReportsManager /></Lazy>} />
 
           {/* Profile */}
           <Route path="/profile" element={<Lazy><ProfileManager /></Lazy>} />

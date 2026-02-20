@@ -48,7 +48,7 @@ const card = 'content-card p-5 sm:p-6';
 
 const BigNumber = ({ value, label, size = 'default', tint, colorClass }) => {
   const sizes = {
-    hero: 'text-[clamp(1.5rem,6vw,3.5rem)] font-extrabold',
+    hero: 'text-[clamp(1rem,4vw,2.25rem)] font-extrabold',
     compact: 'text-[clamp(1rem,4vw,2rem)] font-bold',
     default: 'text-[clamp(1rem,4vw,2.25rem)] font-bold',
   };
@@ -62,8 +62,8 @@ const BigNumber = ({ value, label, size = 'default', tint, colorClass }) => {
     red: 'text-[rgb(212,76,71)]',
   };
   return (
-    <div className={cn('min-w-0 rounded-lg px-4 py-3.5 sm:px-6 sm:py-5 transition-colors', tints[tint] || '')}>
-      <p className={cn('tabular-nums leading-none tracking-tight truncate', sizes[size], colors[colorClass] || '')}>{value}</p>
+    <div className={cn('min-w-0 h-full px-4 py-3.5 sm:px-5 sm:py-4 transition-colors', tints[tint] || '')}>
+      <p className={cn('tabular-nums leading-none tracking-tight truncate', sizes[size], colors[colorClass] || 'text-surface-700')}>{value}</p>
       <p className="text-[10px] sm:text-xs font-medium uppercase tracking-[0.08em] text-surface-400 mt-2 sm:mt-2.5 truncate">{label}</p>
     </div>
   );
@@ -142,11 +142,6 @@ const GigCard = ({ gig, onClick, getTypeColor }) => {
       <div className="event-card-row__body">
         <div className="event-card-row__header">
           <span className="event-card-row__title">{gig.projectTitle || 'Untitled Project'}</span>
-          {isFuture && daysAway <= 3 && (
-            <span className="event-card-row__urgency">
-              {daysAway === 0 ? 'Today' : daysAway === 1 ? 'Tomorrow' : `${daysAway}d`}
-            </span>
-          )}
         </div>
 
         <div className="event-card-row__meta">
@@ -163,6 +158,7 @@ const GigCard = ({ gig, onClick, getTypeColor }) => {
         <div className="event-card-row__date">
           <span className="event-card-row__date-month">{fmtDate(gig.shootStartDate, { month: 'short' })}</span>
           <span className="event-card-row__date-day">{d.getDate()}</span>
+          <span className="event-card-row__date-year">{d.getFullYear()}</span>
         </div>
       ) : (
         <div className="event-card-row__date event-card-row__date--empty">
@@ -542,7 +538,7 @@ const Dashboard = () => {
       {/* 2. Financial hero */}
       {hasFinancials && (
         <motion.div variants={stagger.item} className="space-y-3">
-          <div className="grid grid-cols-[1fr_auto] sm:grid-cols-[2fr_1fr] gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className="content-card">
               <BigNumber
                 value={fmtFull(profit)}
@@ -556,7 +552,6 @@ const Dashboard = () => {
               <BigNumber
                 value={fmtFull(pendingPayments)}
                 label="Awaiting payment"
-                size="compact"
                 tint={pendingPayments > 0 ? 'red' : 'neutral'}
                 colorClass={pendingPayments > 0 ? 'red' : ''}
               />
@@ -584,22 +579,15 @@ const Dashboard = () => {
 
       {/* 3. Salary owed */}
       {salaryByMember.length > 0 && (
-        <motion.div variants={stagger.item} className="content-card p-5 sm:p-6">
+        <motion.div variants={stagger.item} className={card}>
           <SectionLabel action={<ViewAllLink onClick={() => navigate('/salary')} />}>
             Salary owed
           </SectionLabel>
-          <div className="space-y-0.5 mt-3">
+          <div className="flex flex-wrap items-baseline gap-x-8 gap-y-3 mt-3">
             {salaryByMember.map(m => (
-              <button
-                key={m.name}
-                onClick={() => navigate('/salary')}
-                className="flex items-center justify-between gap-3 px-2 py-2.5 w-full text-left rounded-md hover:bg-[rgba(212,76,71,0.04)] transition-colors group"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[rgb(212,76,71)] opacity-40 shrink-0" />
-                  <p className="text-sm text-surface-600 truncate group-hover:text-surface-800 transition-colors">{m.name}</p>
-                </div>
-                <p className="text-sm font-semibold tabular-nums text-[rgb(212,76,71)] shrink-0">{fmtFull(m.owed)}</p>
+              <button key={m.name} onClick={() => navigate('/salary')} className="hover:opacity-70 transition-opacity text-left">
+                <p className="text-lg font-bold tabular-nums leading-none text-[rgb(212,76,71)]">{fmtFull(m.owed)}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">{m.name}</p>
               </button>
             ))}
           </div>

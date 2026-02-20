@@ -1,20 +1,21 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTabScroll } from '@/hooks/useTabScroll';
-import { useNavigate, useParams } from 'react-router-dom';
-import { motion, useMotionValue, animate } from 'framer-motion';
-import { useQuery } from '@tanstack/react-query';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { motion, useMotionValue, animate, AnimatePresence } from 'framer-motion';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import api from '@/lib/apiClient';
 import { cn, fmtDate, fmtTime, tzDate } from '@/lib/utils';
-import { useUpdateProject, useCreateProjectNote, useUpdateProjectNote, useDeleteProjectNote, useDeleteProjectPermanently, useLockProject, useUnlockProject, useRequestUnlock } from '@/hooks/useMutations';
+import { useUpdateProject, useCreateProjectNote, useUpdateProjectNote, useDeleteProjectNote, useDeleteProjectPermanently } from '@/hooks/useMutations';
 import {
   ChevronLeft, ChevronDown, MapPin, Calendar, User2,
   FileText, Receipt, StickyNote, LayoutDashboard, Send,
   Loader2, Trash2, DollarSign, CreditCard,
   Users, Plus, Pencil, TrendingUp, Package, Wallet, ArrowUpDown,
-  Lock, Unlock, Clock,
+  Clock, Upload, File, Image, ExternalLink, X,
 } from 'lucide-react';
-import { useAppData } from '@/hooks/useAppData';
+import { useAppData, useSettings } from '@/hooks/useAppData';
+import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCreateAssignment, useDeleteAssignment, useUpdateAssignment, useCreateTeamPayment, useUpdateTeamPayment, useDeleteTeamPayment, useCreateExpense, useUpdateExpense, useDeleteExpense } from '@/hooks/useMutations';
 import ExpenseFormDialog from '@/components/ExpenseFormDialog';
@@ -22,6 +23,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useProjectTypes } from '@/lib/projectTypes';
+import { toast } from '@/components/ui/use-toast';
 import { useProjectRoles } from '@/lib/projectRoles';
 import { TEAM_ROLE_LABELS } from '@/lib/teamRoles';
 
@@ -52,6 +54,20 @@ function formatDateRange(startDate, endDate) {
   return { range, days };
 }
 
+function formatTime12(t) {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
+function formatTimeRange(startTime, endTime) {
+  if (!startTime) return null;
+  if (endTime) return `${formatTime12(startTime)} – ${formatTime12(endTime)}`;
+  return formatTime12(startTime);
+}
+
 const PROJECT_STATUSES = [
   { value: 'lead', label: 'Lead' },
   { value: 'booked', label: 'Booked' },
@@ -72,13 +88,13 @@ const STATUS_COLORS = {
 };
 
 const STATUS_BADGE_STYLES = {
-  lead: { dot: 'bg-surface-400', bg: 'bg-surface-100', text: 'text-surface-600', ring: 'ring-surface-200' },
-  booked: { dot: 'bg-blue-500', bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-200' },
-  shooting: { dot: 'bg-rose-500 animate-pulse', bg: 'bg-rose-50', text: 'text-rose-700', ring: 'ring-rose-200' },
-  editing: { dot: 'bg-amber-500', bg: 'bg-amber-50', text: 'text-amber-700', ring: 'ring-amber-200' },
-  delivered: { dot: 'bg-emerald-500', bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-200' },
-  completed: { dot: 'bg-emerald-500', bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-200' },
-  archived: { dot: 'bg-surface-400', bg: 'bg-surface-100', text: 'text-surface-500', ring: 'ring-surface-200' },
+  lead: { dot: 'bg-surface-400', bg: 'bg-surface-100', text: 'text-surface-400', ring: 'ring-surface-200' },
+  booked: { dot: 'bg-blue-500', bg: 'bg-blue-50', text: 'text-blue-500', ring: 'ring-blue-200' },
+  shooting: { dot: 'bg-rose-500 animate-pulse', bg: 'bg-rose-50', text: 'text-rose-500', ring: 'ring-rose-200' },
+  editing: { dot: 'bg-amber-500', bg: 'bg-amber-50', text: 'text-amber-500', ring: 'ring-amber-200' },
+  delivered: { dot: 'bg-emerald-500', bg: 'bg-emerald-50', text: 'text-emerald-500', ring: 'ring-emerald-200' },
+  completed: { dot: 'bg-emerald-500', bg: 'bg-emerald-50', text: 'text-emerald-500', ring: 'ring-emerald-200' },
+  archived: { dot: 'bg-surface-400', bg: 'bg-surface-100', text: 'text-surface-400', ring: 'ring-surface-200' },
 };
 
 const invoiceStatusColors = {
@@ -104,7 +120,7 @@ const FinancialCard = ({ label, value, icon: Icon, delay }) => (
     initial={{ opacity: 0, y: 15 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ delay }}
-    className="project-details p-4"
+    className="content-card project-details p-4"
   >
     <div className="flex items-center gap-3">
       <div className="p-2 rounded-lg bg-surface-100">
@@ -149,8 +165,65 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
         </div>
       )}
 
+      {/* Sessions Card — timeline layout for multi-session projects */}
+      {project.sessions?.length > 0 && (
+        <div className="content-card overflow-hidden">
+          <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-[rgb(var(--surface-100))]">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-400">Sessions</h3>
+              <span className="text-[11px] font-medium text-surface-400 tabular-nums">{project.sessions.length} session{project.sessions.length !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
+          <div className="px-4 py-3 sm:px-5 sm:py-4">
+            <div className="relative">
+              {/* Timeline line */}
+              {project.sessions.length > 1 && (
+                <div className="absolute left-[7px] top-[10px] bottom-[10px] w-px bg-[rgb(var(--surface-200))]" />
+              )}
+              <div className="space-y-0">
+                {project.sessions.map((s, i) => {
+                  const isPast = s.sessionDate && new Date(s.sessionDate) < new Date(new Date().toDateString());
+                  const isToday = s.sessionDate && new Date(s.sessionDate).toDateString() === new Date().toDateString();
+                  return (
+                    <div key={s.id || i} className="flex items-start gap-3 group relative py-2.5">
+                      {/* Timeline dot */}
+                      <div className={cn(
+                        'w-[15px] h-[15px] rounded-full border-2 flex-shrink-0 mt-0.5 relative z-10 transition-colors',
+                        isToday
+                          ? 'border-blue-500 bg-blue-500'
+                          : isPast
+                            ? 'border-[rgb(var(--surface-300))] bg-[rgb(var(--surface-300))]'
+                            : 'border-[rgb(var(--surface-300))] bg-[rgb(var(--glass-bg))]',
+                      )} />
+                      {/* Content */}
+                      <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-baseline sm:gap-3">
+                        <span className={cn(
+                          'text-sm font-semibold truncate',
+                          isPast ? 'text-surface-400' : 'text-surface-800',
+                        )}>
+                          {s.label || `Session ${i + 1}`}
+                        </span>
+                        <div className="flex items-center gap-2 text-[13px] text-surface-500">
+                          <span className="tabular-nums">{formatDate(s.sessionDate)}</span>
+                          {s.startTime && (
+                            <>
+                              <span className="text-surface-300">·</span>
+                              <span className="tabular-nums text-surface-400">{formatTimeRange(s.startTime, s.endTime)}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Project Details — Notion-style property table */}
-      <div className="project-details">
+      <div className="content-card project-details">
         {project.description && (
           <div className="project-details__description">
             <p>{project.description}</p>
@@ -158,6 +231,7 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
         )}
         <div className="project-details__props">
           {(() => {
+            if (project.sessions?.length > 0) return null;
             const dateRange = formatDateRange(project.shootStartDate, project.shootEndDate);
             if (dateRange) return (
               <div className="project-details__prop">
@@ -168,12 +242,18 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
                 </span>
               </div>
             );
-            if (project.shootStartDate) return (
-              <div className="project-details__prop">
-                <span className="project-details__prop-label"><Calendar className="project-details__prop-icon" /> Shoot</span>
-                <span className="project-details__prop-value">{formatDate(project.shootStartDate)}</span>
-              </div>
-            );
+            if (project.shootStartDate) {
+              const timeRange = formatTimeRange(project.shootStartTime, project.shootEndTime);
+              return (
+                <div className="project-details__prop">
+                  <span className="project-details__prop-label"><Calendar className="project-details__prop-icon" /> Shoot</span>
+                  <span className="project-details__prop-value">
+                    {formatDate(project.shootStartDate)}
+                    {timeRange && <span className="project-details__prop-hint">{timeRange}</span>}
+                  </span>
+                </div>
+              );
+            }
             return null;
           })()}
           {project.deliveryDate && (
@@ -340,61 +420,376 @@ const QuotesTab = ({ quotes, navigate, isPrivileged, project }) => {
 
 // ─── Invoices Tab ────────────────────────────────────────────────────────────
 
+const formatFileSize = (bytes) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const DOC_ICON_MAP = {
+  'application/pdf': { icon: FileText, color: 'text-red-500 bg-red-50 dark:bg-red-950' },
+  'image/png': { icon: Image, color: 'text-blue-500 bg-blue-50 dark:bg-blue-950' },
+  'image/jpeg': { icon: Image, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950' },
+  'image/heic': { icon: Image, color: 'text-violet-500 bg-violet-50 dark:bg-violet-950' },
+  'image/heif': { icon: Image, color: 'text-violet-500 bg-violet-50 dark:bg-violet-950' },
+};
+
+const isImageMime = (mime) => mime?.startsWith('image/');
+
+const PhotoLightbox = ({ doc, docs, onClose, onNavigate }) => {
+  const allImages = docs.filter(d => isImageMime(d.mimeType));
+  const currentIdx = allImages.findIndex(d => d.id === doc.id);
+  const hasPrev = currentIdx > 0;
+  const hasNext = currentIdx < allImages.length - 1;
+
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowLeft' && hasPrev) onNavigate(allImages[currentIdx - 1]);
+      if (e.key === 'ArrowRight' && hasNext) onNavigate(allImages[currentIdx + 1]);
+    };
+    window.addEventListener('keydown', handleKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      document.body.style.overflow = '';
+    };
+  }, [doc.id, hasPrev, hasNext]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="photo-lightbox__overlay"
+      onClick={onClose}
+    >
+      {/* Top bar */}
+      <div className="photo-lightbox__topbar" onClick={e => e.stopPropagation()}>
+        <p className="photo-lightbox__filename">{doc.originalName}</p>
+        <div className="flex items-center gap-2">
+          <a
+            href={`/api/storage/project-docs/file/${doc.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="photo-lightbox__btn"
+            title="Open in new tab"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </a>
+          <button onClick={onClose} className="photo-lightbox__btn" title="Close">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Image */}
+      <motion.img
+        key={doc.id}
+        initial={{ scale: 0.92, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.92, opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        src={`/api/storage/project-docs/file/${doc.id}`}
+        alt={doc.originalName}
+        className="photo-lightbox__img"
+        onClick={e => e.stopPropagation()}
+      />
+
+      {/* Nav arrows */}
+      {hasPrev && (
+        <button
+          className="photo-lightbox__arrow photo-lightbox__arrow--left"
+          onClick={e => { e.stopPropagation(); onNavigate(allImages[currentIdx - 1]); }}
+        >
+          <ChevronLeft className="w-6 h-6" />
+        </button>
+      )}
+      {hasNext && (
+        <button
+          className="photo-lightbox__arrow photo-lightbox__arrow--right"
+          onClick={e => { e.stopPropagation(); onNavigate(allImages[currentIdx + 1]); }}
+        >
+          <ChevronDown className="w-6 h-6 -rotate-90" />
+        </button>
+      )}
+
+      {/* Counter */}
+      {allImages.length > 1 && (
+        <div className="photo-lightbox__counter">
+          {currentIdx + 1} / {allImages.length}
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
+const ProjectDocuments = ({ projectId, isPrivileged }) => {
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [viewingDoc, setViewingDoc] = useState(null);
+
+  const { data: docs = [] } = useQuery({
+    queryKey: ['project-documents', projectId],
+    queryFn: () => api.get(`/storage/project-docs/list/${projectId}`).then(r => r.data),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/storage/project-docs/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project-documents', projectId] });
+      setConfirmDelete(null);
+    },
+  });
+
+  const handleUpload = useCallback(async (fileList) => {
+    if (!fileList?.length) return;
+    setUploading(true);
+    setUploadError(null);
+    const files = Array.from(fileList);
+    const count = files.length;
+    try {
+      for (const file of files) {
+        await api.upload('/storage/project-documents', file, { projectId });
+      }
+      queryClient.invalidateQueries({ queryKey: ['project-documents', projectId] });
+      toast({ title: `${count} file${count > 1 ? 's' : ''} uploaded` });
+    } catch (err) {
+      console.error('Upload failed:', err);
+      setUploadError(err?.message || 'Upload failed');
+      toast({ title: 'Upload failed', description: err?.message || 'Something went wrong', variant: 'destructive' });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }, [projectId, queryClient]);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    e.currentTarget.classList.remove('project-docs__drop--active');
+    handleUpload(e.dataTransfer.files);
+  }, [handleUpload]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-surface-700">Documents</h4>
+        {isPrivileged && (
+          <>
+            <button onClick={() => fileInputRef.current?.click()} className="action-btn text-xs !px-3 !py-1.5" disabled={uploading}>
+              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Upload className="w-3.5 h-3.5 mr-1" />}
+              Upload
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept="image/*,.pdf,application/pdf"
+              multiple
+              onChange={(e) => { handleUpload(e.target.files); }}
+            />
+          </>
+        )}
+      </div>
+
+      {/* Error message */}
+      {uploadError && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800">
+          <p className="text-xs text-red-600 dark:text-red-400 flex-1">{uploadError}</p>
+          <button onClick={() => setUploadError(null)} className="text-red-400 hover:text-red-600"><X className="w-3.5 h-3.5" /></button>
+        </div>
+      )}
+
+      {/* Uploading indicator */}
+      {uploading && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+          <p className="text-xs text-blue-600 dark:text-blue-400">Uploading...</p>
+        </div>
+      )}
+
+      {/* Drop zone + list */}
+      {docs.length === 0 && !uploading ? (
+        <div
+          className="project-docs__drop"
+          onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('project-docs__drop--active'); }}
+          onDragLeave={(e) => e.currentTarget.classList.remove('project-docs__drop--active')}
+          onDrop={handleDrop}
+          onClick={() => isPrivileged && fileInputRef.current?.click()}
+        >
+          <Upload className="w-8 h-8 text-surface-300 mb-2" />
+          <p className="text-sm text-surface-500 font-medium">Drop files here or click to upload</p>
+          <p className="text-xs text-surface-400 mt-1">PDF, JPG, PNG, HEIC — up to 10 MB</p>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <AnimatePresence>
+            {docs.map(doc => {
+              const mapped = DOC_ICON_MAP[doc.mimeType] || { icon: File, color: 'text-surface-500 bg-surface-100' };
+              const IconComp = mapped.icon;
+              const isImage = isImageMime(doc.mimeType);
+              const handleDocClick = () => {
+                if (isImage) {
+                  setViewingDoc(doc);
+                } else {
+                  window.open(`/api/storage/project-docs/file/${doc.id}`, '_blank');
+                }
+              };
+              return (
+                <motion.div
+                  key={doc.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="project-docs__item project-docs__item--clickable"
+                  onClick={handleDocClick}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => e.key === 'Enter' && handleDocClick()}
+                >
+                  {/* Thumbnail for images, icon for others */}
+                  {isImage ? (
+                    <div className="project-docs__thumb">
+                      <img
+                        src={`/api/storage/project-docs/file/${doc.id}`}
+                        alt=""
+                        className="project-docs__thumb-img"
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : (
+                    <div className={cn('project-docs__icon', mapped.color)}>
+                      <IconComp className="w-4 h-4" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-surface-800 dark:text-surface-200 truncate">{doc.originalName}</p>
+                    <p className="text-xs text-surface-400">{formatFileSize(doc.fileSize)} · {fmtDate(doc.createdAt)}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                    {isPrivileged && (
+                      confirmDelete === doc.id ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => deleteMutation.mutate(doc.id)}
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded bg-red-500 text-[#C8C6C2] hover:bg-red-600 transition-colors"
+                          >
+                            {deleteMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Delete'}
+                          </button>
+                          <button onClick={() => setConfirmDelete(null)} className="icon-button">
+                            <X className="w-3.5 h-3.5 text-surface-400" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setConfirmDelete(doc.id)} className="icon-button" title="Delete">
+                          <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                        </button>
+                      )
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+
+          {/* Mini drop zone when documents exist */}
+          {isPrivileged && (
+            <div
+              className="project-docs__drop project-docs__drop--mini"
+              onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('project-docs__drop--active'); }}
+              onDragLeave={(e) => e.currentTarget.classList.remove('project-docs__drop--active')}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Plus className="w-4 h-4 text-surface-400" />
+              <span className="text-xs text-surface-400">Add more files</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Photo lightbox */}
+      <AnimatePresence>
+        {viewingDoc && isImageMime(viewingDoc.mimeType) && (
+          <PhotoLightbox
+            doc={viewingDoc}
+            docs={docs}
+            onClose={() => setViewingDoc(null)}
+            onNavigate={setViewingDoc}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 const InvoicesTab = ({ invoices, navigate, isPrivileged, project }) => {
   const handleNewInvoice = () => {
     navigate('/invoices', { state: { projectToPreload: { id: project.id, clientId: project.clientId } } });
   };
 
   return (
-    <div className="space-y-2">
-      {isPrivileged && (
-        <div className="flex justify-end">
-          <button onClick={handleNewInvoice} className="action-btn text-xs !px-3 !py-2">
-            <Plus className="w-3.5 h-3.5 mr-1" /> New Invoice
-          </button>
-        </div>
-      )}
-      {(!invoices || invoices.length === 0) ? (
-        <div className="content-card p-12 text-center">
-          <Receipt className="w-10 h-10 text-surface-400 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-surface-600 mb-1">No invoices linked</h3>
-          <p className="text-surface-400 text-sm">Invoices assigned to this project will appear here.</p>
-        </div>
-      ) : (
-        invoices.map(inv => {
-          const paidPercent = inv.total > 0 ? Math.min(100, (inv.paidAmount / inv.total) * 100) : 0;
-          return (
-            <motion.div
-              key={inv.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`content-card__row p-4 transition-shadow ${isPrivileged ? 'cursor-pointer hover:shadow-md' : ''}`}
-              onClick={() => isPrivileged && navigate(`/invoices/${inv.id}`)}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold text-surface-800">{formatDocNumber(inv.invoiceNumber)}</span>
-                  <span className={`chip ${invoiceStatusColors[inv.status] || ''} text-xs capitalize`}>{inv.status}</span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <p className="font-semibold">{formatCurrency(inv.total)}</p>
-                    <p className="text-xs text-surface-400">Paid: {formatCurrency(inv.paidAmount)}</p>
+    <div className="space-y-6">
+      {/* Invoices section */}
+      <div className="space-y-2">
+        {isPrivileged && (
+          <div className="flex justify-end">
+            <button onClick={handleNewInvoice} className="action-btn text-xs !px-3 !py-2">
+              <Plus className="w-3.5 h-3.5 mr-1" /> New Invoice
+            </button>
+          </div>
+        )}
+        {(!invoices || invoices.length === 0) ? (
+          <div className="content-card p-12 text-center">
+            <Receipt className="w-10 h-10 text-surface-400 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold text-surface-600 mb-1">No invoices linked</h3>
+            <p className="text-surface-400 text-sm">Invoices assigned to this project will appear here.</p>
+          </div>
+        ) : (
+          invoices.map(inv => {
+            const paidPercent = inv.total > 0 ? Math.min(100, (inv.paidAmount / inv.total) * 100) : 0;
+            return (
+              <motion.div
+                key={inv.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`content-card__row p-4 transition-shadow ${isPrivileged ? 'cursor-pointer hover:shadow-md' : ''}`}
+                onClick={() => isPrivileged && navigate(`/invoices/${inv.id}`)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-surface-800">{formatDocNumber(inv.invoiceNumber)}</span>
+                    <span className={`chip ${invoiceStatusColors[inv.status] || ''} text-xs capitalize`}>{inv.status}</span>
                   </div>
-                  {/* Progress bar */}
-                  <div className="w-20 h-1.5 rounded-full bg-surface-200 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${inv.status === 'paid' ? 'bg-emerald-400' : 'bg-amber-400'}`}
-                      style={{ width: `${paidPercent}%` }}
-                    />
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="font-semibold">{formatCurrency(inv.total)}</p>
+                      <p className="text-xs text-surface-400">Paid: {formatCurrency(inv.paidAmount)}</p>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="w-20 h-1.5 rounded-full bg-surface-200 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${inv.status === 'paid' ? 'bg-emerald-400' : 'bg-amber-400'}`}
+                        style={{ width: `${paidPercent}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-surface-400">{formatDate(inv.createdAt)}</span>
                   </div>
-                  <span className="text-xs text-surface-400">{formatDate(inv.createdAt)}</span>
                 </div>
-              </div>
-            </motion.div>
-          );
-        })
-      )}
+              </motion.div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Documents section */}
+      <div className="border-t border-surface-200 pt-5">
+        <ProjectDocuments projectId={project.id} isPrivileged={isPrivileged} />
+      </div>
     </div>
   );
 };
@@ -453,7 +848,7 @@ const NoteCard = ({ note, projectId, currentUserId, isPrivileged }) => {
               <span className="text-sm text-red-500 font-medium">Delete this note?</span>
               <button
                 onClick={() => { deleteNote.mutate({ projectId, noteId: note.id }); setConfirmDelete(false); }}
-                className="text-xs font-medium px-2.5 py-1 rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors"
+                className="text-xs font-medium px-2.5 py-1 rounded-md bg-red-500 text-[#C8C6C2] hover:bg-red-600 transition-colors"
               >
                 {deleteNote.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Delete'}
               </button>
@@ -597,11 +992,11 @@ const SwipeablePaymentRow = ({ payment: p, index: i, isPrivileged, getMemberName
       {/* Swipe actions behind */}
       <div className="absolute inset-0 flex items-stretch justify-end rounded-xl md:hidden">
         <button onClick={(e) => { e.stopPropagation(); animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 }); onEdit(); }}
-          className="flex items-center justify-center w-[60px] bg-blue-500 text-white">
+          className="flex items-center justify-center w-[60px] bg-blue-500 text-[#C8C6C2]">
           <Pencil className="w-4 h-4" />
         </button>
         <button onClick={(e) => { e.stopPropagation(); animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 }); onDelete(); }}
-          className="flex items-center justify-center w-[60px] bg-red-500 text-white">
+          className="flex items-center justify-center w-[60px] bg-red-500 text-[#C8C6C2]">
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
@@ -1119,7 +1514,7 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.03 }}
-                className="list-card list-card-accent p-3 flex items-center justify-between gap-3 cursor-pointer group"
+                className="list-card list-card--accent p-3 flex items-center justify-between gap-3 cursor-pointer group"
                 onClick={() => isPrivileged && handleEdit(expense)}
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1207,7 +1602,7 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 text-white">Delete</AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 text-[#C8C6C2]">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1220,6 +1615,8 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
 const ProjectDetail = () => {
   const { id: projectId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const backTo = location.state?.backTo || '/projects';
   const [activeTab, setActiveTab] = useState('overview');
   const { tabsRef, scrollToTabs } = useTabScroll();
   const tabScrollRef = useRef(null);
@@ -1227,13 +1624,16 @@ const ProjectDetail = () => {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const updateProject = useUpdateProject();
   const deleteProjectPermanently = useDeleteProjectPermanently();
-  const lockProject = useLockProject();
-  const unlockProject = useUnlockProject();
-  const requestUnlock = useRequestUnlock();
   const { isPrivileged, canSeePrices, teamRole, can } = useAppData();
   const { user } = useAuth();
   const { getTypeColor } = useProjectTypes();
   const { roles: assignmentRoles } = useProjectRoles();
+
+  const { data: settingsData } = useSettings();
+  const mapsApiKey = settingsData?.google_maps_api_key;
+  const mapsLoaded = useGoogleMaps(mapsApiKey);
+  const [dynamicPhotoUrl, setDynamicPhotoUrl] = useState(null);
+  const [streetViewUrl, setStreetViewUrl] = useState(null);
 
   const { data: projectRes, isLoading } = useQuery({
     queryKey: queryKeys.projects.detail(projectId),
@@ -1241,8 +1641,55 @@ const ProjectDetail = () => {
     enabled: !!projectId,
   });
 
-
   const project = projectRes?.data;
+
+  // Fetch Google Places photo dynamically if project has a placeId but no stored coverPhotoUrl
+  useEffect(() => {
+    if (!project?.placeId || project.coverPhotoUrl || !mapsLoaded) {
+      setDynamicPhotoUrl(null);
+      return;
+    }
+    const service = new window.google.maps.places.PlacesService(document.createElement('div'));
+    service.getDetails({ placeId: project.placeId, fields: ['photos'] }, (place, status) => {
+      if (status === window.google.maps.places.PlacesServiceStatus.OK && place?.photos?.length) {
+        setDynamicPhotoUrl(place.photos[0].getUrl({ maxWidth: 1200 }));
+      }
+    });
+  }, [project?.placeId, project?.coverPhotoUrl, mapsLoaded]);
+
+  // Street View / satellite map fallback for hero photo
+  useEffect(() => {
+    if (!mapsApiKey || !project || project.coverPhotoUrl) {
+      setStreetViewUrl(null);
+      return;
+    }
+    const parts = [project.addressStreet, project.addressCity,
+      [project.addressState, project.addressZip].filter(Boolean).join(' ')
+    ].filter(Boolean);
+    if (!parts.length) { setStreetViewUrl(null); return; }
+    const addr = parts.join(', ');
+    const encodedAddr = encodeURIComponent(addr);
+    const key = encodeURIComponent(mapsApiKey);
+    let cancelled = false;
+    fetch(`https://maps.googleapis.com/maps/api/streetview/metadata?location=${encodedAddr}&key=${key}`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return;
+        if (data.status === 'OK') {
+          setStreetViewUrl(`https://maps.googleapis.com/maps/api/streetview?size=1200x600&location=${encodedAddr}&key=${key}`);
+        } else {
+          // No street view — fall back to satellite map
+          setStreetViewUrl(`https://maps.googleapis.com/maps/api/staticmap?center=${encodedAddr}&zoom=18&size=1200x600&maptype=satellite&key=${key}`);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          // On network error, still try satellite as it's very reliable
+          setStreetViewUrl(`https://maps.googleapis.com/maps/api/staticmap?center=${encodedAddr}&zoom=18&size=1200x600&maptype=satellite&key=${key}`);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [project?.addressStreet, project?.addressCity, project?.addressState, project?.addressZip, project?.coverPhotoUrl, mapsApiKey]);
 
   if (isLoading) {
     return (
@@ -1256,7 +1703,7 @@ const ProjectDetail = () => {
     return (
       <div className="text-center py-20">
         <p className="text-surface-500">Project not found.</p>
-        <button onClick={() => navigate('/projects')} className="action-btn mt-4">Back to Projects</button>
+        <button onClick={() => navigate(backTo)} className="action-btn mt-4">Back to Projects</button>
       </div>
     );
   }
@@ -1266,9 +1713,8 @@ const ProjectDetail = () => {
     : '—';
 
   const isOwnProject = project.userId === user?.id;
-  const isLocked = !!project.lockedBy;
   const isManager = ['owner', 'manager'].includes(teamRole);
-  const canEdit = isManager || (isOwnProject && !isLocked);
+  const canEdit = isManager || isOwnProject;
 
   const handleStatusChange = (newStatus) => {
     updateProject.mutate({ id: project.id, status: newStatus });
@@ -1282,49 +1728,74 @@ const ProjectDetail = () => {
     >
       {/* Back button */}
       <button
-        onClick={() => navigate('/projects')}
+        onClick={() => navigate(backTo)}
         className="flex items-center gap-1.5 text-sm text-surface-500 hover:text-surface-700 transition-colors -mb-2"
       >
         <ChevronLeft className="w-4 h-4" /> Back to Projects
       </button>
 
       {/* Header Card */}
-      <div className="project-hero" data-status={project.status || 'lead'}>
+      {(() => {
+        const heroPhoto = project.coverPhotoUrl || dynamicPhotoUrl || streetViewUrl;
+        return (
+      <div
+        className={cn('project-hero', heroPhoto && 'project-hero--has-photo')}
+        data-status={project.status || 'lead'}
+      >
+        {heroPhoto && <div className="project-hero__image" style={{ backgroundImage: `url(${heroPhoto})` }} />}
+        {heroPhoto && <div className="project-hero__photo-overlay" />}
         <div className="project-hero__layout">
           <div className="project-hero__body">
+            {project.projectTypeRel && (
+              <span className={cn('project-hero__pill', getTypeColor(project.projectTypeId || project.projectType).pill)}>
+                {project.projectTypeRel.label}
+              </span>
+            )}
             <div className="project-hero__header">
               <h1 className="project-hero__title">{project.title}</h1>
-              {project.projectTypeRel && (
-                <span className={cn('project-hero__pill', getTypeColor(project.projectTypeId || project.projectType).pill)}>
-                  {project.projectTypeRel.label}
-                </span>
-              )}
             </div>
             <div className="project-hero__meta">
-              <button
-                onClick={() => navigate(`/clients/${project.clientId}`)}
-                className="project-hero__meta-link"
-              >
-                <User2 /> {clientName}
-              </button>
+              {project.clientId && (
+                <button
+                  onClick={() => navigate(`/clients/${project.clientId}`)}
+                  className="project-hero__meta-link"
+                >
+                  <User2 /> {clientName}
+                </button>
+              )}
               {(() => {
+                if (project.sessions?.length > 0) {
+                  const sorted = [...project.sessions].sort((a, b) => new Date(a.sessionDate) - new Date(b.sessionDate));
+                  return (
+                    <>
+                      <span className="project-hero__dot" />
+                      <span className="project-hero__meta-item">
+                        <Calendar /> {project.sessions.length} sessions · {formatDate(sorted[0].sessionDate)} – {formatDate(sorted[sorted.length - 1].sessionDate)}
+                      </span>
+                    </>
+                  );
+                }
                 const dateRange = formatDateRange(project.shootStartDate, project.shootEndDate);
                 if (dateRange) return (
                   <>
                     <span className="project-hero__dot" />
                     <span className="project-hero__meta-item">
-                      <Calendar /> {dateRange.range} <span className="text-surface-400">({dateRange.days}d)</span>
+                      <Calendar /> {dateRange.range} ({dateRange.days}d)
                     </span>
                   </>
                 );
-                if (project.shootStartDate) return (
-                  <>
-                    <span className="project-hero__dot" />
-                    <span className="project-hero__meta-item">
-                      <Calendar /> {formatDate(project.shootStartDate)}
-                    </span>
-                  </>
-                );
+                if (project.shootStartDate) {
+                  const timeRange = formatTimeRange(project.shootStartTime, project.shootEndTime);
+                  return (
+                    <>
+                      <span className="project-hero__dot" />
+                      <span className="project-hero__meta-item">
+                        <Calendar /> {formatDate(project.shootStartDate)}
+                        {timeRange && <> · {timeRange}</>}
+                      </span>
+                    </>
+                  );
+                }
                 return null;
               })()}
               {project.location && (
@@ -1342,24 +1813,6 @@ const ProjectDetail = () => {
             {canEdit && (
               <button onClick={() => navigate(`/projects/${projectId}/edit`)} className="project-hero__action-btn" title="Edit project">
                 <Pencil className="w-4 h-4" />
-              </button>
-            )}
-
-            {can('lock_projects') && (
-              isLocked ? (
-                <button onClick={() => unlockProject.mutate(project.id)} className="project-hero__action-btn project-hero__action-btn--warning" title="Unlock project" disabled={unlockProject.isPending}>
-                  <Lock className="w-4 h-4" />
-                </button>
-              ) : (
-                <button onClick={() => lockProject.mutate(project.id)} className="project-hero__action-btn" title="Lock project" disabled={lockProject.isPending}>
-                  <Unlock className="w-4 h-4" />
-                </button>
-              )
-            )}
-
-            {!can('lock_projects') && isLocked && (
-              <button onClick={() => requestUnlock.mutate(project.id)} className="project-hero__action-btn project-hero__action-btn--warning" title="Request unlock" disabled={requestUnlock.isPending}>
-                <Lock className="w-4 h-4" />
               </button>
             )}
 
@@ -1393,6 +1846,8 @@ const ProjectDetail = () => {
           </div>
         </div>
       </div>
+        );
+      })()}
 
       {/* Tab Navigation */}
       <div ref={tabsRef} className="scroll-mt-14 lg:scroll-mt-0">
@@ -1403,7 +1858,7 @@ const ProjectDetail = () => {
               onClick={(e) => { setActiveTab(tab.key); scrollToTabs(); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
               className={cn(
                 "nav-tab relative flex items-center gap-1.5 px-3 pb-2.5 text-sm whitespace-nowrap transition-colors duration-200 flex-shrink-0",
-                activeTab === tab.key ? "nav-tab-active" : ""
+                activeTab === tab.key ? "nav-tab--active" : ""
               )}
             >
               <tab.icon className="w-3.5 h-3.5 hidden md:block" />
@@ -1411,7 +1866,7 @@ const ProjectDetail = () => {
               {activeTab === tab.key && (
                 <motion.div
                   layoutId="project-tab-glass"
-                  className="nav-tab-glass"
+                  className="nav-tab__glass"
                   transition={{ type: "spring", stiffness: 380, damping: 32 }}
                 />
               )}
@@ -1492,7 +1947,7 @@ const ProjectDetail = () => {
               disabled={deleteConfirmText !== 'DELETE' || deleteProjectPermanently.isPending}
               onClick={() => {
                 deleteProjectPermanently.mutate(project.id, {
-                  onSuccess: () => navigate('/projects'),
+                  onSuccess: () => navigate(backTo),
                 });
               }}
               className="bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:pointer-events-none"

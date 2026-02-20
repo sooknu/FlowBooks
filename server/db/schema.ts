@@ -198,13 +198,16 @@ export const projects = pgTable('projects', {
   status: projectStatusEnum('status').notNull().default('lead'),
   shootStartDate: timestamp('shoot_start_date', { mode: 'date' }),
   shootEndDate: timestamp('shoot_end_date', { mode: 'date' }),
+  shootStartTime: text('shoot_start_time'),
+  shootEndTime: text('shoot_end_time'),
   deliveryDate: timestamp('delivery_date', { mode: 'date' }),
   location: text('location'),
   addressStreet: text('address_street'),
   addressCity: text('address_city'),
   addressState: text('address_state'),
   addressZip: text('address_zip'),
-  lockedBy: text('locked_by').references(() => user.id, { onDelete: 'set null' }),
+  placeId: text('place_id'),
+  coverPhotoUrl: text('cover_photo_url'),
   teamCost: doublePrecision('team_cost').default(0),
   teamCostPaid: doublePrecision('team_cost_paid').default(0),
   margin: doublePrecision('margin'),
@@ -416,6 +419,36 @@ export const projectNotes = pgTable('project_notes', {
 }, (table) => [
   index('project_notes_project_id_idx').on(table.projectId),
   index('project_notes_user_id_idx').on(table.userId),
+]);
+
+// ── Project sessions (non-consecutive shoot dates) ──
+
+export const projectSessions = pgTable('project_sessions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  label: text('label'),
+  sessionDate: timestamp('session_date', { mode: 'date' }).notNull(),
+  startTime: text('start_time'),
+  endTime: text('end_time'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+}, (table) => [
+  index('project_sessions_project_id_idx').on(table.projectId),
+]);
+
+// ── Project documents (uploaded files for record keeping) ──
+
+export const projectDocuments = pgTable('project_documents', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  fileName: text('file_name').notNull(),
+  originalName: text('original_name').notNull(),
+  mimeType: text('mime_type').notNull(),
+  fileSize: integer('file_size').notNull(),
+  uploadedBy: text('uploaded_by'),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+}, (table) => [
+  index('project_documents_project_id_idx').on(table.projectId),
 ]);
 
 // ── Client credits ──
@@ -735,10 +768,20 @@ export const projectRelations = relations(projects, ({ one, many }) => ({
   teamPayments: many(teamPayments),
   expenses: many(expenses),
   recurringExpenses: many(recurringExpenses),
+  sessions: many(projectSessions),
+  documents: many(projectDocuments),
 }));
 
 export const projectNoteRelations = relations(projectNotes, ({ one }) => ({
   project: one(projects, { fields: [projectNotes.projectId], references: [projects.id] }),
+}));
+
+export const projectSessionRelations = relations(projectSessions, ({ one }) => ({
+  project: one(projects, { fields: [projectSessions.projectId], references: [projects.id] }),
+}));
+
+export const projectDocumentRelations = relations(projectDocuments, ({ one }) => ({
+  project: one(projects, { fields: [projectDocuments.projectId], references: [projects.id] }),
 }));
 
 export const quoteRelations = relations(quotes, ({ one, many }) => ({

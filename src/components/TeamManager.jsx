@@ -212,7 +212,7 @@ const TeamManager = () => {
               onClick={() => setActiveTab(tab.key)}
               className={cn(
                 "nav-tab relative flex items-center gap-1.5 px-3 pb-2.5 text-sm whitespace-nowrap transition-colors duration-200",
-                activeTab === tab.key ? "nav-tab-active" : ""
+                activeTab === tab.key ? "nav-tab--active" : ""
               )}
             >
               <tab.icon className="w-4 h-4" />
@@ -220,7 +220,7 @@ const TeamManager = () => {
               {activeTab === tab.key && (
                 <motion.div
                   layoutId="team-tab-glass"
-                  className="nav-tab-glass"
+                  className="nav-tab__glass"
                   transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                 />
               )}

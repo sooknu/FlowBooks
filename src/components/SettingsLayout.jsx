@@ -29,7 +29,7 @@ const SettingsLayout = () => {
             to={tab.path}
             className={({ isActive }) => cn(
               "nav-tab relative flex items-center gap-2 px-3 pb-2.5 text-sm whitespace-nowrap transition-colors duration-200",
-              isActive ? "nav-tab-active" : ""
+              isActive ? "nav-tab--active" : ""
             )}
           >
             {({ isActive }) => (
@@ -39,7 +39,7 @@ const SettingsLayout = () => {
                 {isActive && (
                   <motion.div
                     layoutId="settings-tab-glass"
-                    className="nav-tab-glass"
+                    className="nav-tab__glass"
                     transition={{ type: 'spring', stiffness: 380, damping: 32 }}
                   />
                 )}

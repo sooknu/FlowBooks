@@ -3,7 +3,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, Loader2, X, Users, Plus, ChevronDown, MapPin, Calendar, DollarSign, FileText, Save } from 'lucide-react';
-import { useClientsCatalog, useAppData } from '@/hooks/useAppData';
+import { useClientsCatalog, useAppData, useSettings } from '@/hooks/useAppData';
+import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCreateProject, useUpdateProject } from '@/hooks/useMutations';
 import { queryKeys } from '@/lib/queryKeys';
@@ -25,9 +26,10 @@ const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','
 
 const EMPTY_FORM = {
   title: '', clientId: '', projectTypeId: '', status: 'lead',
-  shootStartDate: '', shootEndDate: '', deliveryDate: '',
+  shootStartDate: '', shootEndDate: '', shootStartTime: '', shootEndTime: '', deliveryDate: '',
   location: '', addressStreet: '', addressCity: '', addressState: 'CA', addressZip: '',
-  description: '', projectPrice: '',
+  placeId: '', coverPhotoUrl: '',
+  description: '', projectPrice: '', sessions: [],
 };
 
 function getMemberName(m) {
@@ -68,6 +70,10 @@ const ProjectForm = () => {
   const queryClient = useQueryClient();
   const { data: clients = [] } = useClientsCatalog();
   const { isPrivileged } = useAppData();
+  const { data: settingsData } = useSettings();
+  const mapsApiKey = settingsData?.google_maps_api_key;
+  const mapsLoaded = useGoogleMaps(mapsApiKey);
+  const addressInputRef = useRef(null);
   const { user } = useAuth();
   const { types: projectTypes, getTypeById } = useProjectTypes();
   const { roles: assignmentRoles } = useProjectRoles();
@@ -101,7 +107,8 @@ const ProjectForm = () => {
   // Populate form for edit mode or apply defaults for create
   useEffect(() => {
     if (isEdit && project) {
-      const hasEnd = !!project.shootEndDate;
+      const hasSessions = project.sessions?.length > 0;
+      const hasEnd = hasSessions || !!project.shootEndDate;
       setIsMultiDay(hasEnd);
       setDeliveryAutoSet(false);
       setForm({
@@ -110,15 +117,25 @@ const ProjectForm = () => {
         projectTypeId: project.projectTypeId || '',
         status: project.status || 'lead',
         shootStartDate: project.shootStartDate ? new Date(project.shootStartDate).toISOString().split('T')[0] : '',
-        shootEndDate: hasEnd ? new Date(project.shootEndDate).toISOString().split('T')[0] : '',
+        shootEndDate: hasEnd ? (project.shootEndDate ? new Date(project.shootEndDate).toISOString().split('T')[0] : '') : '',
+        shootStartTime: project.shootStartTime || '',
+        shootEndTime: project.shootEndTime || '',
         deliveryDate: project.deliveryDate ? new Date(project.deliveryDate).toISOString().split('T')[0] : '',
         location: project.location || '',
         addressStreet: project.addressStreet || '',
         addressCity: project.addressCity || '',
         addressState: project.addressState || '',
         addressZip: project.addressZip || '',
+        placeId: project.placeId || '',
+        coverPhotoUrl: project.coverPhotoUrl || '',
         description: project.description || '',
         projectPrice: project.projectPrice != null ? project.projectPrice.toString() : '',
+        sessions: (project.sessions || []).map(s => ({
+          label: s.label || '',
+          sessionDate: s.sessionDate ? new Date(s.sessionDate).toISOString().split('T')[0] : '',
+          startTime: s.startTime || '',
+          endTime: s.endTime || '',
+        })),
       });
       if (project.assignments) {
         setTeamAssignments(project.assignments.map(a => ({
@@ -136,6 +153,57 @@ const ProjectForm = () => {
       setTeamAssignments([]);
     }
   }, [isEdit, project]);
+
+  // Google Places Autocomplete
+  useEffect(() => {
+    if (!mapsLoaded || !addressInputRef.current) return;
+    const autocomplete = new window.google.maps.places.Autocomplete(
+      addressInputRef.current,
+      { componentRestrictions: { country: 'us' }, fields: ['address_components', 'name', 'place_id', 'photos'] }
+    );
+    autocomplete.addListener('place_changed', () => {
+      const place = autocomplete.getPlace();
+      if (!place.place_id) return;
+      const get = (type) => (place.address_components || []).find(c => c.types.includes(type));
+      const streetNum = get('street_number')?.long_name || '';
+      const route = get('route')?.short_name || '';
+      const city = get('locality')?.long_name || get('sublocality')?.long_name || '';
+      const state = get('administrative_area_level_1')?.short_name || '';
+      const zip = get('postal_code')?.long_name || '';
+      const photoUrl = place.photos?.[0]?.getUrl({ maxWidth: 1200 }) || '';
+
+      const updates = {
+        addressStreet: [streetNum, route].filter(Boolean).join(' ') || undefined,
+        addressCity: city || undefined,
+        addressState: state || undefined,
+        addressZip: zip || undefined,
+        placeId: place.place_id || '',
+        coverPhotoUrl: photoUrl,
+      };
+      // Only set location from place name if it looks like a venue (not a bare address)
+      if (place.name && !/^\d/.test(place.name)) updates.location = place.name;
+
+      setForm(prev => {
+        const next = { ...prev };
+        for (const [k, v] of Object.entries(updates)) {
+          if (v !== undefined) next[k] = v;
+        }
+        return next;
+      });
+
+      // If no photos from autocomplete, try a Place Details request for the photo
+      if (!photoUrl && place.place_id) {
+        const service = new window.google.maps.places.PlacesService(document.createElement('div'));
+        service.getDetails({ placeId: place.place_id, fields: ['photos'] }, (details, status) => {
+          if (status === window.google.maps.places.PlacesServiceStatus.OK) {
+            const url = details?.photos?.[0]?.getUrl({ maxWidth: 1200 });
+            if (url) setForm(prev => ({ ...prev, coverPhotoUrl: url }));
+          }
+        });
+      }
+    });
+    return () => window.google.maps.event.clearInstanceListeners(autocomplete);
+  }, [mapsLoaded]);
 
   // Client search
   const [clientSearch, setClientSearch] = useState('');
@@ -183,6 +251,7 @@ const ProjectForm = () => {
       shootEndDate: isMultiDay && form.shootEndDate ? form.shootEndDate : null,
       deliveryDate: form.deliveryDate || null,
       projectPrice: form.projectPrice ? parseFloat(form.projectPrice) : null,
+      sessions: isMultiDay ? form.sessions.filter(s => s.sessionDate) : [],
     };
 
     try {
@@ -359,62 +428,178 @@ const ProjectForm = () => {
             type="checkbox"
             checked={isMultiDay}
             onChange={e => {
-              setIsMultiDay(e.target.checked);
-              if (!e.target.checked) setForm(prev => ({ ...prev, shootEndDate: '' }));
+              const checked = e.target.checked;
+              setIsMultiDay(checked);
+              if (checked) {
+                setForm(prev => ({
+                  ...prev,
+                  shootEndDate: '',
+                  shootStartTime: '',
+                  shootEndTime: '',
+                  sessions: prev.sessions.length > 0 ? prev.sessions : [
+                    { label: '', sessionDate: prev.shootStartDate || '', startTime: '', endTime: '' },
+                    { label: '', sessionDate: '', startTime: '', endTime: '' },
+                  ],
+                }));
+              } else {
+                setForm(prev => ({ ...prev, shootEndDate: '', sessions: [] }));
+              }
             }}
             className="rounded border-surface-300"
           />
-          <span className="text-xs text-surface-500">Multi-day shoot</span>
+          <span className="text-xs text-surface-500">Multiple sessions</span>
         </label>
 
-        <div className={`grid gap-3 ${isMultiDay ? 'grid-cols-3' : 'grid-cols-2'}`}>
-          <div>
-            <label className="text-xs font-medium text-surface-600 mb-1 block">Shoot Date</label>
-            <input
-              type="date"
-              value={form.shootStartDate}
-              onChange={e => {
-                const val = e.target.value;
-                const updates = { ...form, shootStartDate: val };
-                if (val && (!form.deliveryDate || deliveryAutoSet)) {
-                  const d = new Date(val);
-                  d.setDate(d.getDate() + 28);
-                  updates.deliveryDate = d.toISOString().split('T')[0];
-                  setDeliveryAutoSet(true);
-                }
-                setForm(updates);
-              }}
-              className="glass-input w-full"
-            />
+        {isMultiDay ? (
+          <div className="space-y-2">
+            {form.sessions.map((session, idx) => (
+              <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-end">
+                <div>
+                  {idx === 0 && <label className="text-xs font-medium text-surface-600 mb-1 block">Label</label>}
+                  <input
+                    type="text"
+                    value={session.label}
+                    onChange={e => {
+                      const updated = [...form.sessions];
+                      updated[idx] = { ...updated[idx], label: e.target.value };
+                      setForm({ ...form, sessions: updated });
+                    }}
+                    className="glass-input w-full"
+                    placeholder="e.g. Ceremony"
+                  />
+                </div>
+                <div>
+                  {idx === 0 && <label className="text-xs font-medium text-surface-600 mb-1 block">Date</label>}
+                  <input
+                    type="date"
+                    value={session.sessionDate}
+                    onChange={e => {
+                      const updated = [...form.sessions];
+                      updated[idx] = { ...updated[idx], sessionDate: e.target.value };
+                      setForm({ ...form, sessions: updated });
+                    }}
+                    className="glass-input w-full"
+                  />
+                </div>
+                <div>
+                  {idx === 0 && <label className="text-xs font-medium text-surface-600 mb-1 block">Start</label>}
+                  <input
+                    type="time"
+                    value={session.startTime}
+                    onChange={e => {
+                      const updated = [...form.sessions];
+                      updated[idx] = { ...updated[idx], startTime: e.target.value };
+                      setForm({ ...form, sessions: updated });
+                    }}
+                    className="glass-input w-full"
+                  />
+                </div>
+                <div>
+                  {idx === 0 && <label className="text-xs font-medium text-surface-600 mb-1 block">End</label>}
+                  <input
+                    type="time"
+                    value={session.endTime}
+                    onChange={e => {
+                      const updated = [...form.sessions];
+                      updated[idx] = { ...updated[idx], endTime: e.target.value };
+                      setForm({ ...form, sessions: updated });
+                    }}
+                    className="glass-input w-full"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, sessions: form.sessions.filter((_, i) => i !== idx) })}
+                  className="p-2 rounded-lg text-surface-400 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                  title="Remove session"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, sessions: [...form.sessions, { label: '', sessionDate: '', startTime: '', endTime: '' }] })}
+              className="action-btn action-btn--secondary text-xs !py-1.5"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" /> Add Session
+            </button>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div>
+                <label className="text-xs font-medium text-surface-600 mb-1 block">Delivery Date</label>
+                <input
+                  type="date"
+                  value={form.deliveryDate}
+                  onChange={e => {
+                    setForm({ ...form, deliveryDate: e.target.value });
+                    setDeliveryAutoSet(false);
+                  }}
+                  className="glass-input w-full"
+                />
+              </div>
+            </div>
           </div>
-          {isMultiDay && (
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-surface-600 mb-1 block">End Date</label>
+              <label className="text-xs font-medium text-surface-600 mb-1 block">Shoot Date</label>
               <input
                 type="date"
-                value={form.shootEndDate}
-                min={form.shootStartDate || undefined}
-                onChange={e => setForm({ ...form, shootEndDate: e.target.value })}
+                value={form.shootStartDate}
+                onChange={e => {
+                  const val = e.target.value;
+                  const updates = { ...form, shootStartDate: val };
+                  if (val && (!form.deliveryDate || deliveryAutoSet)) {
+                    const d = new Date(val);
+                    d.setDate(d.getDate() + 28);
+                    updates.deliveryDate = d.toISOString().split('T')[0];
+                    setDeliveryAutoSet(true);
+                  }
+                  setForm(updates);
+                }}
                 className="glass-input w-full"
               />
             </div>
-          )}
-          <div>
-            <label className="text-xs font-medium text-surface-600 mb-1 block">Delivery Date</label>
-            <input
-              type="date"
-              value={form.deliveryDate}
-              onChange={e => {
-                setForm({ ...form, deliveryDate: e.target.value });
-                setDeliveryAutoSet(false);
-              }}
-              className="glass-input w-full"
-            />
-            {deliveryAutoSet && form.deliveryDate && (
-              <p className="text-[10px] text-surface-400 mt-0.5">Auto-set to 4 weeks after shoot</p>
-            )}
+            <div>
+              <label className="text-xs font-medium text-surface-600 mb-1 block">Delivery Date</label>
+              <input
+                type="date"
+                value={form.deliveryDate}
+                onChange={e => {
+                  setForm({ ...form, deliveryDate: e.target.value });
+                  setDeliveryAutoSet(false);
+                }}
+                className="glass-input w-full"
+              />
+              {deliveryAutoSet && form.deliveryDate && (
+                <p className="text-[10px] text-surface-400 mt-0.5">Auto-set to 4 weeks after shoot</p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {!isMultiDay && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-surface-600 mb-1 block">Start Time</label>
+              <input
+                type="time"
+                value={form.shootStartTime}
+                onChange={e => setForm({ ...form, shootStartTime: e.target.value })}
+                className="glass-input w-full"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-surface-600 mb-1 block">End Time</label>
+              <input
+                type="time"
+                value={form.shootEndTime}
+                onChange={e => setForm({ ...form, shootEndTime: e.target.value })}
+                className="glass-input w-full"
+              />
+            </div>
+          </div>
+        )}
       </Section>
 
       {/* ─── Location Section ─── */}
@@ -425,7 +610,7 @@ const ProjectForm = () => {
         </div>
         <div>
           <label className="text-xs font-medium text-surface-600 mb-1 block">Street Address</label>
-          <input type="text" value={form.addressStreet} onChange={e => setForm({ ...form, addressStreet: e.target.value })} className="glass-input w-full" placeholder="123 Main St" />
+          <input ref={addressInputRef} type="text" autoComplete="off" value={form.addressStreet} onChange={e => setForm({ ...form, addressStreet: e.target.value })} className="glass-input w-full" placeholder="123 Main St" />
         </div>
         <div className="grid grid-cols-5 gap-2">
           <div className="col-span-2">
@@ -487,7 +672,7 @@ const ProjectForm = () => {
                       <select
                         value={a.role}
                         onChange={e => updateMemberRole(a.teamMemberId, e.target.value)}
-                        className="text-[11px] font-medium bg-white border border-surface-200 rounded-md px-1.5 py-1 text-surface-600 focus:outline-none focus:ring-1 focus:ring-teal-300 flex-shrink-0"
+                        className="text-[11px] font-medium bg-[rgb(var(--glass-bg))] border border-surface-200 rounded-md px-1.5 py-1 text-surface-600 focus:outline-none focus:ring-1 focus:ring-teal-300 flex-shrink-0"
                       >
                         <option value="">Role...</option>
                         {assignmentRoles.map(r => <option key={r.label} value={r.label}>{r.label}</option>)}

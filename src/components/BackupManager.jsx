@@ -236,9 +236,9 @@ function DestinationDialog({ dest, onClose }) {
       <div className="fixed inset-0 bg-black/30" onClick={onClose} />
 
       {/* Dialog */}
-      <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="relative w-full sm:max-w-lg bg-[rgb(var(--glass-bg))] rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-3.5 border-b border-surface-100 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-3.5 border-b border-surface-100 bg-[rgb(var(--glass-bg))] shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           <h3 className="text-base font-semibold text-surface-800">
             {isEdit ? 'Edit Destination' : 'Add Destination'}
           </h3>
@@ -273,7 +273,7 @@ function DestinationDialog({ dest, onClose }) {
                   className={`flex flex-col items-center gap-0.5 rounded-lg border px-3 py-2.5 text-center transition-all ${
                     provider === p.id
                       ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
-                      : 'border-surface-200 bg-white hover:border-surface-300 hover:bg-surface-50'
+                      : 'border-surface-200 bg-[rgb(var(--glass-bg))] hover:border-surface-300 hover:bg-surface-50'
                   }`}
                 >
                   <span className={`text-sm font-medium ${provider === p.id ? 'text-blue-700' : 'text-surface-700'}`}>{p.label}</span>
@@ -424,7 +424,7 @@ function DestinationDialog({ dest, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 px-5 py-3.5 border-t border-surface-100 bg-white shadow-[0_-1px_3px_rgba(0,0,0,0.04)]">
+        <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 px-5 py-3.5 border-t border-surface-100 bg-[rgb(var(--glass-bg))] shadow-[0_-1px_3px_rgba(0,0,0,0.04)]">
           <button type="button" onClick={onClose} className="glass-button-secondary px-4 py-2">Cancel</button>
           <button
             type="button"

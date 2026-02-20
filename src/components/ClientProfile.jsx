@@ -1108,7 +1108,7 @@ const ClientProfile = () => {
             <button onClick={() => setActiveTab('profile')} className="action-btn action-btn--secondary !px-3 !py-1.5 text-xs">
               <Edit2 className="w-3.5 h-3.5" /> Edit
             </button>
-            <button onClick={() => setIsDeleteDialogOpen(true)} className="action-btn action-btn--secondary !px-3 !py-1.5 text-xs text-red-400 hover:!bg-red-600 hover:!text-white hover:!border-red-600">
+            <button onClick={() => setIsDeleteDialogOpen(true)} className="action-btn action-btn--secondary !px-3 !py-1.5 text-xs text-red-400 hover:!bg-red-600 hover:!text-[#C8C6C2] hover:!border-red-600">
               <Trash2 className="w-3.5 h-3.5" /> Delete
             </button>
           </div>
