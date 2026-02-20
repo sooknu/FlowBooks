@@ -153,7 +153,6 @@ export default async function reportsRoutes(fastify: any) {
         JOIN projects p ON e.project_id = p.id
         WHERE e.expense_date >= ${startIso}::timestamptz AND e.expense_date < ${endIso}::timestamptz
           AND e.type = 'expense'
-          AND e.team_payment_id IS NULL
           AND p.client_id IS NOT NULL
         GROUP BY p.client_id
       )
@@ -204,7 +203,7 @@ export default async function reportsRoutes(fastify: any) {
     })
       .from(expenses)
       .leftJoin(expenseCategories, eq(expenses.categoryId, expenseCategories.id))
-      .where(and(isExpense, inPeriod(expenses.expenseDate), notTeamPayment))
+      .where(and(isExpense, inPeriod(expenses.expenseDate)))
       .groupBy(expenses.categoryId, expenseCategories.name, expenseCategories.color)
       .orderBy(desc(sql`COALESCE(SUM(${expenses.amount}), 0)`));
 
