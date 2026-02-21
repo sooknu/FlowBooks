@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, useMotionValue, useTransform, animate, AnimatePresence } from 'framer-motion';
 import {
   Wallet, Plus, Search, X, Loader2, Edit2, Trash2, ChevronRight,
   TrendingDown, Calendar as CalendarIcon, DollarSign, FolderKanban,
@@ -97,62 +97,86 @@ const MonthlyTrend = ({ byMonth }) => {
   );
 };
 
+// ─── Swipe Actions (shared) ───────────────────────────────────────────────
+
+const SWIPE_THRESHOLD = -120;
+
+const SwipeActions = ({ x, onEditClick, onDeleteClick }) => {
+  const editScale = useTransform(x, [0, SWIPE_THRESHOLD * 0.4, SWIPE_THRESHOLD], [0.3, 0.85, 1]);
+  const editOpacity = useTransform(x, [0, SWIPE_THRESHOLD * 0.25, SWIPE_THRESHOLD], [0, 0.5, 1]);
+  const deleteScale = useTransform(x, [0, SWIPE_THRESHOLD * 0.6, SWIPE_THRESHOLD], [0.3, 0.75, 1]);
+  const deleteOpacity = useTransform(x, [0, SWIPE_THRESHOLD * 0.5, SWIPE_THRESHOLD], [0, 0.3, 1]);
+
+  return (
+    <div className="absolute inset-0 flex items-stretch justify-end rounded-xl md:hidden bg-gradient-to-b from-sky-400 to-blue-500">
+      <button
+        onClick={onEditClick}
+        className="flex flex-col items-center justify-center w-[60px] bg-gradient-to-b from-sky-400 to-blue-500 text-white"
+      >
+        <motion.div
+          style={{ scale: editScale, opacity: editOpacity }}
+          className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center"
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+        </motion.div>
+        <motion.span style={{ opacity: editOpacity }} className="text-[10px] font-medium mt-1">
+          Edit
+        </motion.span>
+      </button>
+      <button
+        onClick={onDeleteClick}
+        className="flex flex-col items-center justify-center w-[60px] bg-gradient-to-b from-rose-400 to-red-500 text-white"
+      >
+        <motion.div
+          style={{ scale: deleteScale, opacity: deleteOpacity }}
+          className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </motion.div>
+        <motion.span style={{ opacity: deleteOpacity }} className="text-[10px] font-medium mt-1">
+          Delete
+        </motion.span>
+      </button>
+    </div>
+  );
+};
+
 // ─── Expense Row ───────────────────────────────────────────────────────────
 
 const ExpenseRow = React.memo(({ expense, onEdit, onDelete }) => {
   const palette = COLOR_PALETTE[expense.categoryColor] || COLOR_PALETTE.slate;
+  const x = useMotionValue(0);
   const dateStr = expense.expenseDate
     ? fmtDate(expense.expenseDate, { month: 'short', day: 'numeric' })
     : '—';
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="list-card list-card--accent p-3 px-4 group cursor-pointer"
-      onClick={() => onEdit(expense)}
-    >
+  const tag = expense.type === 'credit' ? (
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 shrink-0">
+      Credit
+    </span>
+  ) : expense.teamPaymentId ? (
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/50 shrink-0">
+      <Users className="w-2.5 h-2.5" /> Team
+    </span>
+  ) : expense.categoryName ? (
+    <span className={cn(
+      'inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border shrink-0',
+      palette.bg, palette.text, palette.border,
+    )}>
+      <span className={cn('w-1.5 h-1.5 rounded-full', palette.dot)} />
+      {expense.categoryName}
+    </span>
+  ) : null;
+
+  const cardContent = (
+    <div className="list-card p-3 px-3.5 sm:p-3.5 sm:px-4 group">
       <div className="flex items-center gap-3">
+        {/* Content — left */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-xs text-surface-400 tabular-nums shrink-0 w-12">{dateStr}</span>
-              {expense.type === 'credit' ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 shrink-0">
-                  Credit
-                </span>
-              ) : expense.teamPaymentId ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/50 shrink-0">
-                  <Users className="w-2.5 h-2.5" /> Team
-                </span>
-              ) : expense.categoryName ? (
-                <span className={cn(
-                  'inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border shrink-0',
-                  palette.bg, palette.text, palette.border,
-                )}>
-                  <span className={cn('w-1.5 h-1.5 rounded-full', palette.dot)} />
-                  {expense.categoryName}
-                </span>
-              ) : null}
-              <span className="text-sm font-medium text-surface-700 truncate">{expense.description}</span>
-            </div>
-            <span className={cn(
-              'text-sm font-bold tabular-nums shrink-0',
-              expense.type === 'credit' ? 'text-emerald-600' : 'text-surface-800',
-            )}>
-              {expense.type === 'credit' ? '+' : ''}{formatCurrency(expense.amount)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between mt-1">
-            <div className="flex items-center gap-2 text-xs text-surface-400">
-              {expense.projectTitle && (
-                <span className="flex items-center gap-1 truncate">
-                  <FolderKanban className="w-3 h-3" />
-                  {expense.projectTitle}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-surface-800 dark:text-surface-900 truncate">{expense.description}</span>
+            {/* Desktop hover actions */}
+            <div className="hidden md:flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
               <button onClick={() => onEdit(expense)} className="icon-button !p-1.5">
                 <Edit2 className="w-3.5 h-3.5 text-blue-400" />
               </button>
@@ -161,8 +185,63 @@ const ExpenseRow = React.memo(({ expense, onEdit, onDelete }) => {
               </button>
             </div>
           </div>
+          <div className="flex items-center gap-2 mt-1 min-w-0">
+            <span className="text-xs text-surface-500 dark:text-surface-500 tabular-nums shrink-0">{dateStr}</span>
+            {tag}
+            {expense.projectTitle && (
+              <span className="flex items-center gap-1 text-xs text-surface-400 dark:text-surface-500 truncate">
+                <FolderKanban className="w-3 h-3 shrink-0" />
+                <span className="truncate">{expense.projectTitle}</span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="w-px self-stretch bg-surface-200 dark:bg-surface-300/50" />
+
+        {/* Amount block — right */}
+        <div className="shrink-0 text-right min-w-[72px]">
+          <span className={cn(
+            'text-[15px] font-semibold tabular-nums leading-tight',
+            expense.type === 'credit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-surface-900 dark:text-surface-950',
+          )}>
+            {expense.type === 'credit' ? '+' : ''}{formatCurrency(expense.amount)}
+          </span>
         </div>
       </div>
+    </div>
+  );
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="relative overflow-hidden rounded-xl md:overflow-visible"
+    >
+      <SwipeActions
+        x={x}
+        onEditClick={(e) => { e.stopPropagation(); animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 }); onEdit(expense); }}
+        onDeleteClick={(e) => { e.stopPropagation(); animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 }); onDelete(expense); }}
+      />
+
+      <motion.div
+        className="relative z-10 swipe-card"
+        style={{ x }}
+        drag="x"
+        dragDirectionLock
+        dragConstraints={{ left: SWIPE_THRESHOLD, right: 0 }}
+        dragElastic={0.1}
+        onDragEnd={(_, info) => {
+          if (info.offset.x < SWIPE_THRESHOLD / 2) {
+            animate(x, SWIPE_THRESHOLD, { type: 'spring', stiffness: 300, damping: 30 });
+          } else {
+            animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 });
+          }
+        }}
+      >
+        {cardContent}
+      </motion.div>
     </motion.div>
   );
 });
@@ -171,17 +250,13 @@ const ExpenseRow = React.memo(({ expense, onEdit, onDelete }) => {
 
 const RecurringExpenseCard = React.memo(({ item, onEdit, onToggle, onDelete }) => {
   const palette = COLOR_PALETTE[item.categoryColor] || COLOR_PALETTE.slate;
+  const x = useMotionValue(0);
   const nextDueStr = item.nextDueDate
     ? fmtDate(item.nextDueDate, { month: 'short', day: 'numeric' })
     : '—';
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={cn('list-card list-card--accent p-3 px-4 group cursor-pointer', !item.isActive && 'opacity-50')}
-      onClick={() => onEdit(item)}
-    >
+  const cardContent = (
+    <div className={cn('list-card p-[17px] px-[21px] group', !item.isActive && 'opacity-50')}>
       <div className="flex items-center gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
@@ -205,7 +280,7 @@ const RecurringExpenseCard = React.memo(({ item, onEdit, onToggle, onDelete }) =
               <span className="shrink-0">·</span>
               <span className="shrink-0">Next: {nextDueStr}</span>
             </div>
-            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+            <div className="hidden md:flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
               <button onClick={() => onToggle(item)} className="icon-button !p-1.5" title={item.isActive ? 'Pause' : 'Resume'}>
                 {item.isActive
                   ? <Pause className="w-3.5 h-3.5 text-amber-400" />
@@ -222,6 +297,38 @@ const RecurringExpenseCard = React.memo(({ item, onEdit, onToggle, onDelete }) =
           </div>
         </div>
       </div>
+    </div>
+  );
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="relative overflow-hidden rounded-xl md:overflow-visible"
+    >
+      <SwipeActions
+        x={x}
+        onEditClick={(e) => { e.stopPropagation(); animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 }); onEdit(item); }}
+        onDeleteClick={(e) => { e.stopPropagation(); animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 }); onDelete(item); }}
+      />
+
+      <motion.div
+        className="relative z-10 swipe-card"
+        style={{ x }}
+        drag="x"
+        dragDirectionLock
+        dragConstraints={{ left: SWIPE_THRESHOLD, right: 0 }}
+        dragElastic={0.1}
+        onDragEnd={(_, info) => {
+          if (info.offset.x < SWIPE_THRESHOLD / 2) {
+            animate(x, SWIPE_THRESHOLD, { type: 'spring', stiffness: 300, damping: 30 });
+          } else {
+            animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 });
+          }
+        }}
+      >
+        {cardContent}
+      </motion.div>
     </motion.div>
   );
 });
@@ -240,6 +347,7 @@ const ExpensesManager = () => {
   const [editingRecurringExpense, setEditingRecurringExpense] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteRecurringTarget, setDeleteRecurringTarget] = useState(null);
+  const sentinelRef = useRef(null);
 
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
@@ -320,6 +428,18 @@ const ExpensesManager = () => {
 
   const expenses = expensesData?.pages.flatMap(p => p.data || []) ?? [];
   const totalCount = expensesData?.pages[0]?.count || 0;
+
+  // Auto-load next page when sentinel scrolls into view
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage(); },
+      { rootMargin: '200px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Regular expense handlers
   const handleSave = useCallback(async (formData) => {
@@ -541,12 +661,10 @@ const ExpensesManager = () => {
               ))}
             </AnimatePresence>
           </div>
-          {hasNextPage && (
-            <div className="flex justify-center pt-4">
-              <button onClick={() => fetchNextPage()} disabled={isFetchingNextPage} className="action-btn action-btn--secondary text-sm">
-                {isFetchingNextPage ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Load more
-              </button>
+          <div ref={sentinelRef} className="h-1" />
+          {isFetchingNextPage && (
+            <div className="flex justify-center py-4">
+              <Loader2 className="w-5 h-5 animate-spin text-surface-400" />
             </div>
           )}
         </>

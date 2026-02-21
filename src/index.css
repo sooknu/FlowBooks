@@ -280,22 +280,23 @@
 
   /* List cards */
   .list-card {
-    @apply rounded-md border relative overflow-hidden transition-all duration-150 cursor-pointer;
+    @apply rounded-xl border relative overflow-hidden transition-all duration-150;
     background: rgb(var(--glass-bg));
     border-color: rgb(var(--surface-200));
     box-shadow: var(--shadow-sm);
-    border-left: 2px solid rgb(var(--surface-200));
   }
-  .list-card:hover {
-    background: rgb(var(--surface-50));
-    border-color: rgb(var(--surface-300));
-    box-shadow: var(--shadow-md);
+  @media (hover: hover) {
+    .list-card:hover {
+      background: rgb(var(--surface-50));
+      border-color: rgb(var(--surface-300));
+      box-shadow: var(--shadow-md);
+    }
+    .list-card--accent:hover {
+      border-left-color: rgba(var(--accent-rgb) / 0.8);
+    }
   }
   .list-card--accent {
     border-left-color: rgba(var(--accent-rgb) / 0.5);
-  }
-  .list-card--accent:hover {
-    border-left-color: rgba(var(--accent-rgb) / 0.8);
   }
 
   /* Flat nested card */
