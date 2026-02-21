@@ -8,7 +8,7 @@ import {
   BarChart3,
   Settings, Shield, ScrollText,
   LogOut, User, UserPlus, ChevronsLeft, Menu, X, Bell, Banknote, ChevronRight,
-  Sun, Moon, Monitor,
+  Sun, Moon, SunMoon,
 } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -369,7 +369,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
       <div className={cn("flex-shrink-0 px-2 pb-3 pt-1", collapsed && "lg:px-1")}>
         <button
           onClick={cycleTheme}
-          title={`Theme: ${theme}`}
+          title={`Theme: ${theme === 'system' ? 'Auto' : theme}`}
           className={cn(
             "flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-sidebar-muted hover:text-sidebar-text hover:bg-sidebar-hover transition-colors text-[13px]",
             collapsed && "lg:justify-center lg:px-0"
@@ -377,9 +377,9 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
         >
           {theme === 'light' && <Sun className="w-4 h-4 flex-shrink-0" />}
           {theme === 'dark' && <Moon className="w-4 h-4 flex-shrink-0" />}
-          {theme === 'system' && <Monitor className="w-4 h-4 flex-shrink-0" />}
+          {theme === 'system' && <SunMoon className="w-4 h-4 flex-shrink-0" />}
           <span className={cn("truncate", collapsed && "lg:hidden")}>
-            {theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System'}
+            {theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'Auto'}
           </span>
         </button>
       </div>
