@@ -175,15 +175,6 @@ const ExpenseRow = React.memo(({ expense, onEdit, onDelete }) => {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-surface-800 dark:text-surface-900 truncate">{expense.description}</span>
-            {/* Desktop hover actions */}
-            <div className="hidden md:flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-              <button onClick={() => onEdit(expense)} className="icon-button !p-1.5">
-                <Edit2 className="w-3.5 h-3.5 text-blue-400" />
-              </button>
-              <button onClick={() => onDelete(expense)} className="icon-button !p-1.5">
-                <Trash2 className="w-3.5 h-3.5 text-red-400" />
-              </button>
-            </div>
           </div>
           <div className="flex items-center gap-2 mt-1 min-w-0">
             <span className="text-xs text-surface-500 dark:text-surface-500 tabular-nums shrink-0">{dateStr}</span>
@@ -195,6 +186,16 @@ const ExpenseRow = React.memo(({ expense, onEdit, onDelete }) => {
               </span>
             )}
           </div>
+        </div>
+
+        {/* Desktop hover actions */}
+        <div className="hidden md:flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+          <button onClick={() => onEdit(expense)} className="icon-button !p-1.5">
+            <Edit2 className="w-3.5 h-3.5 text-blue-400" />
+          </button>
+          <button onClick={() => onDelete(expense)} className="icon-button !p-1.5">
+            <Trash2 className="w-3.5 h-3.5 text-red-400" />
+          </button>
         </div>
 
         {/* Divider */}
