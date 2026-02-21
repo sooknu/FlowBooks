@@ -1818,6 +1818,9 @@
     font-weight: 500;
     @apply px-2 py-0.5 rounded-full leading-tight text-[#C8C6C2];
   }
+  .dark .event-card-row__pill {
+    color: inherit;
+  }
   .event-card-row__chip {
     font-size: 11px;
     @apply px-2 py-0.5 rounded-md leading-tight;

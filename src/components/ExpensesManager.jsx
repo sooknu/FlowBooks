@@ -118,11 +118,11 @@ const ExpenseRow = React.memo(({ expense, onEdit, onDelete }) => {
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-xs text-surface-400 tabular-nums shrink-0 w-12">{dateStr}</span>
               {expense.type === 'credit' ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 shrink-0">
                   Credit
                 </span>
               ) : expense.teamPaymentId ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 shrink-0">
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/50 shrink-0">
                   <Users className="w-2.5 h-2.5" /> Team
                 </span>
               ) : expense.categoryName ? (
