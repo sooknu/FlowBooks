@@ -54,8 +54,7 @@ const UsersManager = () => {
   const handleImpersonate = async (userId) => {
     setImpersonatingId(userId);
     try {
-      const { error } = await authClient.admin.impersonateUser({ userId });
-      if (error) throw error;
+      await api.post(`/users/${userId}/impersonate`);
       window.location.href = '/dashboard';
     } catch (err) {
       toast({ title: 'Failed to impersonate', description: err?.message || 'Something went wrong', variant: 'destructive' });

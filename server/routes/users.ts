@@ -461,22 +461,22 @@ export default async function userRoutes(fastify: any) {
       .set({ impersonatedBy: request.user.id })
       .where(eq(session.id, newSession.id));
 
-    // Sign and set session cookie
+    // Sign session cookie (same HMAC-SHA256 method as Better Auth / better-call)
     const { getWebcryptoSubtle } = await import('@better-auth/utils');
-    const algorithm = { name: 'HMAC', hash: 'SHA-256' };
     const secretBuf = new TextEncoder().encode(authCtx.secret);
-    const key = await getWebcryptoSubtle().importKey('raw', secretBuf, algorithm, false, ['sign']);
-    const signature = await getWebcryptoSubtle().sign('HMAC', key, new TextEncoder().encode(newSession.token));
-    const base64Sig = btoa(String.fromCharCode(...new Uint8Array(signature)));
+    const cryptoKey = await getWebcryptoSubtle().importKey('raw', secretBuf, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sig = await getWebcryptoSubtle().sign('HMAC', cryptoKey, new TextEncoder().encode(newSession.token));
+    const base64Sig = btoa(String.fromCharCode(...new Uint8Array(sig)));
     const signedValue = encodeURIComponent(`${newSession.token}.${base64Sig}`);
 
     const { name: cookieName, attributes: cookieAttrs } = authCtx.authCookies.sessionToken;
+
     const parts = [
       `${cookieName}=${signedValue}`,
       `Path=${cookieAttrs.path || '/'}`,
       'HttpOnly',
       `SameSite=${cookieAttrs.sameSite || 'lax'}`,
-      `Max-Age=${cookieAttrs.maxAge || 604800}`,
+      `Max-Age=${authCtx.sessionConfig.expiresIn || 604800}`,
     ];
     if (cookieAttrs.secure) parts.push('Secure');
     reply.header('set-cookie', parts.join('; '));
