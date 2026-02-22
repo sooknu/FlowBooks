@@ -72,6 +72,14 @@ export async function syncTeamPaymentExpense(
     .from(expenses)
     .where(eq(expenses.teamPaymentId, teamPaymentId));
 
+  // Only create/keep expense for paid payments — pending shouldn't affect financials
+  if (data.status !== 'paid') {
+    if (existingExpense) {
+      await db.delete(expenses).where(eq(expenses.id, existingExpense.id));
+    }
+    return;
+  }
+
   const expenseData = {
     categoryId,
     projectId: data.projectId,
