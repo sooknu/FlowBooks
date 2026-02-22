@@ -693,35 +693,12 @@
 
   /* ── Project Hero with cover photo ── */
 
-  @keyframes heroImageReveal {
-    from { transform: scale(1.06); opacity: 0; }
-    to   { transform: scale(1);    opacity: 1; }
-  }
-
   .project-hero--has-photo {
     min-height: 220px;
-    border: 1px solid rgba(var(--surface-200) / 0.6);
-    border-top-width: 1px;
-    border-top-color: rgba(var(--surface-200) / 0.6);
-    border-bottom-width: 3px;
-  }
-
-  /* Photo variant: status accent on bottom instead of top */
-  .project-hero--has-photo[data-status="lead"],
-  .project-hero--has-photo[data-status="archived"]  { border-bottom-color: rgb(var(--surface-300)); }
-  .project-hero--has-photo[data-status="booked"]    { border-bottom-color: rgb(59 130 246); }
-  .project-hero--has-photo[data-status="shooting"]  { border-bottom-color: rgb(244 63 94); }
-  .project-hero--has-photo[data-status="editing"]   { border-bottom-color: rgb(245 158 11); }
-  .project-hero--has-photo[data-status="delivered"],
-  .project-hero--has-photo[data-status="completed"] { border-bottom-color: rgb(16 185 129); }
-
-  .project-hero__image {
-    position: absolute;
-    inset: 0;
+    border: 1px solid rgb(var(--surface-200));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 4px 16px -2px rgba(0, 0, 0, 0.04);
     background-size: cover;
     background-position: center;
-    border-radius: inherit;
-    animation: heroImageReveal 0.7s ease-out both;
   }
 
   .project-hero__photo-overlay {
@@ -734,7 +711,6 @@
       rgba(255,255,255,0.30) 65%,
       rgba(255,255,255,0.05) 100%
     );
-    border-radius: inherit;
     pointer-events: none;
   }
 
@@ -1734,6 +1710,8 @@
     align-items: stretch;
     gap: 0.5rem;
     padding: 0.25rem 0.25rem 0.25rem 0.625rem;
+    overflow: hidden;
+    min-width: 0;
   }
   .event-card-row:hover {
     border-color: rgba(var(--surface-300) / 0.6);
@@ -1824,9 +1802,10 @@
   }
   .event-card-row__chip {
     font-size: 11px;
-    @apply px-2 py-0.5 rounded-md leading-tight;
+    @apply px-2 py-0.5 rounded-md leading-tight truncate;
     color: rgb(var(--surface-500));
     background: rgb(var(--surface-50));
+    max-width: 10rem;
   }
 
   /* Desktop-only details column — hidden on mobile */

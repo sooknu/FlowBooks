@@ -509,7 +509,7 @@ const Dashboard = () => {
             <p className="text-[13px] text-muted-foreground mt-0.5">{todayStr()}</p>
           </div>
           {showActionButtons && (
-            <div className="flex items-center gap-2.5 sm:mt-1">
+            <div className="flex items-center gap-2.5 flex-wrap sm:mt-1">
               {can('edit_quotes') && (
                 <button onClick={() => navigate('/quotes')} className="action-btn">
                   <Plus className="action-btn__icon" /> New Quote

@@ -12,7 +12,7 @@ import {
   FileText, Receipt, StickyNote, LayoutDashboard, Send,
   Loader2, Trash2, DollarSign, CreditCard,
   Users, Plus, Pencil, TrendingUp, Package, Wallet, ArrowUpDown,
-  Clock, Upload, File, Image, ExternalLink, X,
+  Upload, File, Image, ExternalLink, X,
 } from 'lucide-react';
 import { useAppData, useSettings } from '@/hooks/useAppData';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
@@ -298,10 +298,6 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
               </span>
             </div>
           )}
-          <div className="project-details__prop">
-            <span className="project-details__prop-label"><Clock className="project-details__prop-icon" /> Created</span>
-            <span className="project-details__prop-value">{formatDate(project.createdAt)}</span>
-          </div>
           {invoices.length > 0 && (
             <div className="project-details__prop">
               <span className="project-details__prop-label"><Receipt className="project-details__prop-icon" /> Invoices</span>
@@ -1732,8 +1728,8 @@ const ProjectDetail = () => {
       <div
         className={cn('project-hero', heroPhoto && 'project-hero--has-photo')}
         data-status={project.status || 'lead'}
+        style={heroPhoto ? { backgroundImage: `url(${heroPhoto})` } : undefined}
       >
-        {heroPhoto && <div className="project-hero__image" style={{ backgroundImage: `url(${heroPhoto})` }} />}
         {heroPhoto && <div className="project-hero__photo-overlay" />}
         <div className="project-hero__layout">
           <div className="project-hero__body">

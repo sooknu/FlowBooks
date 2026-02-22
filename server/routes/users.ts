@@ -452,34 +452,44 @@ export default async function userRoutes(fastify: any) {
     const authCtx = await auth.$context;
     const newSession = await authCtx.internalAdapter.createSession(
       targetId,
-      false,
-      { ipAddress: request.ip, userAgent: request.headers['user-agent'] || '' },
+      true, // dontRememberMe — short impersonation session
+      {
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'] || '',
+        impersonatedBy: request.user.id,
+      },
+      true, // overrideAll — use our fields directly
     );
 
-    // Set impersonatedBy on the new session
-    await db.update(session)
-      .set({ impersonatedBy: request.user.id })
-      .where(eq(session.id, newSession.id));
-
-    // Sign session cookie (same HMAC-SHA256 method as Better Auth / better-call)
+    // Helper: HMAC-SHA256 sign a cookie value (same as Better Auth / better-call)
     const { getWebcryptoSubtle } = await import('@better-auth/utils');
     const secretBuf = new TextEncoder().encode(authCtx.secret);
     const cryptoKey = await getWebcryptoSubtle().importKey('raw', secretBuf, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-    const sig = await getWebcryptoSubtle().sign('HMAC', cryptoKey, new TextEncoder().encode(newSession.token));
-    const base64Sig = btoa(String.fromCharCode(...new Uint8Array(sig)));
-    const signedValue = encodeURIComponent(`${newSession.token}.${base64Sig}`);
+    const signValue = async (val: string) => {
+      const sig = await getWebcryptoSubtle().sign('HMAC', cryptoKey, new TextEncoder().encode(val));
+      return encodeURIComponent(`${val}.${btoa(String.fromCharCode(...new Uint8Array(sig)))}`);
+    };
 
     const { name: cookieName, attributes: cookieAttrs } = authCtx.authCookies.sessionToken;
+    const { name: sessionDataName } = authCtx.authCookies.sessionData;
+    const adminCookieProp = authCtx.createAuthCookie('admin_session');
 
-    const parts = [
-      `${cookieName}=${signedValue}`,
-      `Path=${cookieAttrs.path || '/'}`,
-      'HttpOnly',
-      `SameSite=${cookieAttrs.sameSite || 'lax'}`,
-      `Max-Age=${authCtx.sessionConfig.expiresIn || 604800}`,
-    ];
-    if (cookieAttrs.secure) parts.push('Secure');
-    reply.header('set-cookie', parts.join('; '));
+    const cookiePath = cookieAttrs.path || '/';
+    const sameSite = cookieAttrs.sameSite || 'lax';
+    const isSecure = !!cookieAttrs.secure;
+    const sharedAttrs = `Path=${cookiePath}; HttpOnly; SameSite=${sameSite}${isSecure ? '; Secure' : ''}`;
+
+    // 1. Set new session_token cookie for the impersonated user
+    const tokenCookie = `${cookieName}=${await signValue(newSession.token)}; ${sharedAttrs}; Max-Age=${authCtx.sessionConfig.expiresIn || 604800}`;
+
+    // 2. Expire session_data cache cookie (forces DB lookup on next request)
+    const expireDataCookie = `${sessionDataName}=; ${sharedAttrs}; Max-Age=0`;
+
+    // 3. Save admin's session token in admin_session cookie (needed by stopImpersonating)
+    const adminSessionValue = `${request.session.token}:`;
+    const adminCookie = `${adminCookieProp.name}=${await signValue(adminSessionValue)}; ${sharedAttrs}; Max-Age=${authCtx.sessionConfig.expiresIn || 604800}`;
+
+    reply.header('set-cookie', [tokenCookie, expireDataCookie, adminCookie]);
 
     logActivity({ ...actorFromRequest(request), action: 'impersonated', entityType: 'user', entityId: targetId, entityLabel: target.email || target.displayName });
     return { success: true };
