@@ -153,9 +153,12 @@ export default async function storageRoutes(fastify: any) {
     const filePath = path.join(UPLOADS_DIR, 'project-docs', doc.fileName);
     try {
       const buffer = await fs.readFile(filePath);
+      // Use ASCII-safe fallback + RFC 5987 UTF-8 encoding for non-ASCII filenames
+      const asciiName = doc.originalName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '\\"');
+      const utf8Name = encodeURIComponent(doc.originalName);
       return reply
         .header('Content-Type', doc.mimeType)
-        .header('Content-Disposition', `inline; filename="${doc.originalName}"`)
+        .header('Content-Disposition', `inline; filename="${asciiName}"; filename*=UTF-8''${utf8Name}`)
         .send(buffer);
     } catch {
       return reply.code(404).send({ error: 'File not found on disk' });
