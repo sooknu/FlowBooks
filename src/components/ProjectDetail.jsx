@@ -1432,13 +1432,6 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
   });
   const categories = categoriesData?.data || [];
 
-  const { data: vendorsData } = useQuery({
-    queryKey: queryKeys.vendors.list(),
-    queryFn: () => api.get('/vendors'),
-    enabled: isPrivileged,
-  });
-  const vendorsList = vendorsData?.data || [];
-
   const expenses = project.expenses || [];
   const totalExpenses = expenses.filter(e => e.type !== 'credit').reduce((sum, e) => sum + (e.amount || 0), 0);
   const teamPaymentTotal = expenses.filter(e => e.teamPaymentId).reduce((s, e) => s + (e.amount || 0), 0);
@@ -1579,7 +1572,6 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
           setIsFormOpen(open);
         }}
         categories={categories}
-        vendors={vendorsList}
         onSave={handleSave}
         isPending={createExpense.isPending || updateExpense.isPending}
         fixedProjectId={projectId}
