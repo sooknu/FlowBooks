@@ -275,6 +275,8 @@ const ClientsManager = () => {
 
 
   const handleViewProfile = useCallback((clientId) => {
+    const main = document.querySelector('main');
+    if (main) sessionStorage.setItem('scroll:/clients', String(main.scrollTop));
     navigate('/clients/' + clientId);
   }, [navigate]);
 

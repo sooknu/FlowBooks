@@ -554,7 +554,7 @@ const InvoiceEditor = ({ invoice: initialInvoice, onBack, onUpdate, appData, onS
                         </>
                     )}
                     {!isEditing && selectedClient && (
-                        <Button variant="ghost" size="icon" className="shrink-0 text-surface-400 hover:text-[#C8C6C2]" title="View Client Profile" onClick={() => navigate('/clients/' + selectedClient)}>
+                        <Button variant="ghost" size="icon" className="shrink-0 text-surface-400 hover:text-[#C8C6C2]" title="View Client Profile" onClick={() => { const m = document.querySelector('main'); if (m) sessionStorage.setItem('scroll:/invoices', String(m.scrollTop)); navigate('/clients/' + selectedClient); }}>
                             <ExternalLink className="w-4 h-4" />
                         </Button>
                     )}
@@ -1212,7 +1212,7 @@ const InvoiceRow = React.memo(({ invoice, onSelect, onDelete, onSelectionChange,
               <div className="flex items-center gap-3 min-w-0">
                 {invoice.clientId ? (
                   <button
-                    onClick={(e) => { e.stopPropagation(); navigate('/clients/' + invoice.clientId); }}
+                    onClick={(e) => { e.stopPropagation(); const m = document.querySelector('main'); if (m) sessionStorage.setItem('scroll:/invoices', String(m.scrollTop)); navigate('/clients/' + invoice.clientId); }}
                     className="text-surface-600 text-sm truncate hover:text-blue-500 transition-colors text-left flex items-center gap-1.5 group/client"
                   >
                     <span className="truncate">{invoice.clientName || 'No Client'}</span>

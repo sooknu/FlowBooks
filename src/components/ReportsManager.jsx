@@ -409,7 +409,7 @@ function ReportCard({ report, data, filter, index }) {
     <motion.button
       className="rpt-card"
       style={{ '--card-accent': report.accent, '--card-accent-bg': report.accent + '0a' }}
-      onClick={() => navigate(`/reports/${report.id}?filter=${filter}`)}
+      onClick={() => { const m = document.querySelector('main'); if (m) sessionStorage.setItem('scroll:/reports', String(m.scrollTop)); navigate(`/reports/${report.id}?filter=${filter}`); }}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.04 }}

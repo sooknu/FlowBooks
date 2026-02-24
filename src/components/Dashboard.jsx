@@ -468,7 +468,7 @@ const Dashboard = () => {
   const customerPayments = stats?.customerPayments || 0;
   const otherIncome = stats?.otherIncome || 0;
   const totalPaidSalary = stats?.totalPaidSalary || 0;
-  const profit = totalCredits - totalExpenses - totalPaidSalary;
+  const profit = totalRevenue + totalCredits - totalExpenses - totalPaidSalary;
   const salaryByMember = stats?.salaryByMember || [];
 
   // Entity counts

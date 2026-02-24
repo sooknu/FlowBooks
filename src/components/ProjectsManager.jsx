@@ -72,7 +72,7 @@ const fmtCurrency = (v) => {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
 };
 
-const ProjectRow = memo(({ project, onEdit, onArchive, onRestore, onDelete, onContextMenu, canEdit, canDelete, getTypeColor, backTo, financialMode }) => {
+const ProjectRow = memo(({ project, onEdit, onArchive, onRestore, onDelete, onContextMenu, canEdit, canDelete, getTypeColor, backTo, financialMode, onBeforeNavigate }) => {
   const navigate = useNavigate();
   const x = useMotionValue(0);
   const isArchived = project.status === 'archived';
@@ -150,7 +150,7 @@ const ProjectRow = memo(({ project, onEdit, onArchive, onRestore, onDelete, onCo
 
   if (!isSwipeable) {
     return (
-      <div onClick={() => navigate(`/projects/${project.id}`, { state: { backTo } })}>
+      <div onClick={() => { onBeforeNavigate?.(); navigate(`/projects/${project.id}`, { state: { backTo } }); }}>
         {cardContent}
       </div>
     );
@@ -180,7 +180,7 @@ const ProjectRow = memo(({ project, onEdit, onArchive, onRestore, onDelete, onCo
           }
         }}
         onClick={() => {
-          if (Math.abs(x.get()) < 5) navigate(`/projects/${project.id}`, { state: { backTo } });
+          if (Math.abs(x.get()) < 5) { onBeforeNavigate?.(); navigate(`/projects/${project.id}`, { state: { backTo } }); }
         }}
       >
         {cardContent}
@@ -222,6 +222,12 @@ const ProjectsManager = () => {
   const tabScrollRef = useRef(null);
   const contextMenuRef = useRef(null);
   const sentinelRef = useRef(null);
+
+  // Save scroll position before navigating to a project detail
+  const saveScroll = useCallback(() => {
+    const main = document.querySelector('main');
+    if (main) sessionStorage.setItem('scroll:/projects', String(main.scrollTop));
+  }, []);
 
   // When a financial sort is active, override the normal sort
   const effectiveOrderBy = financialFilter || currentSort.orderBy;
@@ -611,9 +617,13 @@ const ProjectsManager = () => {
           <p className="text-xs text-surface-400">{totalCount} project{totalCount !== 1 ? 's' : ''}</p>
           <div className="space-y-2">
             {projects.map(p => (
-              <ProjectRow key={p.id} project={p} onEdit={handleEdit} onArchive={handleArchive} onRestore={handleRestore} onDelete={handleDelete} onContextMenu={handleContextMenu} canEdit={can('manage_projects')} canDelete={can('delete_projects')} getTypeColor={getTypeColor} backTo={`/projects${location.search}`} financialMode={financialFilter} />
+              <ProjectRow key={p.id} project={p} onEdit={handleEdit} onArchive={handleArchive} onRestore={handleRestore} onDelete={handleDelete} onContextMenu={handleContextMenu} canEdit={can('manage_projects')} canDelete={can('delete_projects')} getTypeColor={getTypeColor} backTo={`/projects${location.search}`} financialMode={financialFilter} onBeforeNavigate={saveScroll} />
             ))}
           </div>
+          {/* Fade-out gradient — sticks to bottom of scroll viewport */}
+          {(hasNextPage || projects.length > 6) && (
+            <div className="sticky bottom-0 h-16 -mt-16 pointer-events-none z-10" style={{ background: 'linear-gradient(to bottom, transparent, rgb(var(--surface-50)))' }} />
+          )}
           <div ref={sentinelRef} className="h-1" />
           {isFetchingNextPage && (
             <div className="flex justify-center py-4">

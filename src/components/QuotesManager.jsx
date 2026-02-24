@@ -453,7 +453,7 @@ const QuoteEditor = ({ quote: initialQuote, onBack, onUpdate, appData, onSendEma
                     </>
                   )}
                   {!isEditing && selectedClient && navigate && (
-                    <Button variant="ghost" size="icon" className="shrink-0 text-surface-400 hover:text-[#C8C6C2]" title="View Client Profile" onClick={() => navigate('/clients/' + selectedClient)}>
+                    <Button variant="ghost" size="icon" className="shrink-0 text-surface-400 hover:text-[#C8C6C2]" title="View Client Profile" onClick={() => { const m = document.querySelector('main'); if (m) sessionStorage.setItem('scroll:/quotes', String(m.scrollTop)); navigate('/clients/' + selectedClient); }}>
                       <ExternalLink className="w-4 h-4" />
                     </Button>
                   )}
@@ -1029,7 +1029,7 @@ const QuoteRow = React.memo(({ quote, onSelect, onDelete, onSelectionChange, isS
               <div className="flex items-center gap-2 min-w-0">
                 {quote.clientId ? (
                   <button
-                    onClick={(e) => { e.stopPropagation(); navigate('/clients/' + quote.clientId); }}
+                    onClick={(e) => { e.stopPropagation(); const m = document.querySelector('main'); if (m) sessionStorage.setItem('scroll:/quotes', String(m.scrollTop)); navigate('/clients/' + quote.clientId); }}
                     className="text-surface-600 text-sm truncate hover:text-blue-500 transition-colors text-left flex items-center gap-1.5 group/client"
                   >
                     <span className="truncate">{quote.clientName || 'No Client'}</span>

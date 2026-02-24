@@ -27,7 +27,7 @@ import { toast } from '@/components/ui/use-toast';
 import { useProjectRoles } from '@/lib/projectRoles';
 import { TEAM_ROLE_LABELS } from '@/lib/teamRoles';
 
-const formatCurrency = (amount) => '$' + (parseFloat(amount) || 0).toFixed(2);
+const formatCurrency = (amount) => '$' + (parseFloat(amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatDocNumber = (num) => '#' + String(num).padStart(5, '0');
 
 function formatDate(d) {
@@ -115,22 +115,15 @@ const TABS = [
 
 // ─── Financial Card ──────────────────────────────────────────────────────────
 
-const FinancialCard = ({ label, value, icon: Icon, delay }) => (
+const FinancialCard = ({ label, value, icon: Icon, delay, colorClass }) => (
   <motion.div
-    initial={{ opacity: 0, y: 15 }}
+    initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ delay }}
-    className="content-card project-details p-3 sm:p-4"
+    className="content-card overflow-hidden px-2.5 py-2 sm:px-4 sm:py-3"
   >
-    <div className="flex items-center gap-2 sm:gap-3">
-      <div className="hidden sm:block p-2 rounded-lg bg-surface-100">
-        <Icon className="w-4 h-4 text-surface-400" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-surface-400 text-[11px] sm:text-xs">{label}</p>
-        <p className="text-base sm:text-xl font-bold truncate">{value}</p>
-      </div>
-    </div>
+    <p className="text-surface-400 text-[9px] sm:text-[11px] uppercase tracking-wider font-medium truncate">{label}</p>
+    <p className={cn('font-bold tabular-nums truncate mt-0.5', colorClass || '')} style={{ fontSize: 'clamp(0.8rem, 2.5vw, 1.125rem)' }}>{value}</p>
   </motion.div>
 );
 
@@ -336,29 +329,29 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
         const allItems = invoices.flatMap(inv => (inv.items || []).map(item => ({ ...item, invoiceNumber: inv.invoiceNumber })));
         if (!allItems.length) return null;
         return (
-          <div className="content-card p-5 space-y-3">
-            <h3 className="text-sm font-semibold text-surface-500 uppercase tracking-wider flex items-center gap-2">
-              <Package className="w-3.5 h-3.5" /> Items
-            </h3>
-            <div className="divide-y divide-surface-100">
+          <div className="content-card overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[rgb(var(--surface-100))]">
+              <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Items</h3>
+              {invoices.length > 1 && (
+                <span className="text-[11px] text-surface-400 tabular-nums">Across {invoices.length} invoices</span>
+              )}
+            </div>
+            <div>
               {allItems.map((item, i) => (
-                <div key={item.id || i} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
+                <div key={item.id || i} className="flex items-center justify-between px-5 py-2.5 border-b border-surface-100 last:border-b-0">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-surface-800 truncate">{item.name}</p>
-                    {item.description && <p className="text-xs text-surface-400 truncate">{item.description}</p>}
+                    <p className="text-[13px] font-medium text-surface-800 truncate">{item.name}</p>
+                    {item.description && <p className="text-[11px] text-surface-400 truncate">{item.description}</p>}
                   </div>
                   {canSeePrices && (
-                    <div className="flex items-center gap-4 ml-4 shrink-0 text-sm">
-                      <span className="text-surface-400 tabular-nums">×{item.qty}</span>
-                      <span className="font-semibold text-surface-700 tabular-nums w-20 text-right">{formatCurrency(item.total)}</span>
+                    <div className="flex items-center gap-4 ml-4 shrink-0">
+                      <span className="text-[11px] text-surface-400 tabular-nums">x{item.qty}</span>
+                      <span className="text-[13px] font-semibold text-surface-700 tabular-nums w-20 text-right">{formatCurrency(item.total)}</span>
                     </div>
                   )}
                 </div>
               ))}
             </div>
-            {invoices.length > 1 && (
-              <p className="text-[10px] text-surface-400 pt-1">Across {invoices.length} invoices</p>
-            )}
           </div>
         );
       })()}
@@ -374,42 +367,47 @@ const QuotesTab = ({ quotes, navigate, isPrivileged, project }) => {
   };
 
   return (
-    <div className="space-y-2">
-      {isPrivileged && (
-        <div className="flex justify-end">
-          <button onClick={handleNewQuote} className="action-btn text-xs !px-3 !py-2">
-            <Plus className="w-3.5 h-3.5 mr-1" /> New Quote
+    <div className="content-card overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-[rgb(var(--surface-100))]">
+        <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Quotes ({quotes?.length || 0})</h3>
+        {isPrivileged && (
+          <button onClick={handleNewQuote} className="action-btn text-xs !py-1.5 !px-3 flex items-center gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> New Quote
           </button>
-        </div>
-      )}
+        )}
+      </div>
       {(!quotes || quotes.length === 0) ? (
-        <div className="content-card p-12 text-center">
-          <FileText className="w-10 h-10 text-surface-400 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-surface-600 mb-1">No quotes linked</h3>
-          <p className="text-surface-400 text-sm">Quotes assigned to this project will appear here.</p>
+        <div className="px-5 py-10 text-center">
+          <p className="text-sm text-surface-400">No quotes linked to this project.</p>
         </div>
       ) : (
-        quotes.map(q => (
-          <motion.div
-            key={q.id}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`content-card__row p-4 transition-shadow ${isPrivileged ? 'cursor-pointer hover:shadow-md' : ''}`}
-            onClick={() => isPrivileged && navigate(`/quotes/${q.id}`)}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="font-semibold text-surface-800">{formatDocNumber(q.quoteNumber)}</span>
-                {q.clientName && <span className="text-surface-400 text-sm ml-2">{q.clientName}</span>}
+        <div>
+          {quotes.map((q, i) => (
+            <motion.div
+              key={q.id}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: i * 0.02 }}
+              className={cn('flex items-center gap-3 px-5 py-2.5 border-b border-surface-100 last:border-b-0 transition-colors', isPrivileged && 'cursor-pointer hover:bg-surface-50/60')}
+              onClick={() => isPrivileged && navigate(`/quotes/${q.id}`)}
+            >
+              <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 bg-surface-100 text-surface-400">
+                <FileText className="w-3 h-3" />
               </div>
-              <div className="flex items-center gap-3">
-                {q.approvedAt && <span className="chip chip--success text-xs">Approved</span>}
-                <span className="font-semibold">{formatCurrency(q.total)}</span>
-                <span className="text-xs text-surface-400">{formatDate(q.createdAt)}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium text-surface-800 leading-tight">
+                  {formatDocNumber(q.quoteNumber)}
+                  {q.clientName && <span className="text-surface-400 font-normal ml-1.5">{q.clientName}</span>}
+                </p>
+                <p className="text-[11px] text-surface-400 leading-tight mt-0.5">{formatDate(q.createdAt)}</p>
               </div>
-            </div>
-          </motion.div>
-        ))
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {q.approvedAt && <span className="chip chip--success text-[10px]">Approved</span>}
+                <span className="text-[13px] font-semibold tabular-nums text-surface-700">{formatCurrency(q.total)}</span>
+              </div>
+            </motion.div>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -730,63 +728,61 @@ const InvoicesTab = ({ invoices, navigate, isPrivileged, project }) => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Invoices section */}
-      <div className="space-y-2">
-        {isPrivileged && (
-          <div className="flex justify-end">
-            <button onClick={handleNewInvoice} className="action-btn text-xs !px-3 !py-2">
-              <Plus className="w-3.5 h-3.5 mr-1" /> New Invoice
+    <div className="space-y-4">
+      <div className="content-card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[rgb(var(--surface-100))]">
+          <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Invoices ({invoices?.length || 0})</h3>
+          {isPrivileged && (
+            <button onClick={handleNewInvoice} className="action-btn text-xs !py-1.5 !px-3 flex items-center gap-1.5">
+              <Plus className="w-3.5 h-3.5" /> New Invoice
             </button>
-          </div>
-        )}
+          )}
+        </div>
         {(!invoices || invoices.length === 0) ? (
-          <div className="content-card p-12 text-center">
-            <Receipt className="w-10 h-10 text-surface-400 mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-surface-600 mb-1">No invoices linked</h3>
-            <p className="text-surface-400 text-sm">Invoices assigned to this project will appear here.</p>
+          <div className="px-5 py-10 text-center">
+            <p className="text-sm text-surface-400">No invoices linked to this project.</p>
           </div>
         ) : (
-          invoices.map(inv => {
-            const paidPercent = inv.total > 0 ? Math.min(100, (inv.paidAmount / inv.total) * 100) : 0;
-            return (
-              <motion.div
-                key={inv.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`content-card__row p-4 transition-shadow ${isPrivileged ? 'cursor-pointer hover:shadow-md' : ''}`}
-                onClick={() => isPrivileged && navigate(`/invoices/${inv.id}`)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="font-semibold text-surface-800">{formatDocNumber(inv.invoiceNumber)}</span>
-                    <span className={`chip ${invoiceStatusColors[inv.status] || ''} text-xs capitalize`}>{inv.status}</span>
+          <div>
+            {invoices.map((inv, i) => {
+              const paidPercent = inv.total > 0 ? Math.min(100, (inv.paidAmount / inv.total) * 100) : 0;
+              return (
+                <motion.div
+                  key={inv.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: i * 0.02 }}
+                  className={cn('flex items-center gap-3 px-5 py-2.5 border-b border-surface-100 last:border-b-0 transition-colors', isPrivileged && 'cursor-pointer hover:bg-surface-50/60')}
+                  onClick={() => isPrivileged && navigate(`/invoices/${inv.id}`)}
+                >
+                  <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 bg-surface-100 text-surface-400">
+                    <Receipt className="w-3 h-3" />
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="font-semibold">{formatCurrency(inv.total)}</p>
-                      <p className="text-xs text-surface-400">Paid: {formatCurrency(inv.paidAmount)}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-[13px] font-medium text-surface-800 leading-tight">{formatDocNumber(inv.invoiceNumber)}</p>
+                      <span className={`chip ${invoiceStatusColors[inv.status] || ''} text-[10px] capitalize`}>{inv.status}</span>
                     </div>
-                    {/* Progress bar */}
-                    <div className="w-20 h-1.5 rounded-full bg-surface-200 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${inv.status === 'paid' ? 'bg-emerald-400' : 'bg-amber-400'}`}
-                        style={{ width: `${paidPercent}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-surface-400">{formatDate(inv.createdAt)}</span>
+                    <p className="text-[11px] text-surface-400 leading-tight mt-0.5">
+                      {formatDate(inv.createdAt)}
+                      {inv.paidAmount > 0 && <> &middot; Paid {formatCurrency(inv.paidAmount)}</>}
+                    </p>
                   </div>
-                </div>
-              </motion.div>
-            );
-          })
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <div className="w-14 h-1 rounded-full bg-surface-100 overflow-hidden hidden sm:block">
+                      <div className={`h-full rounded-full ${inv.status === 'paid' ? 'bg-emerald-400' : 'bg-amber-400'}`} style={{ width: `${paidPercent}%` }} />
+                    </div>
+                    <span className="text-[13px] font-semibold tabular-nums text-surface-700">{formatCurrency(inv.total)}</span>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
         )}
       </div>
 
-      {/* Documents section */}
-      <div className="border-t border-surface-200 pt-5">
-        <ProjectDocuments projectId={project.id} isPrivileged={isPrivileged} />
-      </div>
+      {/* Documents */}
+      <ProjectDocuments projectId={project.id} isPrivileged={isPrivileged} />
     </div>
   );
 };
@@ -819,7 +815,7 @@ const NoteCard = ({ note, projectId, currentUserId, isPrivileged }) => {
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="content-card p-4">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-5 py-3 border-b border-surface-100 last:border-b-0 hover:bg-surface-50/60 transition-colors group">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           {isEditing ? (
@@ -853,8 +849,8 @@ const NoteCard = ({ note, projectId, currentUserId, isPrivileged }) => {
             </div>
           ) : (
             <>
-              <p className="text-sm whitespace-pre-wrap">{note.content}</p>
-              <div className="flex items-center gap-2 mt-2 text-xs text-surface-400">
+              <p className="text-[13px] whitespace-pre-wrap text-surface-800 leading-relaxed">{note.content}</p>
+              <div className="flex items-center gap-2 mt-1.5 text-[11px] text-surface-400">
                 <span>{note.createdBy}</span>
                 <span>&middot;</span>
                 <span>{fmtDate(note.createdAt)} {fmtTime(note.createdAt)}</span>
@@ -864,15 +860,15 @@ const NoteCard = ({ note, projectId, currentUserId, isPrivileged }) => {
           )}
         </div>
         {!isEditing && !confirmDelete && (
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
             {isOwn && (
-              <button onClick={() => setIsEditing(true)} className="icon-button" title="Edit note">
-                <Pencil className="w-3.5 h-3.5 text-blue-400" />
+              <button onClick={() => setIsEditing(true)} className="p-1 rounded hover:bg-surface-100 transition-colors" title="Edit note">
+                <Pencil className="w-3 h-3 text-surface-400" />
               </button>
             )}
             {(isOwn || isPrivileged) && (
-              <button onClick={() => setConfirmDelete(true)} className="icon-button" title="Delete note">
-                <Trash2 className="w-3.5 h-3.5 text-red-400" />
+              <button onClick={() => setConfirmDelete(true)} className="p-1 rounded hover:bg-red-50 transition-colors" title="Delete note">
+                <Trash2 className="w-3 h-3 text-surface-400 hover:text-red-400" />
               </button>
             )}
           </div>
@@ -906,114 +902,94 @@ const NotesTab = ({ projectId, isPrivileged }) => {
 
   return (
     <div className="space-y-4">
-      <form onSubmit={handleAddNote} className="content-card p-4">
-        <textarea
-          value={noteContent}
-          onChange={(e) => setNoteContent(e.target.value)}
-          className="glass-textarea w-full mb-3"
-          rows={3}
-          placeholder="Add a project note..."
-        />
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            className="action-btn !px-3 !py-2 text-xs"
-            disabled={!noteContent.trim() || createNote.isPending}
-          >
-            {createNote.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Send className="w-3.5 h-3.5" /> Add Note</>}
-          </button>
-        </div>
-      </form>
-
-      {isLoading ? (
-        <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>
-      ) : notes.length > 0 ? (
-        <div className="space-y-3">
-          {notes.map(note => (
-            <NoteCard key={note.id} note={note} projectId={projectId} currentUserId={user?.id} isPrivileged={isPrivileged} />
-          ))}
-        </div>
-      ) : (
-        <div className="content-card p-8 text-center">
-          <StickyNote className="w-8 h-8 text-surface-500 mx-auto mb-2" />
-          <p className="text-surface-400 text-sm">No notes yet. Add one above.</p>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ─── Swipeable Payment Row ───────────────────────────────────────────────────
-
-const PAYMENT_SWIPE_THRESHOLD = -120;
-
-const SwipeablePaymentRow = ({ payment: p, index: i, isPrivileged, getMemberName, formatCurrency, formatDate, onEdit, onDelete }) => {
-  const x = useMotionValue(0);
-
-  const cardContent = (
-    <div className="content-card__row p-3 flex items-center justify-between gap-3">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="min-w-0">
-          <p className="text-sm font-medium">{getMemberName(p)}</p>
-          <p className="text-xs text-surface-400">{formatDate(p.paymentDate)}{p.paymentMethod ? ` · ${p.paymentMethod}` : ''}</p>
-        </div>
-      </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
-        <span className={`text-sm font-bold ${p.status === 'paid' ? 'text-emerald-400' : 'text-amber-400'}`}>{formatCurrency(p.amount)}</span>
-        <span className={`chip text-xs ${p.status === 'paid' ? 'chip--success' : 'chip--warning'}`}>{p.status}</span>
-        {isPrivileged && (
-          <div className="hidden md:flex items-center gap-3">
-            <button onClick={onEdit} className="icon-button" title="Edit">
-              <Pencil className="w-3.5 h-3.5" />
+      <div className="content-card overflow-hidden">
+        <form onSubmit={handleAddNote} className="px-5 py-3 border-b border-[rgb(var(--surface-100))]">
+          <textarea
+            value={noteContent}
+            onChange={(e) => setNoteContent(e.target.value)}
+            className="glass-textarea w-full mb-2 text-sm"
+            rows={2}
+            placeholder="Add a project note..."
+          />
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="action-btn !px-3 !py-1.5 text-xs"
+              disabled={!noteContent.trim() || createNote.isPending}
+            >
+              {createNote.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Send className="w-3.5 h-3.5" /> Add Note</>}
             </button>
-            <button onClick={onDelete} className="icon-button">
-              <Trash2 className="w-3.5 h-3.5 text-red-400" />
-            </button>
+          </div>
+        </form>
+
+        {isLoading ? (
+          <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>
+        ) : notes.length > 0 ? (
+          <div>
+            {notes.map(note => (
+              <NoteCard key={note.id} note={note} projectId={projectId} currentUserId={user?.id} isPrivileged={isPrivileged} />
+            ))}
+          </div>
+        ) : (
+          <div className="px-5 py-10 text-center">
+            <p className="text-sm text-surface-400">No notes yet.</p>
           </div>
         )}
       </div>
     </div>
   );
+};
 
-  if (!isPrivileged) {
+// ─── Swipeable Row (generic) ─────────────────────────────────────────────────
+
+const SWIPE_THRESHOLD = -120;
+
+const SwipeableRow = ({ children, index, canSwipe, onEdit, onDelete, onClick }) => {
+  const x = useMotionValue(0);
+
+  if (!canSwipe) {
     return (
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-        {cardContent}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: (index || 0) * 0.02 }}>
+        {children}
       </motion.div>
     );
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-      className="relative overflow-hidden rounded-xl md:overflow-visible">
-      {/* Swipe actions behind */}
-      <div className="absolute inset-0 flex items-stretch justify-end rounded-xl md:hidden">
-        <button onClick={(e) => { e.stopPropagation(); animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 }); onEdit(); }}
-          className="flex items-center justify-center w-[60px] bg-blue-500 text-[#C8C6C2]">
-          <Pencil className="w-4 h-4" />
-        </button>
-        <button onClick={(e) => { e.stopPropagation(); animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 }); onDelete(); }}
-          className="flex items-center justify-center w-[60px] bg-red-500 text-[#C8C6C2]">
-          <Trash2 className="w-4 h-4" />
-        </button>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: (index || 0) * 0.02 }}
+      className="relative overflow-hidden md:overflow-visible">
+      <div className="absolute inset-0 flex items-stretch justify-end md:hidden">
+        {onEdit && (
+          <button onClick={(e) => { e.stopPropagation(); animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 }); onEdit(); }}
+            className="flex items-center justify-center w-[60px] bg-blue-500 text-white">
+            <Pencil className="w-4 h-4" />
+          </button>
+        )}
+        {onDelete && (
+          <button onClick={(e) => { e.stopPropagation(); animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 }); onDelete(); }}
+            className="flex items-center justify-center w-[60px] bg-red-500 text-white">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       <motion.div
-        className="relative z-10 swipe-card"
+        className="relative z-10 bg-[rgb(var(--glass-bg))]"
         style={{ x }}
         drag="x"
         dragDirectionLock
-        dragConstraints={{ left: PAYMENT_SWIPE_THRESHOLD, right: 0 }}
+        dragConstraints={{ left: SWIPE_THRESHOLD, right: 0 }}
         dragElastic={0.1}
         onDragEnd={(_, info) => {
-          if (info.offset.x < PAYMENT_SWIPE_THRESHOLD / 2) {
-            animate(x, PAYMENT_SWIPE_THRESHOLD, { type: 'spring', stiffness: 300, damping: 30 });
+          if (info.offset.x < SWIPE_THRESHOLD / 2) {
+            animate(x, SWIPE_THRESHOLD, { type: 'spring', stiffness: 300, damping: 30 });
           } else {
             animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 });
           }
         }}
+        onClick={() => { if (Math.abs(x.get()) < 5 && onClick) onClick(); }}
       >
-        {cardContent}
+        {children}
       </motion.div>
     </motion.div>
   );
@@ -1024,19 +1000,13 @@ const SwipeablePaymentRow = ({ payment: p, index: i, isPrivileged, getMemberName
 const TeamTab = ({ project, projectId, isPrivileged }) => {
   const { roles: assignmentRoles } = useProjectRoles();
   const [assignDialog, setAssignDialog] = useState(false);
-  const [paymentDialog, setPaymentDialog] = useState(false);
   const [editAssignment, setEditAssignment] = useState(null);
-  const [editPayment, setEditPayment] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [assignForm, setAssignForm] = useState({ teamMemberId: '', role: '', daysWorked: '', hoursWorked: '', notes: '' });
-  const [paymentForm, setPaymentForm] = useState({ teamMemberId: '', amount: '', paymentDate: '', paymentMethod: '', status: 'paid', notes: '', advanceRepayment: '', salaryDeduction: '' });
 
   const createAssignment = useCreateAssignment();
   const updateAssignment = useUpdateAssignment();
   const deleteAssignment = useDeleteAssignment();
-  const createPayment = useCreateTeamPayment();
-  const updatePayment = useUpdateTeamPayment();
-  const deletePayment = useDeleteTeamPayment();
 
   const { data: teamList = [] } = useQuery({
     queryKey: queryKeys.team.list(),
@@ -1045,8 +1015,6 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
   });
 
   const assignments = project.assignments || [];
-  const payments = project.teamPayments || [];
-  const teamCostPaid = project.teamCostPaid || 0;
 
   const assignedMemberIds = assignments.map(a => a.teamMemberId);
   const availableMembers = teamList.filter(m => !assignedMemberIds.includes(m.id) && m.isActive);
@@ -1086,46 +1054,9 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
     } catch { /* handled */ }
   };
 
-  const handlePaymentSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (editPayment) {
-        await updatePayment.mutateAsync({
-          id: editPayment.id,
-          projectId,
-          teamMemberId: paymentForm.teamMemberId,
-          amount: parseFloat(paymentForm.amount),
-          paymentDate: paymentForm.paymentDate || undefined,
-          paymentMethod: paymentForm.paymentMethod || undefined,
-          status: paymentForm.status,
-          notes: paymentForm.notes || undefined,
-        });
-      } else {
-        await createPayment.mutateAsync({
-          projectId,
-          teamMemberId: paymentForm.teamMemberId,
-          amount: parseFloat(paymentForm.amount),
-          paymentDate: paymentForm.paymentDate || undefined,
-          paymentMethod: paymentForm.paymentMethod || undefined,
-          status: paymentForm.status,
-          notes: paymentForm.notes || undefined,
-          advanceRepayment: paymentForm.advanceRepayment ? parseFloat(paymentForm.advanceRepayment) : undefined,
-          salaryDeduction: paymentForm.salaryDeduction ? parseFloat(paymentForm.salaryDeduction) : undefined,
-        });
-      }
-      setPaymentDialog(false);
-      setEditPayment(null);
-      setPaymentForm({ teamMemberId: '', amount: '', paymentDate: '', paymentMethod: '', status: 'paid', notes: '', advanceRepayment: '', salaryDeduction: '' });
-    } catch { /* handled */ }
-  };
-
   const handleDeleteConfirm = () => {
     if (!deleteConfirm) return;
-    if (deleteConfirm.type === 'assignment') {
-      deleteAssignment.mutate({ id: deleteConfirm.id, projectId });
-    } else {
-      deletePayment.mutate({ id: deleteConfirm.id, projectId });
-    }
+    deleteAssignment.mutate({ id: deleteConfirm.id, projectId });
     setDeleteConfirm(null);
   };
 
@@ -1136,16 +1067,11 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
   };
 
   return (
-    <div className="space-y-5">
-      {/* Financial Summary */}
-      <div className="grid grid-cols-2 gap-3">
-        <FinancialCard label="Paid to Team" value={formatCurrency(teamCostPaid)} icon={Users} delay={0} />
-      </div>
-
+    <div className="space-y-4">
       {/* Assigned Crew */}
-      <div className="content-card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-surface-500 uppercase tracking-wider">Assigned Crew ({assignments.length})</h3>
+      <div className="content-card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[rgb(var(--surface-100))]">
+          <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Assigned Crew ({assignments.length})</h3>
           {isPrivileged && (
             <button onClick={() => openAssignDialog()} className="action-btn text-xs !py-1.5 !px-3 flex items-center gap-1.5">
               <Plus className="w-3.5 h-3.5" /> Assign
@@ -1153,80 +1079,33 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
           )}
         </div>
         {assignments.length > 0 ? (
-          <div className="space-y-2">
+          <div>
             {assignments.map((a, i) => (
-                <motion.div key={a.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-                  className="content-card__row p-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Avatar className="h-8 w-8 flex-shrink-0">
-                      <AvatarImage src={a.teamMember?.user?.image} />
-                      <AvatarFallback className="text-[10px] bg-surface-200">{getMemberName(a).substring(0, 2).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{getMemberName(a)}</p>
-                      <div className="flex items-center gap-2 text-xs text-surface-400">
-                        <span>{a.role || '—'}</span>
-                        {(a.daysWorked || a.hoursWorked) && (
-                          <span>{a.daysWorked ? `${a.daysWorked}d` : `${a.hoursWorked}h`}</span>
-                        )}
-                      </div>
-                    </div>
+                <motion.div key={a.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
+                  className="flex items-center gap-3 px-5 py-2.5 border-b border-surface-100 last:border-b-0 hover:bg-surface-50/60 transition-colors group">
+                  <Avatar className="h-7 w-7 flex-shrink-0">
+                    <AvatarImage src={a.teamMember?.user?.image} />
+                    <AvatarFallback className="text-[10px] bg-surface-200">{getMemberName(a).substring(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-medium text-surface-800 truncate leading-tight">{getMemberName(a)}</p>
+                    <p className="text-[11px] text-surface-400 leading-tight mt-0.5">
+                      {a.role || '—'}
+                      {(a.daysWorked || a.hoursWorked) && <> &middot; {a.daysWorked ? `${a.daysWorked}d` : `${a.hoursWorked}h`}</>}
+                    </p>
                   </div>
                   {isPrivileged && (
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button onClick={() => openAssignDialog(a)} className="icon-button" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => setDeleteConfirm({ type: 'assignment', id: a.id, label: getMemberName(a) })} className="icon-button" title="Remove"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                      <button onClick={() => openAssignDialog(a)} className="p-1 rounded hover:bg-surface-100 transition-colors" title="Edit"><Pencil className="w-3 h-3 text-surface-400" /></button>
+                      <button onClick={() => setDeleteConfirm({ type: 'assignment', id: a.id, label: getMemberName(a) })} className="p-1 rounded hover:bg-red-50 transition-colors" title="Remove"><Trash2 className="w-3 h-3 text-surface-400 hover:text-red-400" /></button>
                     </div>
                   )}
                 </motion.div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-6">
-            <Users className="w-8 h-8 text-surface-400 mx-auto mb-2" />
-            <p className="text-surface-400 text-sm">No crew assigned yet.</p>
-          </div>
-        )}
-      </div>
-
-      {/* Team Payments */}
-      <div className="content-card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-surface-500 uppercase tracking-wider">Team Payments ({payments.length})</h3>
-          {isPrivileged && assignments.length > 0 && (
-            <button onClick={() => { const sd = project.shootStartDate; const defaultDate = sd ? new Date(sd).toISOString().slice(0, 10) : ''; setEditPayment(null); setPaymentForm({ teamMemberId: assignments[0]?.teamMemberId || '', amount: '', paymentDate: defaultDate, paymentMethod: '', status: 'paid', notes: '', advanceRepayment: '', salaryDeduction: '' }); setPaymentDialog(true); }}
-              className="action-btn text-xs !py-1.5 !px-3 flex items-center gap-1.5">
-              <Plus className="w-3.5 h-3.5" /> Record Payment
-            </button>
-          )}
-        </div>
-        {payments.length > 0 ? (
-          <div className="space-y-2">
-            {payments.map((p, i) => (
-              <SwipeablePaymentRow key={p.id} payment={p} index={i} isPrivileged={isPrivileged}
-                getMemberName={getMemberName} formatCurrency={formatCurrency} formatDate={formatDate}
-                onEdit={() => {
-                  setEditPayment(p);
-                  setPaymentForm({
-                    teamMemberId: p.teamMemberId,
-                    amount: p.amount?.toString() || '',
-                    paymentDate: p.paymentDate ? new Date(p.paymentDate).toISOString().slice(0, 10) : '',
-                    paymentMethod: p.paymentMethod || '',
-                    status: p.status || 'paid',
-                    notes: p.notes || '',
-                    advanceRepayment: '',
-                    salaryDeduction: '',
-                  });
-                  setPaymentDialog(true);
-                }}
-                onDelete={() => setDeleteConfirm({ type: 'payment', id: p.id, label: `${formatCurrency(p.amount)} to ${getMemberName(p)}` })}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-6">
-            <DollarSign className="w-8 h-8 text-surface-400 mx-auto mb-2" />
-            <p className="text-surface-400 text-sm">No payments recorded.</p>
+          <div className="px-5 py-10 text-center">
+            <p className="text-sm text-surface-400">No crew assigned yet.</p>
           </div>
         )}
       </div>
@@ -1278,102 +1157,6 @@ const TeamTab = ({ project, projectId, isPrivileged }) => {
         </DialogContent>
       </Dialog>
 
-      {/* Payment Dialog */}
-      <Dialog open={paymentDialog} onOpenChange={setPaymentDialog}>
-        <DialogContent className="glass-modal max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
-          <DialogHeader><DialogTitle>{editPayment ? 'Edit Team Payment' : 'Record Team Payment'}</DialogTitle></DialogHeader>
-          <form onSubmit={handlePaymentSubmit} className="space-y-4 mt-2">
-            <div>
-              <label className="text-xs font-medium text-surface-500 mb-1 block">Team Member</label>
-              <select value={paymentForm.teamMemberId} onChange={e => setPaymentForm(f => ({ ...f, teamMemberId: e.target.value }))} className="glass-input w-full" required>
-                {assignments.map(a => (
-                  <option key={a.teamMemberId} value={a.teamMemberId}>{getMemberName(a)}</option>
-                ))}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-surface-500 mb-1 block">Amount ($)</label>
-                <input type="number" inputMode="decimal" step="0.01" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} className="glass-input w-full" required />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-surface-500 mb-1 block">Date</label>
-                <input type="date" value={paymentForm.paymentDate} onChange={e => setPaymentForm(f => ({ ...f, paymentDate: e.target.value }))} className="glass-input w-full" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-surface-500 mb-1 block">Method</label>
-                <input type="text" value={paymentForm.paymentMethod} onChange={e => setPaymentForm(f => ({ ...f, paymentMethod: e.target.value }))} className="glass-input w-full" placeholder="Cash, Zelle..." />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-surface-500 mb-1 block">Status</label>
-                <select value={paymentForm.status} onChange={e => setPaymentForm(f => ({ ...f, status: e.target.value }))} className="glass-input w-full">
-                  <option value="paid">Paid</option>
-                  <option value="pending">Pending</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-surface-500 mb-1 block">Notes</label>
-              <textarea value={paymentForm.notes} onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))} className="glass-textarea w-full" rows={2} />
-            </div>
-            {/* Apply toward advance — only if selected member has advancesEnabled (create only) */}
-            {!editPayment && (() => {
-              const selectedAssignment = assignments.find(a => a.teamMemberId === paymentForm.teamMemberId);
-              if (selectedAssignment?.teamMember?.advancesEnabled) {
-                return (
-                  <div>
-                    <label className="text-xs font-medium text-surface-500 mb-1 block">Apply toward advance ($)</label>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      min="0"
-                      max={paymentForm.amount || undefined}
-                      value={paymentForm.advanceRepayment}
-                      onChange={e => setPaymentForm(f => ({ ...f, advanceRepayment: e.target.value }))}
-                      className="glass-input w-full"
-                      placeholder="0.00"
-                    />
-                    <p className="text-[11px] text-surface-400 mt-1">Deduct from their advance balance</p>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-            {/* Apply toward salary — only if selected member has salaryEnabled (create only) */}
-            {!editPayment && (() => {
-              const selectedAssignment = assignments.find(a => a.teamMemberId === paymentForm.teamMemberId);
-              if (selectedAssignment?.teamMember?.salaryEnabled) {
-                return (
-                  <div>
-                    <label className="text-xs font-medium text-surface-500 mb-1 block">Apply toward salary ($)</label>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      min="0"
-                      max={paymentForm.amount || undefined}
-                      value={paymentForm.salaryDeduction}
-                      onChange={e => setPaymentForm(f => ({ ...f, salaryDeduction: e.target.value }))}
-                      className="glass-input w-full"
-                      placeholder="0.00"
-                    />
-                    <p className="text-[11px] text-surface-400 mt-1">Mark as salary paid (reduces balance owed)</p>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setPaymentDialog(false)} className="action-btn action-btn--secondary text-sm">Cancel</button>
-              <button type="submit" className="action-btn text-sm" disabled={createPayment.isPending || updatePayment.isPending}>{editPayment ? 'Update' : 'Record Payment'}</button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
       {/* Delete Confirm */}
       <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
         <AlertDialogContent>
@@ -1418,10 +1201,18 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
   const [expenseSort, setExpenseSort] = useState('date-desc');
   const [paymentDialog, setPaymentDialog] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ amount: '', expenseDate: '', paymentMethod: '', notes: '' });
+  // Team payment state
+  const [teamPaymentDialog, setTeamPaymentDialog] = useState(false);
+  const [editTeamPayment, setEditTeamPayment] = useState(null);
+  const [teamPaymentForm, setTeamPaymentForm] = useState({ teamMemberId: '', amount: '', paymentDate: '', paymentMethod: '', status: 'paid', notes: '', advanceRepayment: '', salaryDeduction: '' });
+  const [teamPaymentDeleteTarget, setTeamPaymentDeleteTarget] = useState(null);
 
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
+  const createTeamPmt = useCreateTeamPayment();
+  const updateTeamPmt = useUpdateTeamPayment();
+  const deleteTeamPmt = useDeleteTeamPayment();
 
   const { data: categoriesData } = useQuery({
     queryKey: ['expense-categories', 'list'],
@@ -1431,9 +1222,20 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
   const categories = categoriesData?.data || [];
 
   const expenses = project.expenses || [];
-  const totalExpenses = expenses.filter(e => e.type !== 'credit').reduce((sum, e) => sum + (e.amount || 0), 0);
-  const teamPaymentTotal = expenses.filter(e => e.teamPaymentId).reduce((s, e) => s + (e.amount || 0), 0);
-  const clientPaymentTotal = expenses.filter(e => e.type === 'credit').reduce((s, e) => s + (e.amount || 0), 0);
+  const creditExpenses = expenses.filter(e => e.type === 'credit');
+  const debitExpenses = expenses.filter(e => e.type !== 'credit' && !e.teamPaymentId);
+  const totalExpenses = debitExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+  const clientPaymentTotal = creditExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+  const teamPayments = project.teamPayments || [];
+  const assignments = project.assignments || [];
+  const teamPaymentTotal = teamPayments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0);
+  const tabProfit = clientPaymentTotal - totalExpenses - teamPaymentTotal;
+
+  const getTeamMemberName = (p) => {
+    const tm = p.teamMember;
+    if (!tm) return '—';
+    return tm.user?.profile?.displayName || tm.user?.name || tm.name || tm.user?.email || '—';
+  };
 
   const handleSave = async (formData) => {
     try {
@@ -1479,94 +1281,91 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
     } catch { /* handled by mutation */ }
   };
 
+  const handleTeamPaymentSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editTeamPayment) {
+        await updateTeamPmt.mutateAsync({
+          id: editTeamPayment.id,
+          projectId,
+          teamMemberId: teamPaymentForm.teamMemberId,
+          amount: parseFloat(teamPaymentForm.amount),
+          paymentDate: teamPaymentForm.paymentDate || undefined,
+          paymentMethod: teamPaymentForm.paymentMethod || undefined,
+          status: teamPaymentForm.status,
+          notes: teamPaymentForm.notes || undefined,
+        });
+      } else {
+        await createTeamPmt.mutateAsync({
+          projectId,
+          teamMemberId: teamPaymentForm.teamMemberId,
+          amount: parseFloat(teamPaymentForm.amount),
+          paymentDate: teamPaymentForm.paymentDate || undefined,
+          paymentMethod: teamPaymentForm.paymentMethod || undefined,
+          status: teamPaymentForm.status,
+          notes: teamPaymentForm.notes || undefined,
+          advanceRepayment: teamPaymentForm.advanceRepayment ? parseFloat(teamPaymentForm.advanceRepayment) : undefined,
+          salaryDeduction: teamPaymentForm.salaryDeduction ? parseFloat(teamPaymentForm.salaryDeduction) : undefined,
+        });
+      }
+      setTeamPaymentDialog(false);
+      setEditTeamPayment(null);
+      setTeamPaymentForm({ teamMemberId: '', amount: '', paymentDate: '', paymentMethod: '', status: 'paid', notes: '', advanceRepayment: '', salaryDeduction: '' });
+    } catch { /* handled */ }
+  };
+
+  const handleTeamPaymentDeleteConfirm = () => {
+    if (!teamPaymentDeleteTarget) return;
+    deleteTeamPmt.mutate({ id: teamPaymentDeleteTarget.id, projectId });
+    setTeamPaymentDeleteTarget(null);
+  };
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Summary cards */}
       {isPrivileged && (
-        <div className="grid grid-cols-3 gap-3">
-          <FinancialCard label="Client Payments" value={formatCurrency(clientPaymentTotal)} icon={CreditCard} delay={0} />
+        <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
+          <FinancialCard label="Payments" value={formatCurrency(clientPaymentTotal)} icon={CreditCard} delay={0} />
           <FinancialCard label="Expenses" value={formatCurrency(totalExpenses)} icon={Wallet} delay={0.05} />
-          <FinancialCard label="Team Payments" value={formatCurrency(teamPaymentTotal)} icon={Users} delay={0.1} />
+          <FinancialCard label="Team" value={formatCurrency(teamPaymentTotal)} icon={Users} delay={0.1} />
+          <FinancialCard label="Profit" value={formatCurrency(tabProfit)} icon={TrendingUp} delay={0.15} colorClass={tabProfit < 0 ? 'text-red-500' : tabProfit > 0 ? 'text-emerald-600' : ''} />
         </div>
       )}
 
-      {/* Expense list */}
-      <div className="content-card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <h3 className="text-xs font-semibold text-surface-500 uppercase tracking-wider">
-              All Expenses ({expenses.length})
-            </h3>
-            {expenses.length > 1 && (
-              <select
-                value={expenseSort}
-                onChange={e => setExpenseSort(e.target.value)}
-                className="text-[11px] text-surface-500 bg-surface-50 border border-surface-200 rounded-md px-2 py-1 outline-none cursor-pointer"
-              >
-                {EXPENSE_SORT_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            )}
-          </div>
+      {/* Client Payments */}
+      <div className="content-card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[rgb(var(--surface-100))]">
+          <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider">
+            Client Payments ({creditExpenses.length})
+          </h3>
           {isPrivileged && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => { const sd = project?.shootStartDate; setPaymentForm({ amount: '', expenseDate: sd ? new Date(sd).toISOString().slice(0, 10) : '', paymentMethod: '', notes: '' }); setPaymentDialog(true); }}
-                className="action-btn text-xs !py-1.5 !px-3 flex items-center gap-1.5 !bg-emerald-500 hover:!bg-emerald-600 !text-white"
-              >
-                <DollarSign className="w-3.5 h-3.5" /> Record Payment
-              </button>
-              <button
-                onClick={() => { setEditingExpense(null); setIsFormOpen(true); }}
-                className="action-btn text-xs !py-1.5 !px-3 flex items-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" /> Add Expense
-              </button>
-            </div>
+            <button
+              onClick={() => { const sd = project?.shootStartDate; setPaymentForm({ amount: '', expenseDate: sd ? new Date(sd).toISOString().slice(0, 10) : '', paymentMethod: '', notes: '' }); setPaymentDialog(true); }}
+              className="action-btn text-xs !py-1.5 !px-3 flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" /> Record Payment
+            </button>
           )}
         </div>
-
-        {expenses.length > 0 ? (
-          <div className="-mx-5">
-            {sortExpenses(expenses, expenseSort).map((expense, i) => {
-              const isCredit = expense.type === 'credit';
-              const isTeam = !!expense.teamPaymentId;
-              return (
-                <motion.div
-                  key={expense.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: i * 0.02 }}
-                  className="flex items-center gap-3 px-5 py-2.5 cursor-pointer group border-b border-surface-100 last:border-b-0 hover:bg-surface-50/60 transition-colors"
-                  onClick={() => isPrivileged && handleEdit(expense)}
-                >
-                  {/* Type indicator */}
-                  <div className={cn(
-                    'w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0',
-                    isCredit ? 'bg-emerald-50 text-emerald-500' : isTeam ? 'bg-teal-50 text-teal-500' : 'bg-surface-100 text-surface-400'
-                  )}>
-                    {isCredit ? <DollarSign className="w-3 h-3" /> : isTeam ? <Users className="w-3 h-3" /> : <Wallet className="w-3 h-3" />}
+        {creditExpenses.length > 0 ? (
+          <div>
+            {creditExpenses.map((expense, i) => (
+              <SwipeableRow key={expense.id} index={i} canSwipe={isPrivileged}
+                onEdit={() => handleEdit(expense)} onDelete={() => setDeleteTarget(expense)}
+                onClick={() => isPrivileged && handleEdit(expense)}>
+                <div className="flex items-center gap-3 px-5 py-2.5 group border-b border-surface-100 last:border-b-0 hover:bg-surface-50/60 transition-colors bg-[rgb(var(--glass-bg))]">
+                  <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 bg-emerald-50 text-emerald-500">
+                    <DollarSign className="w-3 h-3" />
                   </div>
-
-                  {/* Description + date */}
                   <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-medium text-surface-800 truncate leading-tight">{expense.description}</p>
-                    <p className="text-[11px] text-surface-400 leading-tight mt-0.5">
-                      {formatDate(expense.expenseDate)}
-                      {expense.vendor?.name && <> &middot; {expense.vendor.name}</>}
-                      {!isCredit && !isTeam && expense.category?.name && <> &middot; {expense.category.name}</>}
-                    </p>
+                    <p className="text-[11px] text-surface-400 leading-tight mt-0.5">{formatDate(expense.expenseDate)}</p>
                   </div>
-
-                  {/* Amount */}
-                  <span className={cn('text-[13px] font-semibold tabular-nums flex-shrink-0', isCredit ? 'text-emerald-600' : 'text-surface-700')}>
-                    {isCredit ? '+' : '-'}{formatCurrency(expense.amount)}
+                  <span className="text-[13px] font-semibold tabular-nums flex-shrink-0 text-emerald-600">
+                    +{formatCurrency(expense.amount)}
                   </span>
-
-                  {/* Edit/delete (desktop hover) */}
                   {isPrivileged && (
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" onClick={e => e.stopPropagation()}>
+                    <div className="hidden md:flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" onClick={e => e.stopPropagation()}>
                       <button onClick={() => handleEdit(expense)} className="p-1 rounded hover:bg-surface-100 transition-colors">
                         <Pencil className="w-3 h-3 text-surface-400" />
                       </button>
@@ -1575,14 +1374,165 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
                       </button>
                     </div>
                   )}
-                </motion.div>
+                </div>
+              </SwipeableRow>
+            ))}
+          </div>
+        ) : (
+          <div className="px-5 py-8 text-center">
+            <p className="text-sm text-surface-400">No client payments recorded yet.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Team Payments */}
+      <div className="content-card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[rgb(var(--surface-100))]">
+          <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider">
+            Team Payments ({teamPayments.length})
+          </h3>
+          {isPrivileged && assignments.length > 0 && (
+            <button
+              onClick={() => {
+                const sd = project.shootStartDate;
+                const defaultDate = sd ? new Date(sd).toISOString().slice(0, 10) : '';
+                setEditTeamPayment(null);
+                setTeamPaymentForm({ teamMemberId: assignments[0]?.teamMemberId || '', amount: '', paymentDate: defaultDate, paymentMethod: '', status: 'paid', notes: '', advanceRepayment: '', salaryDeduction: '' });
+                setTeamPaymentDialog(true);
+              }}
+              className="action-btn text-xs !py-1.5 !px-3 flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" /> Record Payment
+            </button>
+          )}
+        </div>
+        {teamPayments.length > 0 ? (
+          <div>
+            {teamPayments.map((p, i) => {
+              const editTeamPmt = () => {
+                setEditTeamPayment(p);
+                setTeamPaymentForm({
+                  teamMemberId: p.teamMemberId,
+                  amount: p.amount?.toString() || '',
+                  paymentDate: p.paymentDate ? new Date(p.paymentDate).toISOString().slice(0, 10) : '',
+                  paymentMethod: p.paymentMethod || '',
+                  status: p.status || 'paid',
+                  notes: p.notes || '',
+                  advanceRepayment: '',
+                  salaryDeduction: '',
+                });
+                setTeamPaymentDialog(true);
+              };
+              const deleteTeamPmt = () => setTeamPaymentDeleteTarget({ id: p.id, label: `${formatCurrency(p.amount)} to ${getTeamMemberName(p)}` });
+              return (
+                <SwipeableRow key={p.id} index={i} canSwipe={isPrivileged}
+                  onEdit={editTeamPmt} onDelete={deleteTeamPmt} onClick={() => isPrivileged && editTeamPmt()}>
+                  <div className="flex items-center gap-3 px-5 py-2.5 group border-b border-surface-100 last:border-b-0 hover:bg-surface-50/60 transition-colors bg-[rgb(var(--glass-bg))]">
+                    <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 bg-teal-50 text-teal-500">
+                      <Users className="w-3 h-3" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-medium text-surface-800 leading-tight">{getTeamMemberName(p)}</p>
+                      <p className="text-[11px] text-surface-400 leading-tight mt-0.5">{formatDate(p.paymentDate)}{p.paymentMethod ? ` · ${p.paymentMethod}` : ''}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`chip text-[10px] ${p.status === 'paid' ? 'chip--success' : 'chip--warning'}`}>{p.status}</span>
+                      <span className={`text-[13px] font-semibold tabular-nums ${p.status === 'paid' ? 'text-surface-700' : 'text-amber-500'}`}>{formatCurrency(p.amount)}</span>
+                      {isPrivileged && (
+                        <div className="hidden md:flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                          <button onClick={editTeamPmt} className="p-1 rounded hover:bg-surface-100 transition-colors">
+                            <Pencil className="w-3 h-3 text-surface-400" />
+                          </button>
+                          <button onClick={deleteTeamPmt} className="p-1 rounded hover:bg-red-50 transition-colors">
+                            <Trash2 className="w-3 h-3 text-surface-400 hover:text-red-400" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </SwipeableRow>
               );
             })}
           </div>
         ) : (
-          <div className="text-center py-8">
-            <Wallet className="w-8 h-8 text-surface-300 mx-auto mb-2" />
-            <p className="text-surface-400 text-sm">No expenses for this project yet.</p>
+          <div className="px-5 py-8 text-center">
+            <p className="text-sm text-surface-400">No team payments recorded yet.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Expenses */}
+      <div className="content-card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[rgb(var(--surface-100))]">
+          <div className="flex items-center gap-3">
+            <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider">
+              Expenses ({debitExpenses.length})
+            </h3>
+            {debitExpenses.length > 1 && (
+              <select
+                value={expenseSort}
+                onChange={e => setExpenseSort(e.target.value)}
+                className="text-[11px] text-surface-400 bg-transparent border border-surface-200 rounded-md px-2 py-0.5 outline-none cursor-pointer"
+              >
+                {EXPENSE_SORT_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            )}
+          </div>
+          {isPrivileged && (
+            <button
+              onClick={() => { setEditingExpense(null); setIsFormOpen(true); }}
+              className="action-btn text-xs !py-1.5 !px-3 flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Expense
+            </button>
+          )}
+        </div>
+        {debitExpenses.length > 0 ? (
+          <div>
+            {sortExpenses(debitExpenses, expenseSort).map((expense, i) => {
+              const isTeam = !!expense.teamPaymentId;
+              return (
+                <SwipeableRow key={expense.id} index={i} canSwipe={isPrivileged}
+                  onEdit={() => handleEdit(expense)} onDelete={() => setDeleteTarget(expense)}
+                  onClick={() => isPrivileged && handleEdit(expense)}>
+                  <div className="flex items-center gap-3 px-5 py-2.5 group border-b border-surface-100 last:border-b-0 hover:bg-surface-50/60 transition-colors bg-[rgb(var(--glass-bg))]">
+                    <div className={cn(
+                      'w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0',
+                      isTeam ? 'bg-teal-50 text-teal-500' : 'bg-surface-100 text-surface-400'
+                    )}>
+                      {isTeam ? <Users className="w-3 h-3" /> : <Wallet className="w-3 h-3" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-medium text-surface-800 truncate leading-tight">{expense.description}</p>
+                      <p className="text-[11px] text-surface-400 leading-tight mt-0.5">
+                        {formatDate(expense.expenseDate)}
+                        {expense.vendor?.name && <> &middot; {expense.vendor.name}</>}
+                        {!isTeam && expense.category?.name && <> &middot; {expense.category.name}</>}
+                      </p>
+                    </div>
+                    <span className="text-[13px] font-semibold tabular-nums flex-shrink-0 text-surface-700">
+                      -{formatCurrency(expense.amount)}
+                    </span>
+                    {isPrivileged && (
+                      <div className="hidden md:flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => handleEdit(expense)} className="p-1 rounded hover:bg-surface-100 transition-colors">
+                          <Pencil className="w-3 h-3 text-surface-400" />
+                        </button>
+                        <button onClick={() => setDeleteTarget(expense)} className="p-1 rounded hover:bg-red-50 transition-colors">
+                          <Trash2 className="w-3 h-3 text-surface-400 hover:text-red-400" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </SwipeableRow>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="px-5 py-8 text-center">
+            <p className="text-sm text-surface-400">No expenses for this project yet.</p>
           </div>
         )}
       </div>
@@ -1676,14 +1626,108 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
               />
             </div>
             <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={() => setPaymentDialog(false)} className="glass-button-secondary text-sm px-4 py-2">Cancel</button>
-              <button type="submit" disabled={createExpense.isPending} className="glass-button text-sm px-4 py-2 !bg-emerald-500 hover:!bg-emerald-600 !text-white">
+              <button type="button" onClick={() => setPaymentDialog(false)} className="action-btn action-btn--secondary text-sm">Cancel</button>
+              <button type="submit" disabled={createExpense.isPending} className="action-btn text-sm">
                 {createExpense.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Record Payment'}
               </button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Team Payment Dialog */}
+      <Dialog open={teamPaymentDialog} onOpenChange={setTeamPaymentDialog}>
+        <DialogContent className="glass-modal max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <DialogHeader><DialogTitle>{editTeamPayment ? 'Edit Team Payment' : 'Record Team Payment'}</DialogTitle></DialogHeader>
+          <form onSubmit={handleTeamPaymentSubmit} className="space-y-4 mt-2">
+            <div>
+              <label className="text-xs font-medium text-surface-500 mb-1 block">Team Member</label>
+              <select value={teamPaymentForm.teamMemberId} onChange={e => setTeamPaymentForm(f => ({ ...f, teamMemberId: e.target.value }))} className="glass-input w-full" required>
+                {assignments.map(a => (
+                  <option key={a.teamMemberId} value={a.teamMemberId}>{getTeamMemberName(a)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-surface-500 mb-1 block">Amount ($)</label>
+                <input type="number" inputMode="decimal" step="0.01" value={teamPaymentForm.amount} onChange={e => setTeamPaymentForm(f => ({ ...f, amount: e.target.value }))} className="glass-input w-full" required />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-surface-500 mb-1 block">Date</label>
+                <input type="date" value={teamPaymentForm.paymentDate} onChange={e => setTeamPaymentForm(f => ({ ...f, paymentDate: e.target.value }))} className="glass-input w-full" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-surface-500 mb-1 block">Method</label>
+                <input type="text" value={teamPaymentForm.paymentMethod} onChange={e => setTeamPaymentForm(f => ({ ...f, paymentMethod: e.target.value }))} className="glass-input w-full" placeholder="Cash, Zelle..." />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-surface-500 mb-1 block">Status</label>
+                <select value={teamPaymentForm.status} onChange={e => setTeamPaymentForm(f => ({ ...f, status: e.target.value }))} className="glass-input w-full">
+                  <option value="paid">Paid</option>
+                  <option value="pending">Pending</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-surface-500 mb-1 block">Notes</label>
+              <textarea value={teamPaymentForm.notes} onChange={e => setTeamPaymentForm(f => ({ ...f, notes: e.target.value }))} className="glass-textarea w-full" rows={2} />
+            </div>
+            {/* Apply toward advance — only on create, if member has advancesEnabled */}
+            {!editTeamPayment && (() => {
+              const selectedAssignment = assignments.find(a => a.teamMemberId === teamPaymentForm.teamMemberId);
+              if (selectedAssignment?.teamMember?.advancesEnabled) {
+                return (
+                  <div>
+                    <label className="text-xs font-medium text-surface-500 mb-1 block">Apply toward advance ($)</label>
+                    <input type="number" inputMode="decimal" step="0.01" min="0" max={teamPaymentForm.amount || undefined}
+                      value={teamPaymentForm.advanceRepayment} onChange={e => setTeamPaymentForm(f => ({ ...f, advanceRepayment: e.target.value }))}
+                      className="glass-input w-full" placeholder="0.00" />
+                    <p className="text-[11px] text-surface-400 mt-1">Deduct from their advance balance</p>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            {/* Apply toward salary — only on create, if member has salaryEnabled */}
+            {!editTeamPayment && (() => {
+              const selectedAssignment = assignments.find(a => a.teamMemberId === teamPaymentForm.teamMemberId);
+              if (selectedAssignment?.teamMember?.salaryEnabled) {
+                return (
+                  <div>
+                    <label className="text-xs font-medium text-surface-500 mb-1 block">Apply toward salary ($)</label>
+                    <input type="number" inputMode="decimal" step="0.01" min="0" max={teamPaymentForm.amount || undefined}
+                      value={teamPaymentForm.salaryDeduction} onChange={e => setTeamPaymentForm(f => ({ ...f, salaryDeduction: e.target.value }))}
+                      className="glass-input w-full" placeholder="0.00" />
+                    <p className="text-[11px] text-surface-400 mt-1">Mark as salary paid (reduces balance owed)</p>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setTeamPaymentDialog(false)} className="action-btn action-btn--secondary text-sm">Cancel</button>
+              <button type="submit" className="action-btn text-sm" disabled={createTeamPmt.isPending || updateTeamPmt.isPending}>{editTeamPayment ? 'Update' : 'Record Payment'}</button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Team Payment Delete Confirm */}
+      <AlertDialog open={!!teamPaymentDeleteTarget} onOpenChange={(open) => { if (!open) setTeamPaymentDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {teamPaymentDeleteTarget?.label}?</AlertDialogTitle>
+            <AlertDialogDescription>This will also delete the linked expense record. This action cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleTeamPaymentDeleteConfirm} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

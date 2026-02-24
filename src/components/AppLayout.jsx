@@ -56,10 +56,19 @@ const AppLayout = () => {
     }
   }, [navigate]);
 
-  // Scroll main content to top on route change
+  // Scroll main content to top on route change (unless a saved position exists)
   const mainRef = useRef(null);
   useEffect(() => {
-    mainRef.current?.scrollTo(0, 0);
+    const key = 'scroll:' + location.pathname;
+    const saved = sessionStorage.getItem(key);
+    if (saved) {
+      sessionStorage.removeItem(key);
+      requestAnimationFrame(() => {
+        mainRef.current?.scrollTo(0, parseInt(saved, 10));
+      });
+    } else {
+      mainRef.current?.scrollTo(0, 0);
+    }
   }, [location.pathname]);
 
   const appName = effectiveSettings?.app_name || 'QuoteFlow';

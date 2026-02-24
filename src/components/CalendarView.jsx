@@ -619,6 +619,8 @@ const CalendarView = () => {
   };
 
   const handleProjectClick = (id) => {
+    const main = document.querySelector('main');
+    if (main) sessionStorage.setItem('scroll:/calendar', String(main.scrollTop));
     navigate(`/projects/${id}`);
   };
 
