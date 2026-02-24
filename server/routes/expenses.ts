@@ -11,7 +11,7 @@ import { broadcast } from '../lib/pubsub';
 const guard = requirePermission('manage_expenses');
 
 /** Find or create the "Uncategorized" expense category. */
-async function getOrCreateUncategorizedId(): Promise<string> {
+async function getOrCreateUncategorizedId(userId: string): Promise<string> {
   const [existing] = await db
     .select({ id: expenseCategories.id })
     .from(expenseCategories)
@@ -20,19 +20,36 @@ async function getOrCreateUncategorizedId(): Promise<string> {
   if (existing) return existing.id;
   const [created] = await db
     .insert(expenseCategories)
-    .values({ name: 'Uncategorized', color: 'slate', sortOrder: 9999 })
+    .values({ userId, name: 'Uncategorized', color: 'slate', sortOrder: 9999 })
     .returning({ id: expenseCategories.id });
   return created.id;
 }
 
-async function mapBody(body: any) {
-  const categoryId = body.categoryId || await getOrCreateUncategorizedId();
+/** Find or create the "Customer Payment" expense category for credits. */
+async function getOrCreateCustomerPaymentId(userId: string): Promise<string> {
+  const [existing] = await db
+    .select({ id: expenseCategories.id })
+    .from(expenseCategories)
+    .where(eq(expenseCategories.name, 'Customer Payment'))
+    .limit(1);
+  if (existing) return existing.id;
+  const [created] = await db
+    .insert(expenseCategories)
+    .values({ userId, name: 'Customer Payment', color: 'emerald', sortOrder: 998 })
+    .returning({ id: expenseCategories.id });
+  return created.id;
+}
+
+async function mapBody(body: any, userId: string) {
+  const isCredit = body.type === 'credit';
+  const categoryId = body.categoryId
+    || (isCredit ? await getOrCreateCustomerPaymentId(userId) : await getOrCreateUncategorizedId(userId));
   return {
     categoryId,
     projectId: body.projectId || null,
     description: body.description,
     amount: parseFloat(body.amount),
-    type: body.type === 'credit' ? 'credit' as const : 'expense' as const,
+    type: isCredit ? 'credit' as const : 'expense' as const,
     expenseDate: parseDateInput(body.expenseDate) ?? new Date(),
     notes: body.notes || null,
   };
@@ -52,6 +69,7 @@ export default async function expenseRoutes(fastify: any) {
       projectId,
       startDate,
       endDate,
+      source,
     } = request.query;
 
     const skip = parseInt(page) * parseInt(pageSize);
@@ -66,6 +84,7 @@ export default async function expenseRoutes(fastify: any) {
     }
     if (categoryId) conditions.push(eq(expenses.categoryId, categoryId));
     if (projectId) conditions.push(eq(expenses.projectId, projectId));
+    if (source === 'team') conditions.push(sql`${expenses.teamPaymentId} IS NOT NULL`);
     if (startDate) conditions.push(gte(expenses.expenseDate, parseDateInput(startDate)!));
     if (endDate) conditions.push(lte(expenses.expenseDate, parseDateInput(endDate)!));
 
@@ -171,7 +190,7 @@ export default async function expenseRoutes(fastify: any) {
   fastify.post('/', { preHandler: [guard] }, async (request: any) => {
     const [data] = await db
       .insert(expenses)
-      .values({ ...await mapBody(request.body), userId: request.user.id })
+      .values({ ...await mapBody(request.body, request.user.id), userId: request.user.id })
       .returning();
     logActivity({ ...actorFromRequest(request), action: 'created', entityType: 'expense', entityId: data.id, entityLabel: data.description });
     broadcast('expense', 'created', request.user.id, data.id);
@@ -221,7 +240,7 @@ export default async function expenseRoutes(fastify: any) {
     // Regular expense update
     const [data] = await db
       .update(expenses)
-      .set({ ...await mapBody(request.body), updatedAt: new Date() })
+      .set({ ...await mapBody(request.body, request.user.id), updatedAt: new Date() })
       .where(eq(expenses.id, id))
       .returning();
     if (data) logActivity({ ...actorFromRequest(request), action: 'updated', entityType: 'expense', entityId: data.id, entityLabel: data.description });

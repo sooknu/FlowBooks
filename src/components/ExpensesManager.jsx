@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, useMotionValue, useTransform, animate, AnimatePresence } from 'framer-motion';
 import {
@@ -339,6 +340,8 @@ const RecurringExpenseCard = React.memo(({ item, onEdit, onToggle, onDelete }) =
 // ─── Main Component ────────────────────────────────────────────────────────
 
 const ExpensesManager = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sourceFilter = searchParams.get('source') || '';
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebounce(searchTerm, 300);
   const [filterCategoryId, setFilterCategoryId] = useState('');
@@ -407,7 +410,7 @@ const ExpensesManager = () => {
     hasNextPage,
     fetchNextPage,
   } = useInfiniteQuery({
-    queryKey: queryKeys.expenses.list({ search: debouncedSearch, categoryId: filterCategoryId, sortBy }),
+    queryKey: queryKeys.expenses.list({ search: debouncedSearch, categoryId: filterCategoryId, sortBy, source: sourceFilter }),
     queryFn: async ({ pageParam = 0 }) => {
       const [orderBy, dir] = sortBy.split('-');
       return api.get('/expenses', {
@@ -415,6 +418,7 @@ const ExpensesManager = () => {
         page: pageParam,
         pageSize: PAGE_SIZE,
         categoryId: filterCategoryId || undefined,
+        source: sourceFilter || undefined,
         orderBy,
         asc: dir === 'asc' ? 'true' : 'false',
       });
@@ -635,6 +639,17 @@ const ExpensesManager = () => {
           </select>
         </div>
       </div>
+
+      {sourceFilter === 'team' && (
+        <div className="flex items-center gap-2 -mt-1 mb-2">
+          <button
+            onClick={() => { const next = new URLSearchParams(searchParams); next.delete('source'); setSearchParams(next); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 transition-colors"
+          >
+            <Users className="w-3 h-3" /> Team Payments only <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
 
       {/* List */}
       {isLoading ? (

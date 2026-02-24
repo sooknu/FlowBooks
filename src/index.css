@@ -1808,6 +1808,15 @@
     max-width: 10rem;
   }
 
+  .event-card-row__balance-chip {
+    font-size: 10px;
+    font-weight: 600;
+    @apply px-2 py-0.5 rounded-md leading-tight whitespace-nowrap self-end flex-shrink-0;
+    color: rgb(217 119 6);          /* amber-600 */
+    background: rgb(245 158 11 / 0.10);
+    margin-left: auto;
+  }
+
   /* Desktop-only details column — hidden on mobile */
   .event-card-row__details {
     display: none;

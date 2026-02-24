@@ -272,7 +272,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
         "flex items-center pt-5 pb-4 lg:py-5 px-5 flex-shrink-0",
         collapsed && "lg:px-0 lg:justify-center"
       )}>
-        <div className={cn("flex items-center min-w-0", collapsed && "lg:justify-center lg:w-full")}>
+        <NavLink to="/dashboard" className={cn("flex items-center min-w-0", collapsed && "lg:justify-center lg:w-full")}>
           {collapsed && faviconUrl ? (
             <img src={faviconUrl} alt="Logo" className="w-6 h-6 object-contain flex-shrink-0 hidden lg:block" />
           ) : null}
@@ -283,7 +283,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
               <span className="text-[#C8C6C2] text-xs font-bold">{(appName || 'Q')[0]}</span>
             </div>
           )}
-        </div>
+        </NavLink>
       </div>
 
       {/* User bar — avatar + name + bell + collapse (desktop only, mobile has sticky header) */}
@@ -405,6 +405,15 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
               >
                 <Menu className="w-[23px] h-[23px]" />
               </button>
+              {effectiveHeaderLogo ? (
+                <NavLink to="/dashboard" className="flex-shrink-0">
+                  <img src={effectiveHeaderLogo} alt="Home" className="object-contain" style={{ height: '22px' }} />
+                </NavLink>
+              ) : faviconUrl ? (
+                <NavLink to="/dashboard" className="flex-shrink-0">
+                  <img src={faviconUrl} alt="Home" className="w-5 h-5 object-contain" />
+                </NavLink>
+              ) : null}
               <div className="w-px h-4 bg-surface-200/80" />
               <span className="text-[13px] font-semibold text-surface-800 truncate tracking-tight">{currentPageLabel}</span>
             </div>

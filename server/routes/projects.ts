@@ -156,6 +156,7 @@ export default async function projectRoutes(fastify: any) {
       // Balance Owed: only projects with a price set AND positive balance remaining
       const extraConditions = [...(where ? [where] : [])];
       if (orderBy === 'balanceOwed') {
+        extraConditions.push(ne(projects.status, 'lead'));
         extraConditions.push(sql`${projects.projectPrice} IS NOT NULL AND ${projects.projectPrice} > 0`);
         extraConditions.push(sql`(COALESCE(${projects.projectPrice}, 0) - COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.project_id = ${projects.id} AND e.type = 'credit'), 0)) > 0`);
       }
@@ -188,6 +189,8 @@ export default async function projectRoutes(fastify: any) {
         : sql`${col} DESC NULLS LAST`
       : asc === 'true' ? ascFn(col) : descFn(col);
 
+    const balanceSql = sql`COALESCE(${projects.projectPrice}, 0) - COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.project_id = ${projects.id} AND e.type = 'credit'), 0)`;
+
     const [data, [{ total }]] = await Promise.all([
       db.query.projects.findMany({
         where: where ? () => where : undefined,
@@ -195,6 +198,9 @@ export default async function projectRoutes(fastify: any) {
         orderBy: orderFn,
         limit: take,
         offset: skip,
+        extras: {
+          balanceOwed: balanceSql.as('balance_owed'),
+        },
       }),
       db.select({ total: count() }).from(projects).where(where),
     ]);

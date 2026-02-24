@@ -108,7 +108,7 @@ const TABS = [
   { key: 'quotes', label: 'Quotes', icon: FileText },
   { key: 'invoices', label: 'Invoices', icon: Receipt },
   { key: 'team', label: 'Team', icon: Users },
-  { key: 'expenses', label: 'Expenses', icon: Wallet },
+  { key: 'expenses', label: 'Financials', icon: Wallet },
   { key: 'notes', label: 'Notes', icon: StickyNote },
 ];
 
@@ -1416,6 +1416,8 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
   const [editingExpense, setEditingExpense] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [expenseSort, setExpenseSort] = useState('date-desc');
+  const [paymentDialog, setPaymentDialog] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({ amount: '', expenseDate: '', paymentMethod: '', notes: '' });
 
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
@@ -1431,6 +1433,7 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
   const expenses = project.expenses || [];
   const totalExpenses = expenses.filter(e => e.type !== 'credit').reduce((sum, e) => sum + (e.amount || 0), 0);
   const teamPaymentTotal = expenses.filter(e => e.teamPaymentId).reduce((s, e) => s + (e.amount || 0), 0);
+  const clientPaymentTotal = expenses.filter(e => e.type === 'credit').reduce((s, e) => s + (e.amount || 0), 0);
 
   const handleSave = async (formData) => {
     try {
@@ -1457,13 +1460,33 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
     setDeleteTarget(null);
   };
 
+  const handleRecordPayment = async (e) => {
+    e.preventDefault();
+    try {
+      const desc = paymentForm.paymentMethod
+        ? `Customer payment — ${paymentForm.paymentMethod}`
+        : 'Customer payment';
+      await createExpense.mutateAsync({
+        projectId,
+        description: desc,
+        amount: parseFloat(paymentForm.amount),
+        type: 'credit',
+        expenseDate: paymentForm.expenseDate || undefined,
+        notes: paymentForm.notes || undefined,
+      });
+      setPaymentDialog(false);
+      setPaymentForm({ amount: '', expenseDate: '', paymentMethod: '', notes: '' });
+    } catch { /* handled by mutation */ }
+  };
+
   return (
     <div className="space-y-5">
       {/* Summary cards */}
       {isPrivileged && (
-        <div className="grid grid-cols-2 gap-3">
-          <FinancialCard label="Total Expenses" value={formatCurrency(totalExpenses)} icon={Wallet} delay={0} />
-          <FinancialCard label="Team Payments" value={formatCurrency(teamPaymentTotal)} icon={Users} delay={0.05} />
+        <div className="grid grid-cols-3 gap-3">
+          <FinancialCard label="Client Payments" value={formatCurrency(clientPaymentTotal)} icon={CreditCard} delay={0} />
+          <FinancialCard label="Expenses" value={formatCurrency(totalExpenses)} icon={Wallet} delay={0.05} />
+          <FinancialCard label="Team Payments" value={formatCurrency(teamPaymentTotal)} icon={Users} delay={0.1} />
         </div>
       )}
 
@@ -1487,69 +1510,74 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
             )}
           </div>
           {isPrivileged && (
-            <button
-              onClick={() => { setEditingExpense(null); setIsFormOpen(true); }}
-              className="action-btn text-xs !py-1.5 !px-3 flex items-center gap-1.5"
-            >
-              <Plus className="w-3.5 h-3.5" /> Add Expense
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { const sd = project?.shootStartDate; setPaymentForm({ amount: '', expenseDate: sd ? new Date(sd).toISOString().slice(0, 10) : '', paymentMethod: '', notes: '' }); setPaymentDialog(true); }}
+                className="action-btn text-xs !py-1.5 !px-3 flex items-center gap-1.5 !bg-emerald-500 hover:!bg-emerald-600 !text-white"
+              >
+                <DollarSign className="w-3.5 h-3.5" /> Record Payment
+              </button>
+              <button
+                onClick={() => { setEditingExpense(null); setIsFormOpen(true); }}
+                className="action-btn text-xs !py-1.5 !px-3 flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Expense
+              </button>
+            </div>
           )}
         </div>
 
         {expenses.length > 0 ? (
-          <div className="space-y-2">
-            {sortExpenses(expenses, expenseSort).map((expense, i) => (
-              <motion.div
-                key={expense.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.03 }}
-                className="list-card list-card--accent p-3 flex items-center justify-between gap-3 cursor-pointer group"
-                onClick={() => isPrivileged && handleEdit(expense)}
-              >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-surface-800 truncate">
-                        {expense.description}
-                      </span>
-                      {expense.type === 'credit' ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                          Credit
-                        </span>
-                      ) : expense.teamPaymentId ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 shrink-0">
-                          <Users className="w-2.5 h-2.5" /> Team
-                        </span>
-                      ) : expense.category?.name ? (
-                        <span className="text-[11px] text-surface-400 shrink-0">
-                          {expense.category.name}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5 text-xs text-surface-400">
-                      <span>{formatDate(expense.expenseDate)}</span>
-                      {expense.vendor?.name && <><span>&middot;</span><span className="truncate">{expense.vendor.name}</span></>}
-                    </div>
+          <div className="-mx-5">
+            {sortExpenses(expenses, expenseSort).map((expense, i) => {
+              const isCredit = expense.type === 'credit';
+              const isTeam = !!expense.teamPaymentId;
+              return (
+                <motion.div
+                  key={expense.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: i * 0.02 }}
+                  className="flex items-center gap-3 px-5 py-2.5 cursor-pointer group border-b border-surface-100 last:border-b-0 hover:bg-surface-50/60 transition-colors"
+                  onClick={() => isPrivileged && handleEdit(expense)}
+                >
+                  {/* Type indicator */}
+                  <div className={cn(
+                    'w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0',
+                    isCredit ? 'bg-emerald-50 text-emerald-500' : isTeam ? 'bg-teal-50 text-teal-500' : 'bg-surface-100 text-surface-400'
+                  )}>
+                    {isCredit ? <DollarSign className="w-3 h-3" /> : isTeam ? <Users className="w-3 h-3" /> : <Wallet className="w-3 h-3" />}
                   </div>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className={`text-sm font-bold tabular-nums ${expense.type === 'credit' ? 'text-emerald-600' : 'text-surface-800'}`}>
-                    {expense.type === 'credit' ? '+' : ''}{formatCurrency(expense.amount)}
+
+                  {/* Description + date */}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-medium text-surface-800 truncate leading-tight">{expense.description}</p>
+                    <p className="text-[11px] text-surface-400 leading-tight mt-0.5">
+                      {formatDate(expense.expenseDate)}
+                      {expense.vendor?.name && <> &middot; {expense.vendor.name}</>}
+                      {!isCredit && !isTeam && expense.category?.name && <> &middot; {expense.category.name}</>}
+                    </p>
+                  </div>
+
+                  {/* Amount */}
+                  <span className={cn('text-[13px] font-semibold tabular-nums flex-shrink-0', isCredit ? 'text-emerald-600' : 'text-surface-700')}>
+                    {isCredit ? '+' : '-'}{formatCurrency(expense.amount)}
                   </span>
+
+                  {/* Edit/delete (desktop hover) */}
                   {isPrivileged && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                      <button onClick={() => handleEdit(expense)} className="icon-button !p-1.5">
-                        <Pencil className="w-3.5 h-3.5 text-blue-400" />
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => handleEdit(expense)} className="p-1 rounded hover:bg-surface-100 transition-colors">
+                        <Pencil className="w-3 h-3 text-surface-400" />
                       </button>
-                      <button onClick={() => setDeleteTarget(expense)} className="icon-button !p-1.5">
-                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      <button onClick={() => setDeleteTarget(expense)} className="p-1 rounded hover:bg-red-50 transition-colors">
+                        <Trash2 className="w-3 h-3 text-surface-400 hover:text-red-400" />
                       </button>
                     </div>
                   )}
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </div>
         ) : (
           <div className="text-center py-8">
@@ -1595,6 +1623,67 @@ const ExpensesTab = ({ project, projectId, isPrivileged }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Record Customer Payment dialog */}
+      <Dialog open={paymentDialog} onOpenChange={setPaymentDialog}>
+        <DialogContent className="glass-modal max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Record Customer Payment</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleRecordPayment} className="space-y-4 mt-2">
+            <div>
+              <label className="text-xs font-medium text-surface-500 mb-1 block">Amount *</label>
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0.01"
+                value={paymentForm.amount}
+                onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                className="glass-input w-full"
+                placeholder="0.00"
+                required
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-surface-500 mb-1 block">Date</label>
+              <input
+                type="date"
+                value={paymentForm.expenseDate}
+                onChange={e => setPaymentForm(f => ({ ...f, expenseDate: e.target.value }))}
+                className="glass-input w-full"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-surface-500 mb-1 block">Payment Method</label>
+              <input
+                type="text"
+                value={paymentForm.paymentMethod}
+                onChange={e => setPaymentForm(f => ({ ...f, paymentMethod: e.target.value }))}
+                className="glass-input w-full"
+                placeholder="Cash, Zelle, Venmo..."
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-surface-500 mb-1 block">Notes</label>
+              <textarea
+                value={paymentForm.notes}
+                onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))}
+                className="glass-textarea w-full"
+                rows={2}
+                placeholder="Optional notes..."
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" onClick={() => setPaymentDialog(false)} className="glass-button-secondary text-sm px-4 py-2">Cancel</button>
+              <button type="submit" disabled={createExpense.isPending} className="glass-button text-sm px-4 py-2 !bg-emerald-500 hover:!bg-emerald-600 !text-white">
+                {createExpense.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Record Payment'}
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

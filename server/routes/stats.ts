@@ -89,7 +89,7 @@ export default async function statsRoutes(fastify: any) {
               WHERE e.project_id = p.id AND e.type = 'credit'
             ), 0) AS balance
           FROM projects p
-          WHERE p.status != 'archived' AND p.project_price IS NOT NULL AND p.project_price > 0
+          WHERE p.status NOT IN ('archived', 'lead') AND p.project_price IS NOT NULL AND p.project_price > 0
         ) sub WHERE balance > 0
       `);
 

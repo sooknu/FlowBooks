@@ -119,6 +119,10 @@ const ProjectRow = memo(({ project, onEdit, onArchive, onRestore, onDelete, onCo
         </div>
       </div>
 
+      {parseFloat(project.balanceOwed) > 0 && (
+        <span className="event-card-row__balance-chip lg:hidden">{fmtCurrency(project.balanceOwed)}</span>
+      )}
+
       {d ? (
         <div className="event-card-row__date">
           <span className="event-card-row__date-month">{fmtDate(project.shootStartDate, { month: 'short' })}</span>
