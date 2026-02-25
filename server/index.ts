@@ -53,6 +53,9 @@ import setupRoutes from './routes/setup';
 import reportsRoutes from './routes/reports';
 import hubRoutes from './routes/hub';
 import sseRoutes from './routes/sse';
+import { db } from './db';
+import { appSettings, invoices, quotes } from './db/schema';
+import { eq, inArray } from 'drizzle-orm';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -218,7 +221,58 @@ app.route({
 // Serve built frontend in production
 const distPath = path.join(__dirname, '..', 'dist');
 import fs from 'node:fs';
+
+// ── Open Graph tag injection for link previews (iMessage, Slack, etc.) ──
+
+function escapeHtml(s: string) {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+let ogBrandingCache: { data: { companyName: string; logoUrl: string; faviconUrl: string }; expiresAt: number } | null = null;
+
+async function getOgBranding() {
+  if (ogBrandingCache && Date.now() < ogBrandingCache.expiresAt) return ogBrandingCache.data;
+  const rows = await db.select().from(appSettings).where(
+    inArray(appSettings.key, ['company_name', 'app_name', 'header_logo_url', 'login_logo_url', 'favicon_url'])
+  );
+  const m: Record<string, string> = {};
+  for (const r of rows) m[r.key] = r.value;
+  const baseUrl = (process.env.BETTER_AUTH_URL || '').replace(/\/$/, '');
+  const logoPath = m.header_logo_url || m.login_logo_url || '';
+  const data = {
+    companyName: m.company_name || m.app_name || 'FlowBooks',
+    logoUrl: logoPath ? `${baseUrl}${logoPath}` : '',
+    faviconUrl: m.favicon_url || '',
+  };
+  ogBrandingCache = { data, expiresAt: Date.now() + 5 * 60_000 };
+  return data;
+}
+
+function injectOgTags(html: string, branding: { companyName: string; logoUrl: string; faviconUrl: string }, ogTitle: string, ogDescription: string, ogUrl: string) {
+  const tags: string[] = [];
+  tags.push(`<meta property="og:title" content="${escapeHtml(ogTitle)}" />`);
+  if (ogDescription) tags.push(`<meta property="og:description" content="${escapeHtml(ogDescription)}" />`);
+  tags.push(`<meta property="og:type" content="website" />`);
+  if (ogUrl) tags.push(`<meta property="og:url" content="${escapeHtml(ogUrl)}" />`);
+  if (branding.logoUrl) {
+    tags.push(`<meta property="og:image" content="${escapeHtml(branding.logoUrl)}" />`);
+    tags.push(`<link rel="apple-touch-icon" href="${escapeHtml(branding.logoUrl)}" />`);
+  }
+  if (branding.faviconUrl) {
+    tags.push(`<link rel="icon" type="image/png" href="${escapeHtml(branding.faviconUrl)}" />`);
+  }
+  const injection = '    ' + tags.join('\n    ');
+  // Replace existing title and favicon, inject OG tags before </head>
+  let result = html.replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(ogTitle)}</title>`);
+  if (branding.faviconUrl) {
+    result = result.replace(/<link rel="icon"[^>]*\/>/, `<link rel="icon" type="image/png" href="${escapeHtml(branding.faviconUrl)}" />`);
+  }
+  return result.replace('</head>', `${injection}\n  </head>`);
+}
+
 if (fs.existsSync(distPath)) {
+  const indexHtmlTemplate = fs.readFileSync(path.join(distPath, 'index.html'), 'utf-8');
+
   await app.register(fastifyStatic, {
     root: distPath,
     prefix: '/',
@@ -233,13 +287,62 @@ if (fs.existsSync(distPath)) {
       }
     },
   });
-  // SPA catch-all: serve index.html for non-API, non-file routes
-  app.setNotFoundHandler((request: any, reply: any) => {
+  // SPA catch-all: serve index.html with injected Open Graph tags for link previews
+  app.setNotFoundHandler(async (request: any, reply: any) => {
     if (request.url.startsWith('/api/') || request.url.startsWith('/uploads/')) {
-      reply.code(404).send({ error: 'Not found' });
-    } else {
-      reply.header('Cache-Control', 'no-cache').sendFile('index.html', distPath);
+      return reply.code(404).send({ error: 'Not found' });
     }
+
+    const baseUrl = (process.env.BETTER_AUTH_URL || '').replace(/\/$/, '');
+    const urlPath = request.url.split('?')[0];
+
+    let branding: { companyName: string; logoUrl: string; faviconUrl: string };
+    try { branding = await getOgBranding(); }
+    catch { branding = { companyName: 'FlowBooks', logoUrl: '', faviconUrl: '' }; }
+
+    let ogTitle = branding.companyName;
+    let ogDescription = '';
+
+    // Dynamic OG for public payment/approval links (the ones shared via iMessage)
+    const payMatch = urlPath.match(/^\/pay\/([a-f0-9]{32})$/);
+    const approveMatch = urlPath.match(/^\/approve\/([a-f0-9]{32})$/);
+
+    if (payMatch) {
+      try {
+        const inv = await db.query.invoices.findFirst({
+          where: eq(invoices.paymentToken, payMatch[1]),
+          columns: { invoiceNumber: true, clientName: true },
+        });
+        ogTitle = inv
+          ? `Invoice ${inv.invoiceNumber} — ${branding.companyName}`
+          : `Invoice — ${branding.companyName}`;
+        ogDescription = inv
+          ? `View and pay invoice ${inv.invoiceNumber}`
+          : 'View and pay your invoice';
+      } catch {
+        ogTitle = `Invoice — ${branding.companyName}`;
+        ogDescription = 'View and pay your invoice';
+      }
+    } else if (approveMatch) {
+      try {
+        const q = await db.query.quotes.findFirst({
+          where: eq(quotes.approvalToken, approveMatch[1]),
+          columns: { quoteNumber: true, clientName: true },
+        });
+        ogTitle = q
+          ? `Quote ${q.quoteNumber} — ${branding.companyName}`
+          : `Quote — ${branding.companyName}`;
+        ogDescription = q
+          ? `Review and approve quote ${q.quoteNumber}`
+          : 'Review and approve your quote';
+      } catch {
+        ogTitle = `Quote — ${branding.companyName}`;
+        ogDescription = 'Review and approve your quote';
+      }
+    }
+
+    const html = injectOgTags(indexHtmlTemplate, branding, ogTitle, ogDescription, `${baseUrl}${urlPath}`);
+    reply.header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-cache').send(html);
   });
 }
 
