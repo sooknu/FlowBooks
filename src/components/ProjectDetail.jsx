@@ -131,6 +131,7 @@ const FinancialCard = ({ label, value, icon: Icon, delay, colorClass }) => (
 
 const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
   const navigate = useNavigate();
+  const [mapsChoice, setMapsChoice] = useState(null);
   const invoices = project.invoices || [];
   const expenses = project.expenses || [];
 
@@ -260,6 +261,18 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
             const addressParts = [project.addressStreet, project.addressCity, [project.addressState, project.addressZip].filter(Boolean).join(' ')].filter(Boolean);
             const addressLine = addressParts.join(', ');
             const mapsQuery = encodeURIComponent([project.location, addressLine].filter(Boolean).join(', '));
+            const appleUrl = `https://maps.apple.com/?q=${mapsQuery}`;
+            const googleUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
+            const isApple = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
+            const isMobile = /iPhone|iPad|iPod|Android/.test(navigator.userAgent);
+            const handleMapClick = (e) => {
+              e.preventDefault();
+              if (!isMobile) {
+                window.open(isApple ? appleUrl : googleUrl, '_blank');
+              } else {
+                setMapsChoice({ appleUrl, googleUrl });
+              }
+            };
             return (
               <div className="project-details__prop">
                 <span className="project-details__prop-label"><MapPin className="project-details__prop-icon" /> Location</span>
@@ -267,7 +280,7 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
                   {project.location && <span>{project.location}</span>}
                   {project.location && addressLine && <br />}
                   {addressLine && (
-                    <a href={`https://www.google.com/maps/search/?api=1&query=${mapsQuery}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs">
+                    <a href="#" onClick={handleMapClick} className="text-blue-500 hover:underline text-xs">
                       {addressLine}
                     </a>
                   )}
@@ -355,6 +368,26 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
           </div>
         );
       })()}
+      {/* Maps choice dialog (mobile) */}
+      {mapsChoice && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={() => setMapsChoice(null)}>
+          <div className="bg-[rgb(var(--glass-bg))] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-xs p-4 pb-6 space-y-2" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-center text-surface-600 mb-3">Open in Maps</p>
+            <a href={mapsChoice.appleUrl} target="_blank" rel="noopener noreferrer" onClick={() => setMapsChoice(null)}
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-surface-100 text-sm font-medium text-surface-700 hover:bg-surface-200 transition-colors">
+              Apple Maps
+            </a>
+            <a href={mapsChoice.googleUrl} target="_blank" rel="noopener noreferrer" onClick={() => setMapsChoice(null)}
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-surface-100 text-sm font-medium text-surface-700 hover:bg-surface-200 transition-colors">
+              Google Maps
+            </a>
+            <button onClick={() => setMapsChoice(null)}
+              className="w-full py-2.5 text-sm text-surface-400 hover:text-surface-600 transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

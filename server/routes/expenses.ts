@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { expenses, expenseCategories, projects, teamPayments } from '../db/schema';
+import { expenses, expenseCategories, projects, teamPayments, recurringExpenses } from '../db/schema';
 import { eq, and, ilike, or, desc, asc, count, sum, sql, gte, lte, isNull } from 'drizzle-orm';
 import { requirePermission } from '../lib/permissions';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
@@ -8,6 +8,7 @@ import { getLinkedTeamPaymentId, syncTeamPaymentExpense } from '../lib/expenseSy
 import { recalculateProjectTeamFinancials } from '../lib/teamCalc';
 import { broadcast } from '../lib/pubsub';
 
+const readGuard = requirePermission('view_expenses');
 const guard = requirePermission('manage_expenses');
 
 /** Find or create the "Uncategorized" expense category. */
@@ -58,7 +59,7 @@ async function mapBody(body: any, userId: string) {
 export default async function expenseRoutes(fastify: any) {
 
   // GET / — paginated list with filters
-  fastify.get('/', { preHandler: [guard] }, async (request: any) => {
+  fastify.get('/', { preHandler: [readGuard] }, async (request: any) => {
     const {
       search,
       page = '0',
@@ -126,7 +127,7 @@ export default async function expenseRoutes(fastify: any) {
   });
 
   // GET /stats — aggregated stats for dashboard
-  fastify.get('/stats', { preHandler: [guard] }, async () => {
+  fastify.get('/stats', { preHandler: [readGuard] }, async () => {
     const now = new Date();
     const yearStart = new Date(now.getFullYear(), 0, 1);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -142,6 +143,7 @@ export default async function expenseRoutes(fastify: any) {
       [{ totalThisMonth }],
       byCategory,
       byMonth,
+      activeSubscriptions,
     ] = await Promise.all([
       // Total all time
       db.select({ totalAllTime: expenseSum })
@@ -175,6 +177,20 @@ export default async function expenseRoutes(fastify: any) {
         .from(expenses)
         .where(and(expenseOnly, notTeamPayment, gte(expenses.expenseDate, yearStart)))
         .groupBy(sql`EXTRACT(MONTH FROM ${expenses.expenseDate})`),
+      // Active recurring expenses (subscriptions)
+      db.select({
+        id: recurringExpenses.id,
+        description: recurringExpenses.description,
+        amount: recurringExpenses.amount,
+        frequency: recurringExpenses.frequency,
+        nextDueDate: recurringExpenses.nextDueDate,
+        categoryName: expenseCategories.name,
+        categoryColor: expenseCategories.color,
+      })
+        .from(recurringExpenses)
+        .leftJoin(expenseCategories, eq(recurringExpenses.categoryId, expenseCategories.id))
+        .where(eq(recurringExpenses.isActive, true))
+        .orderBy(asc(recurringExpenses.nextDueDate)),
     ]);
 
     return {
@@ -183,6 +199,7 @@ export default async function expenseRoutes(fastify: any) {
       totalThisMonth: parseFloat(totalThisMonth as string) || 0,
       byCategory: byCategory.map(c => ({ ...c, total: parseFloat(c.total as string) || 0 })),
       byMonth: byMonth.map(m => ({ month: m.month, total: parseFloat(m.total as string) || 0 })),
+      activeSubscriptions,
     };
   });
 

@@ -4,7 +4,7 @@ import { eq, asc } from 'drizzle-orm';
 import { requirePermission } from '../lib/permissions';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
 
-const readGuard = requirePermission('manage_expenses');
+const readGuard = requirePermission('view_expenses');
 const writeGuard = requirePermission('manage_categories');
 
 export default async function expenseCategoryRoutes(fastify: any) {

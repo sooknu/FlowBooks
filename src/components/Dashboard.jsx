@@ -538,7 +538,7 @@ const Dashboard = () => {
                 colorClass={profit < 0 ? 'red' : profit > 0 ? 'green' : ''}
               />
             </div>
-            <button className="content-card text-left w-full cursor-pointer hover:ring-1 hover:ring-surface-200 transition-shadow" onClick={() => navigate('/projects?financial=balanceOwed')}>
+            <button className="content-card text-left w-full cursor-pointer hover:border-surface-200 transition-colors" onClick={() => navigate('/projects?financial=balanceOwed')}>
               <BigNumber
                 value={fmtFull(pendingPayments)}
                 label="Awaiting payment"
@@ -560,7 +560,7 @@ const Dashboard = () => {
                 ]}
               />
             </div>
-            <button className="content-card text-left w-full cursor-pointer hover:ring-1 hover:ring-surface-200 transition-shadow" onClick={() => navigate('/expenses')}>
+            <button className="content-card text-left w-full cursor-pointer hover:border-surface-200 transition-colors" onClick={() => navigate('/expenses')}>
               <BigNumber
                 value={fmtFull(totalExpenses)}
                 label="Total expenses"

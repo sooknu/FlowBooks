@@ -8,6 +8,7 @@ import {
   Repeat, Pause, Play, Users, ArrowUpDown,
 } from 'lucide-react';
 import { cn, fmtDate } from '@/lib/utils';
+import { useAppData } from '@/hooks/useAppData';
 import { toast } from '@/components/ui/use-toast';
 import { queryKeys } from '@/lib/queryKeys';
 import {
@@ -340,6 +341,8 @@ const RecurringExpenseCard = React.memo(({ item, onEdit, onToggle, onDelete }) =
 // ─── Main Component ────────────────────────────────────────────────────────
 
 const ExpensesManager = () => {
+  const { can } = useAppData();
+  const canManage = can('manage_expenses');
   const [searchParams, setSearchParams] = useSearchParams();
   const sourceFilter = searchParams.get('source') || '';
   const [searchTerm, setSearchTerm] = useState('');
@@ -395,12 +398,16 @@ const ExpensesManager = () => {
     return () => el.removeEventListener('scroll', checkActiveCard);
   }, [checkActiveCard, !!stats]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Recurring expenses
+  // Recurring expenses (full CRUD list — only for users who can manage)
   const { data: recurringData } = useQuery({
     queryKey: queryKeys.recurringExpenses.list(),
     queryFn: () => api.get('/recurring-expenses'),
+    enabled: canManage,
   });
   const recurringList = recurringData?.data || [];
+
+  // Read-only active subscriptions from stats (visible to all with view_expenses)
+  const activeSubscriptions = stats?.activeSubscriptions || [];
 
   // Expense list
   const {
@@ -518,9 +525,11 @@ const ExpensesManager = () => {
             <p className="text-surface-400 text-sm">Track your business expenses</p>
           </div>
         </div>
-        <button onClick={() => { setEditingExpense(null); setEditingRecurringExpense(null); setIsFormOpen(true); }} className="action-btn">
-          <Plus className="w-4 h-4 mr-2" /> Add
-        </button>
+        {canManage && (
+          <button onClick={() => { setEditingExpense(null); setEditingRecurringExpense(null); setIsFormOpen(true); }} className="action-btn">
+            <Plus className="w-4 h-4 mr-2" /> Add
+          </button>
+        )}
       </div>
 
       {/* Dashboard */}
@@ -577,26 +586,62 @@ const ExpensesManager = () => {
         </div>
       )}
 
-      {/* Active Subscriptions */}
-      {recurringList.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-4 rounded-full bg-blue-400" />
-            <h2 className="text-sm font-semibold text-surface-700">Active Subscriptions</h2>
-            <span className="text-xs text-surface-400">({recurringList.filter(r => r.isActive).length} active)</span>
+      {/* Active Subscriptions — full CRUD for managers, read-only list for viewers */}
+      {canManage ? (
+        recurringList.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-4 rounded-full bg-blue-400" />
+              <h2 className="text-sm font-semibold text-surface-700">Active Subscriptions</h2>
+              <span className="text-xs text-surface-400">({recurringList.filter(r => r.isActive).length} active)</span>
+            </div>
+            <AnimatePresence>
+              {recurringList.map(r => (
+                <RecurringExpenseCard
+                  key={r.id}
+                  item={r}
+                  onEdit={handleEditRecurring}
+                  onToggle={handleToggleRecurring}
+                  onDelete={setDeleteRecurringTarget}
+                />
+              ))}
+            </AnimatePresence>
           </div>
-          <AnimatePresence>
-            {recurringList.map(r => (
-              <RecurringExpenseCard
-                key={r.id}
-                item={r}
-                onEdit={handleEditRecurring}
-                onToggle={handleToggleRecurring}
-                onDelete={setDeleteRecurringTarget}
-              />
-            ))}
-          </AnimatePresence>
-        </div>
+        )
+      ) : (
+        activeSubscriptions.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-4 rounded-full bg-blue-400" />
+              <h2 className="text-sm font-semibold text-surface-700">Active Subscriptions</h2>
+              <span className="text-xs text-surface-400">({activeSubscriptions.length})</span>
+            </div>
+            {activeSubscriptions.map(s => {
+              const palette = COLOR_PALETTE[s.categoryColor] || COLOR_PALETTE.slate;
+              return (
+                <div key={s.id} className="list-card p-[17px] px-[21px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {s.categoryName && (
+                        <span className={cn('inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border shrink-0', palette.bg, palette.text, palette.border)}>
+                          <span className={cn('w-1.5 h-1.5 rounded-full', palette.dot)} />
+                          {s.categoryName}
+                        </span>
+                      )}
+                      <span className="text-sm font-medium text-surface-700 truncate">{s.description}</span>
+                    </div>
+                    <span className="text-sm font-bold tabular-nums text-surface-800 shrink-0">{formatCurrency(s.amount)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-surface-400 mt-1">
+                    <span>{FREQUENCY_LABELS[s.frequency] || s.frequency}</span>
+                    <span>·</span>
+                    <span>Next: {s.nextDueDate ? fmtDate(s.nextDueDate, { month: 'short', day: 'numeric' }) : '—'}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
       )}
 
       {/* Filters */}
@@ -662,10 +707,12 @@ const ExpensesManager = () => {
             <Wallet className="w-8 h-8 text-surface-400" />
           </div>
           <h3 className="text-lg font-semibold text-surface-700 mb-1">No expenses yet</h3>
-          <p className="text-surface-400 text-sm mb-4">Start tracking your business expenses.</p>
-          <button onClick={() => { setEditingExpense(null); setEditingRecurringExpense(null); setIsFormOpen(true); }} className="action-btn">
-            <Plus className="w-4 h-4 mr-2" /> Add Expense
-          </button>
+          <p className="text-surface-400 text-sm mb-4">{canManage ? 'Start tracking your business expenses.' : 'No expenses have been recorded.'}</p>
+          {canManage && (
+            <button onClick={() => { setEditingExpense(null); setEditingRecurringExpense(null); setIsFormOpen(true); }} className="action-btn">
+              <Plus className="w-4 h-4 mr-2" /> Add Expense
+            </button>
+          )}
         </div>
       ) : (
         <>
