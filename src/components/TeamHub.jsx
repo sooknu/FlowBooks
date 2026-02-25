@@ -964,12 +964,7 @@ const TeamHub = () => {
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-xl font-bold text-surface-900 tracking-tight">Team Hub</h1>
-            <span className="text-[9px] font-bold uppercase tracking-widest text-blue-500 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800">
-              Beta
-            </span>
-          </div>
+          <h1 className="text-xl font-bold text-surface-900 tracking-tight">Team Hub</h1>
           <p className="text-surface-400 text-sm mt-0.5">Ideas, tasks, and announcements for the team</p>
         </div>
         <button onClick={() => setShowCreate(true)} className="action-btn">

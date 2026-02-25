@@ -20,7 +20,7 @@ import { useTheme } from '@/hooks/useTheme';
 
 const NAV_ITEMS = [
   { type: 'item', path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { type: 'item', path: '/hub', label: 'Team Hub', icon: MessagesSquare, permission: 'view_hub', badge: 'Beta' },
+  { type: 'item', path: '/hub', label: 'Team Hub', icon: MessagesSquare, permission: 'view_hub' },
   { type: 'item', path: '/projects', label: 'Projects', icon: FolderKanban, permission: 'view_projects' },
   { type: 'item', path: '/calendar', label: 'Calendar', icon: CalendarDays },
   { type: 'section', label: 'Sales', collapsible: true },
@@ -46,7 +46,7 @@ const SYSTEM_SECTION = { type: 'section', label: 'System', collapsible: true };
 
 const CREW_ITEMS = [
   { type: 'item', path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { type: 'item', path: '/hub', label: 'Team Hub', icon: MessagesSquare, badge: 'Beta' },
+  { type: 'item', path: '/hub', label: 'Team Hub', icon: MessagesSquare },
   { type: 'item', path: '/projects', label: 'Projects', icon: FolderKanban },
   { type: 'item', path: '/calendar', label: 'Calendar', icon: CalendarDays },
 ];
