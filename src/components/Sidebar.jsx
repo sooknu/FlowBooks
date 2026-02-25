@@ -8,7 +8,7 @@ import {
   BarChart3,
   Settings, Shield, ScrollText,
   LogOut, User, UserPlus, ChevronsLeft, Menu, X, Bell, Banknote, ChevronRight,
-  Sun, Moon, SunMoon,
+  Sun, Moon, SunMoon, MessagesSquare, CheckSquare,
 } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -20,6 +20,7 @@ import { useTheme } from '@/hooks/useTheme';
 
 const NAV_ITEMS = [
   { type: 'item', path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { type: 'item', path: '/hub', label: 'Team Hub', icon: MessagesSquare, permission: 'view_hub', badge: 'Beta' },
   { type: 'item', path: '/projects', label: 'Projects', icon: FolderKanban, permission: 'view_projects' },
   { type: 'item', path: '/calendar', label: 'Calendar', icon: CalendarDays },
   { type: 'section', label: 'Sales', collapsible: true },
@@ -45,6 +46,7 @@ const SYSTEM_SECTION = { type: 'section', label: 'System', collapsible: true };
 
 const CREW_ITEMS = [
   { type: 'item', path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { type: 'item', path: '/hub', label: 'Team Hub', icon: MessagesSquare, badge: 'Beta' },
   { type: 'item', path: '/projects', label: 'Projects', icon: FolderKanban },
   { type: 'item', path: '/calendar', label: 'Calendar', icon: CalendarDays },
 ];
@@ -55,6 +57,7 @@ const ALL_NAV_ITEMS = [
   { type: 'item', path: '/profile', label: 'Profile', icon: User },
   { type: 'item', path: '/finance', label: 'Finance', icon: Banknote },
   { type: 'item', path: '/salary', label: 'Salary', icon: Wallet },
+  { type: 'item', path: '/hub', label: 'Team Hub', icon: MessagesSquare },
 ];
 
 const NOTIF_TYPE_CONFIG = {
@@ -64,6 +67,8 @@ const NOTIF_TYPE_CONFIG = {
   advance_created: { icon: Banknote, color: 'text-amber-500', bg: 'bg-amber-50', route: '/finance' },
   salary_accrued: { icon: Wallet, color: 'text-emerald-500', bg: 'bg-emerald-50', route: '/salary' },
   new_user_signup: { icon: UserPlus, color: 'text-amber-500', bg: 'bg-amber-50', route: '/team?tab=accounts' },
+  hub_task_assigned: { icon: CheckSquare, color: 'text-orange-500', bg: 'bg-orange-50', route: '/hub' },
+  hub_comment: { icon: MessagesSquare, color: 'text-blue-500', bg: 'bg-blue-50', route: '/hub' },
 };
 
 const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, headerLogoDarkUrl, headerLogoSize, faviconUrl, userProfile, user, onSignOut, advancesEnabled, salaryEnabled, can }) => {
@@ -188,6 +193,11 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
         >
           <Icon className="w-[18px] h-[18px] flex-shrink-0" />
           <span className={cn("sidebar-label truncate text-[17px] lg:text-[14px]", collapsed && "lg:hidden")}>{item.label}</span>
+          {item.badge && !collapsed && (
+            <span className="ml-auto text-[8px] font-bold uppercase tracking-widest text-blue-500 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded-full shrink-0">
+              {item.badge}
+            </span>
+          )}
         </NavLink>
       );
     });

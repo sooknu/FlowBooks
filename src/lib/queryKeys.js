@@ -151,4 +151,10 @@ export const queryKeys = {
   verification: {
     check: (email) => ['verification', 'check', email],
   },
+
+  hub: {
+    all: ['hub'],
+    list: (filters) => [...queryKeys.hub.all, 'list', filters],
+    detail: (id) => [...queryKeys.hub.all, 'detail', id],
+  },
 };

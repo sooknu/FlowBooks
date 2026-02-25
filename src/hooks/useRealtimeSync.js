@@ -22,6 +22,8 @@ const INVALIDATION_MAP = {
   project_note:       [['projects']],
   settings:           [['settings']],
   notification:       [['notifications']],
+  hub_post:           [['hub']],
+  hub_comment:        [['hub']],
 };
 
 export function useRealtimeSync() {

@@ -51,6 +51,7 @@ import backupRoutes from './routes/backup';
 import gdriveAuthRoutes from './routes/gdriveAuth';
 import setupRoutes from './routes/setup';
 import reportsRoutes from './routes/reports';
+import hubRoutes from './routes/hub';
 import sseRoutes from './routes/sse';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -283,6 +284,7 @@ await app.register(backupRoutes, { prefix: '/api/backup' });
 await app.register(gdriveAuthRoutes, { prefix: '/api/backup/gdrive' });
 await app.register(setupRoutes, { prefix: '/api/setup' });
 await app.register(reportsRoutes, { prefix: '/api/reports' });
+await app.register(hubRoutes, { prefix: '/api/hub' });
 await app.register(sseRoutes, { prefix: '/api/sse' });
 
 const port = parseInt(process.env.API_PORT || '3001', 10);

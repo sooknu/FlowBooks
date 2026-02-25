@@ -16,6 +16,7 @@ export const recurringFrequencyEnum = pgEnum('RecurringFrequency', ['weekly', 'm
 export const expenseTypeEnum = pgEnum('ExpenseType', ['expense', 'credit']);
 export const backupStatusEnum = pgEnum('BackupStatus', ['pending', 'running', 'completed', 'partial', 'failed']);
 export const backupUploadStatusEnum = pgEnum('BackupUploadStatus', ['pending', 'uploading', 'completed', 'failed']);
+export const hubPostTypeEnum = pgEnum('hub_post_type', ['idea', 'task', 'announcement']);
 
 // ── Better Auth managed tables ──
 
@@ -718,6 +719,40 @@ export const backupUploads = pgTable('backup_uploads', {
   index('backup_uploads_destination_id_idx').on(table.destinationId),
 ]);
 
+// ── Team Hub ──
+
+export const hubPosts = pgTable('hub_posts', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  authorId: text('author_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  type: hubPostTypeEnum('type').notNull(),
+  title: text('title').notNull(),
+  body: text('body'),
+  pinned: boolean('pinned').notNull().default(false),
+  assigneeId: text('assignee_id').references(() => user.id, { onDelete: 'set null' }),
+  assignedToAll: boolean('assigned_to_all').notNull().default(false),
+  completed: boolean('completed').notNull().default(false),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+}, (table) => [
+  index('hub_posts_author_id_idx').on(table.authorId),
+  index('hub_posts_type_idx').on(table.type),
+  index('hub_posts_pinned_idx').on(table.pinned),
+  index('hub_posts_created_at_idx').on(table.createdAt),
+  index('hub_posts_assignee_id_idx').on(table.assigneeId),
+]);
+
+export const hubComments = pgTable('hub_comments', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  postId: text('post_id').notNull().references(() => hubPosts.id, { onDelete: 'cascade' }),
+  authorId: text('author_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  body: text('body').notNull(),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+}, (table) => [
+  index('hub_comments_post_id_idx').on(table.postId),
+  index('hub_comments_author_id_idx').on(table.authorId),
+]);
+
 // ── Relations ──
 
 export const userRelations = relations(user, ({ many, one }) => ({
@@ -726,6 +761,8 @@ export const userRelations = relations(user, ({ many, one }) => ({
   profile: one(profiles, { fields: [user.id], references: [profiles.id] }),
   teamMember: one(teamMembers, { fields: [user.id], references: [teamMembers.userId] }),
   notifications: many(notifications),
+  hubPosts: many(hubPosts),
+  hubComments: many(hubComments),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -894,4 +931,14 @@ export const backupRelations = relations(backups, ({ one, many }) => ({
 export const backupUploadRelations = relations(backupUploads, ({ one }) => ({
   backup: one(backups, { fields: [backupUploads.backupId], references: [backups.id] }),
   destination: one(backupDestinations, { fields: [backupUploads.destinationId], references: [backupDestinations.id] }),
+}));
+
+export const hubPostRelations = relations(hubPosts, ({ one, many }) => ({
+  author: one(user, { fields: [hubPosts.authorId], references: [user.id] }),
+  comments: many(hubComments),
+}));
+
+export const hubCommentRelations = relations(hubComments, ({ one }) => ({
+  post: one(hubPosts, { fields: [hubComments.postId], references: [hubPosts.id] }),
+  author: one(user, { fields: [hubComments.authorId], references: [user.id] }),
 }));

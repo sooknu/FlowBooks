@@ -35,6 +35,8 @@ export const PERMISSION_KEYS = [
   'manage_backups',
   'approve_users',
   'impersonate_users',
+  'view_hub',
+  'manage_hub',
 ] as const;
 
 export type PermissionKey = typeof PERMISSION_KEYS[number];
@@ -83,6 +85,8 @@ export const PERMISSION_META: PermissionMeta[] = [
   { key: 'manage_backups', label: 'Manage Backups', group: 'Settings', description: 'Create, view, and delete backups' },
   { key: 'approve_users', label: 'Approve Users', group: 'Team', description: 'Approve or reject new user account sign-ups' },
   { key: 'impersonate_users', label: 'Impersonate Users', group: 'Team', description: 'Log in as another user (cannot impersonate admins)' },
+  { key: 'view_hub', label: 'View Team Hub', group: 'Team', description: 'Access the Team Hub feed (posts, tasks, announcements)' },
+  { key: 'manage_hub', label: 'Manage Hub', group: 'Team', description: 'Pin announcements, delete any post or comment' },
 ];
 
 // ── Hardcoded defaults per role ──
@@ -128,6 +132,8 @@ export const DEFAULT_ROLE_PERMISSIONS: AllRoleDefaults = {
     manage_backups: false,
     approve_users: true,
     impersonate_users: false,
+    view_hub: true,
+    manage_hub: true,
   },
   lead: {
     view_prices: true,
@@ -163,6 +169,8 @@ export const DEFAULT_ROLE_PERMISSIONS: AllRoleDefaults = {
     manage_backups: false,
     approve_users: false,
     impersonate_users: false,
+    view_hub: true,
+    manage_hub: false,
   },
   crew: {
     view_prices: false,
@@ -198,5 +206,7 @@ export const DEFAULT_ROLE_PERMISSIONS: AllRoleDefaults = {
     manage_backups: false,
     approve_users: false,
     impersonate_users: false,
+    view_hub: true,
+    manage_hub: false,
   },
 };

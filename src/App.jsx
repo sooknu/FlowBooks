@@ -41,6 +41,7 @@ const PermissionsManager = React.lazy(() => import('@/components/PermissionsMana
 const BackupManager = React.lazy(() => import('@/components/BackupManager'));
 const SetupWizard = React.lazy(() => import('@/components/SetupWizard'));
 const ReportsManager = React.lazy(() => import('@/components/ReportsManager'));
+const TeamHub = React.lazy(() => import('@/components/TeamHub'));
 
 const LazyFallback = () => (
   <div className="flex items-center justify-center py-20">
@@ -64,6 +65,7 @@ function App() {
         <Route element={<AppLayout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Lazy><Dashboard /></Lazy>} />
+          <Route path="/hub" element={<Lazy><TeamHub /></Lazy>} />
 
           {/* Projects */}
           <Route path="/projects" element={<Lazy><ProjectsManager /></Lazy>} />

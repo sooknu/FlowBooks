@@ -1147,3 +1147,89 @@ export function useDeleteRecurringExpense() {
     },
   });
 }
+
+// ─── Hub ──────────────────────────────────────────────────────────────────
+
+export function useCreateHubPost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (postData) => api.post('/hub', postData).then(r => r.data),
+    onSuccess: () => {
+      toast({ title: "Post created!" });
+      queryClient.invalidateQueries({ queryKey: queryKeys.hub.all });
+    },
+    onError: (error) => {
+      toast({ title: "Error creating post", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useUpdateHubPost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }) => api.put('/hub/' + id, data).then(r => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.hub.all });
+    },
+    onError: (error) => {
+      toast({ title: "Error updating post", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useDeleteHubPost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => api.delete('/hub/' + id),
+    onSuccess: () => {
+      toast({ title: "Post deleted" });
+      queryClient.invalidateQueries({ queryKey: queryKeys.hub.all });
+    },
+    onError: (error) => {
+      toast({ title: "Error deleting post", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function usePinHubPost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => api.put('/hub/' + id + '/pin'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.hub.all });
+    },
+  });
+}
+
+export function useToggleHubTaskComplete() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => api.put('/hub/' + id + '/complete'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.hub.all });
+    },
+  });
+}
+
+export function useCreateHubComment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ postId, body }) => api.post('/hub/' + postId + '/comments', { body }).then(r => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.hub.all });
+    },
+    onError: (error) => {
+      toast({ title: "Error adding comment", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useDeleteHubComment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (commentId) => api.delete('/hub/comments/' + commentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.hub.all });
+    },
+  });
+}
