@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { cn, groupByCategory, fmtDate } from "@/lib/utils";
+import { cn, groupByCategory, fmtDate, toDateInput } from "@/lib/utils";
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -151,7 +151,7 @@ const InvoiceEditor = ({ invoice: initialInvoice, onBack, onUpdate, appData, onS
     setDiscountType(inv.discountType || 'percent');
     setDiscountValue(inv.discountValue || 0);
     setNotes(inv.notes || '');
-    setEventDate(inv.eventDate ? new Date(inv.eventDate).toISOString().split('T')[0] : '');
+    setEventDate(inv.eventDate ? toDateInput(inv.eventDate) : '');
     setEventLocation(inv.eventLocation || '');
     setProjectTypeId(inv.projectTypeId || '');
     setSelectedProject(inv.projectId || '');

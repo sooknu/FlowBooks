@@ -2063,6 +2063,62 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+
+  /* ── Mobile full-screen dialog ── */
+  /* Overrides Radix DialogContent to take full viewport on mobile,
+     with a scrollable body and sticky footer. */
+  @media (max-width: 639px) {
+    .dialog-mobile-fullscreen {
+      inset: 0 !important;
+      transform: none !important;
+      max-width: none !important;
+      border-radius: 0 !important;
+      border: none !important;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      animation: dialog-slide-up 0.25s ease-out;
+    }
+    .dialog-mobile-fullscreen[data-state="closed"] {
+      animation: dialog-slide-down 0.2s ease-in;
+    }
+    .dialog-mobile-fullscreen > [data-radix-dialog-close] {
+      top: 1rem;
+      right: 1rem;
+      z-index: 10;
+    }
+    .dialog-mobile-fullscreen__header {
+      flex-shrink: 0;
+      padding: 1.25rem 1.25rem 0;
+    }
+    .dialog-mobile-fullscreen__body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      touch-action: pan-y;
+      -webkit-user-select: text;
+      user-select: text;
+      padding: 1.25rem;
+    }
+    .dialog-mobile-fullscreen__footer {
+      flex-shrink: 0;
+      padding: 0.75rem 1.25rem;
+      padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+      border-top: 1px solid rgb(var(--surface-100));
+      background: rgb(var(--glass-bg));
+    }
+    @keyframes dialog-slide-up {
+      from { transform: translateY(100%); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+    @keyframes dialog-slide-down {
+      from { transform: translateY(0); opacity: 1; }
+      to   { transform: translateY(100%); opacity: 0; }
+    }
+  }
 }
 
 /* ─── Utility Classes ──────────────────────────────────────────── */

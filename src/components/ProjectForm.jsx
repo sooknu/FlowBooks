@@ -12,6 +12,7 @@ import { useProjectTypes } from '@/lib/projectTypes';
 import { useProjectRoles } from '@/lib/projectRoles';
 import { TEAM_ROLE_LABELS } from '@/lib/teamRoles';
 import api from '@/lib/apiClient';
+import { toDateInput } from '@/lib/utils';
 
 export const PROJECT_STATUSES = [
   { value: 'lead', label: 'Lead' },
@@ -116,11 +117,11 @@ const ProjectForm = () => {
         clientId: project.clientId || '',
         projectTypeId: project.projectTypeId || '',
         status: project.status || 'lead',
-        shootStartDate: project.shootStartDate ? new Date(project.shootStartDate).toISOString().split('T')[0] : '',
-        shootEndDate: hasEnd ? (project.shootEndDate ? new Date(project.shootEndDate).toISOString().split('T')[0] : '') : '',
+        shootStartDate: project.shootStartDate ? toDateInput(project.shootStartDate) : '',
+        shootEndDate: hasEnd ? (project.shootEndDate ? toDateInput(project.shootEndDate) : '') : '',
         shootStartTime: project.shootStartTime || '',
         shootEndTime: project.shootEndTime || '',
-        deliveryDate: project.deliveryDate ? new Date(project.deliveryDate).toISOString().split('T')[0] : '',
+        deliveryDate: project.deliveryDate ? toDateInput(project.deliveryDate) : '',
         location: project.location || '',
         addressStreet: project.addressStreet || '',
         addressCity: project.addressCity || '',
@@ -132,7 +133,7 @@ const ProjectForm = () => {
         projectPrice: project.projectPrice != null ? project.projectPrice.toString() : '',
         sessions: (project.sessions || []).map(s => ({
           label: s.label || '',
-          sessionDate: s.sessionDate ? new Date(s.sessionDate).toISOString().split('T')[0] : '',
+          sessionDate: s.sessionDate ? toDateInput(s.sessionDate) : '',
           startTime: s.startTime || '',
           endTime: s.endTime || '',
         })),
@@ -208,6 +209,50 @@ const ProjectForm = () => {
   // Client search
   const [clientSearch, setClientSearch] = useState('');
   const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const [showNewClient, setShowNewClient] = useState(false);
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientEmail, setNewClientEmail] = useState('');
+  const [creatingClient, setCreatingClient] = useState(false);
+  const clientPickerRef = useRef(null);
+
+  // Close client dropdown on click/touch outside
+  useEffect(() => {
+    if (!showClientDropdown) return;
+    const handleOutside = (e) => {
+      if (clientPickerRef.current && !clientPickerRef.current.contains(e.target)) {
+        setShowClientDropdown(false);
+        setShowNewClient(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
+  }, [showClientDropdown]);
+
+  const handleCreateClient = async () => {
+    if (!newClientName.trim()) return;
+    setCreatingClient(true);
+    try {
+      const parts = newClientName.trim().split(/\s+/);
+      const firstName = parts[0];
+      const lastName = parts.slice(1).join(' ') || null;
+      const res = await api.post('/clients', { firstName, lastName, email: newClientEmail.trim() || null });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.catalog() });
+      setForm(prev => ({ ...prev, clientId: res.data.id }));
+      setClientSearch('');
+      setNewClientName('');
+      setNewClientEmail('');
+      setShowNewClient(false);
+      setShowClientDropdown(false);
+    } catch (err) {
+      console.error('Failed to create client', err);
+    } finally {
+      setCreatingClient(false);
+    }
+  };
 
   const filteredClients = clients.filter(c => {
     const name = `${c.firstName || ''} ${c.lastName || ''} ${c.company || ''} ${c.email || ''}`.toLowerCase();
@@ -350,12 +395,12 @@ const ProjectForm = () => {
         </div>
 
         {/* Client picker */}
-        <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setShowClientDropdown(false); }}>
+        <div className="relative" ref={clientPickerRef}>
           <label className="text-xs font-medium text-surface-600 mb-1 block">Client</label>
           <input
             type="text"
             value={showClientDropdown ? clientSearch : (selectedClient ? `${selectedClient.firstName || ''} ${selectedClient.lastName || ''}`.trim() : '')}
-            onChange={e => { setClientSearch(e.target.value); setShowClientDropdown(true); }}
+            onChange={e => { setClientSearch(e.target.value); setShowClientDropdown(true); setShowNewClient(false); }}
             onFocus={() => setShowClientDropdown(true)}
             className="glass-input w-full"
             placeholder="Search clients... (optional)"
@@ -366,25 +411,74 @@ const ProjectForm = () => {
             </button>
           )}
           {showClientDropdown && (
-            <div className="absolute z-50 mt-1 w-full max-h-48 overflow-auto glass-card shadow-lg rounded-lg border border-surface-200">
-              {filteredClients.length === 0 ? (
-                <div className="px-3 py-2 text-sm text-surface-400">No clients found</div>
-              ) : (
-                filteredClients.slice(0, 20).map(c => (
+            <div className="absolute z-50 mt-1 w-full max-h-60 overflow-auto glass-card shadow-lg rounded-lg border border-surface-200">
+              {!showNewClient ? (
+                <>
+                  {filteredClients.length === 0 && clientSearch.trim() ? (
+                    <div className="px-3 py-2.5 text-sm text-surface-400">No clients match "{clientSearch}"</div>
+                  ) : (
+                    filteredClients.slice(0, 20).map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2.5 text-sm hover:bg-surface-100 active:bg-surface-100 transition-colors flex justify-between"
+                        onClick={() => {
+                          setForm({ ...form, clientId: c.id });
+                          setClientSearch('');
+                          setShowClientDropdown(false);
+                        }}
+                      >
+                        <span className="font-medium text-surface-700">{c.firstName} {c.lastName}</span>
+                        {c.company && <span className="text-surface-400 text-xs">{c.company}</span>}
+                      </button>
+                    ))
+                  )}
+                  {/* Create new client button */}
                   <button
-                    key={c.id}
                     type="button"
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-surface-100 transition-colors flex justify-between"
-                    onClick={() => {
-                      setForm({ ...form, clientId: c.id });
-                      setClientSearch('');
-                      setShowClientDropdown(false);
-                    }}
+                    className="w-full text-left px-3 py-2.5 text-sm hover:bg-surface-100 active:bg-surface-100 transition-colors flex items-center gap-2 text-blue-600 dark:text-blue-400 border-t border-surface-100 font-medium"
+                    onClick={() => { setShowNewClient(true); setNewClientName(clientSearch.trim()); setNewClientEmail(''); }}
                   >
-                    <span className="font-medium">{c.firstName} {c.lastName}</span>
-                    {c.company && <span className="text-surface-400 text-xs">{c.company}</span>}
+                    <Plus className="w-3.5 h-3.5" /> Create new client{clientSearch.trim() ? `: "${clientSearch.trim()}"` : ''}
                   </button>
-                ))
+                </>
+              ) : (
+                /* Inline new client mini-form */
+                <div className="p-3 space-y-2.5">
+                  <p className="text-xs font-semibold text-surface-600 uppercase tracking-wider">New Client</p>
+                  <input
+                    type="text"
+                    value={newClientName}
+                    onChange={e => setNewClientName(e.target.value)}
+                    className="glass-input w-full text-sm"
+                    placeholder="Full name *"
+                    autoFocus
+                  />
+                  <input
+                    type="email"
+                    value={newClientEmail}
+                    onChange={e => setNewClientEmail(e.target.value)}
+                    className="glass-input w-full text-sm"
+                    placeholder="Email (optional)"
+                  />
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={!newClientName.trim() || creatingClient}
+                      onClick={handleCreateClient}
+                      className="action-btn text-xs flex-1 justify-center"
+                    >
+                      {creatingClient ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Create & Select'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowNewClient(false)}
+                      className="text-xs text-surface-400 hover:text-surface-600 transition-colors px-2"
+                    >
+                      Back
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -552,7 +646,7 @@ const ProjectForm = () => {
                   if (val && (!form.deliveryDate || deliveryAutoSet)) {
                     const d = new Date(val);
                     d.setDate(d.getDate() + 28);
-                    updates.deliveryDate = d.toISOString().split('T')[0];
+                    updates.deliveryDate = toDateInput(d);
                     setDeliveryAutoSet(true);
                   }
                   setForm(updates);

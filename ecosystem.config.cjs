@@ -7,6 +7,9 @@ module.exports = {
       cwd: __dirname,
       node_args: '--max-old-space-size=384',
       max_memory_restart: '400M',
+      env: {
+        TZ: 'America/Los_Angeles',
+      },
     },
     {
       name: 'FlowBooks-worker',
@@ -15,6 +18,9 @@ module.exports = {
       cwd: __dirname,
       node_args: '--max-old-space-size=256',
       max_memory_restart: '300M',
+      env: {
+        TZ: 'America/Los_Angeles',
+      },
     },
   ],
 };

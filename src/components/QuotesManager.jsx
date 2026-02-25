@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { cn, groupByCategory, fmtDate, tzDate } from "@/lib/utils";
+import { cn, groupByCategory, fmtDate, tzDate, toDateInput } from "@/lib/utils";
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -158,8 +158,8 @@ const QuoteEditor = ({ quote: initialQuote, onBack, onUpdate, appData, onSendEma
     setDiscountType(q.discountType || 'percent');
     setDiscountValue(q.discountValue || 0);
     setNotes(q.notes || '');
-    setEventDate(q.eventDate ? new Date(q.eventDate).toISOString().split('T')[0] : '');
-    setEventEndDate(q.eventEndDate ? new Date(q.eventEndDate).toISOString().split('T')[0] : '');
+    setEventDate(q.eventDate ? toDateInput(q.eventDate) : '');
+    setEventEndDate(q.eventEndDate ? toDateInput(q.eventEndDate) : '');
     setIsMultiDay(!!q.eventEndDate);
     setEventLocation(q.eventLocation || '');
     setProjectTypeId(q.projectTypeId || '');
@@ -508,9 +508,9 @@ const QuoteEditor = ({ quote: initialQuote, onBack, onUpdate, appData, onSendEma
                                 if (pid) {
                                   const proj = (projectsData?.data || []).find(p => p.id === pid);
                                   if (proj) {
-                                    if (proj.shootStartDate && !eventDate) setEventDate(new Date(proj.shootStartDate).toISOString().split('T')[0]);
+                                    if (proj.shootStartDate && !eventDate) setEventDate(toDateInput(proj.shootStartDate));
                                     if (proj.shootEndDate) {
-                                      setEventEndDate(new Date(proj.shootEndDate).toISOString().split('T')[0]);
+                                      setEventEndDate(toDateInput(proj.shootEndDate));
                                       setIsMultiDay(true);
                                     }
                                     if (proj.location && !eventLocation) setEventLocation(proj.location);
@@ -537,9 +537,9 @@ const QuoteEditor = ({ quote: initialQuote, onBack, onUpdate, appData, onSendEma
                                 if (pid) {
                                   const proj = (projectsData?.data || []).find(p => p.id === pid);
                                   if (proj) {
-                                    if (proj.shootStartDate && !eventDate) setEventDate(new Date(proj.shootStartDate).toISOString().split('T')[0]);
+                                    if (proj.shootStartDate && !eventDate) setEventDate(toDateInput(proj.shootStartDate));
                                     if (proj.shootEndDate) {
-                                      setEventEndDate(new Date(proj.shootEndDate).toISOString().split('T')[0]);
+                                      setEventEndDate(toDateInput(proj.shootEndDate));
                                       setIsMultiDay(true);
                                     }
                                     if (proj.location && !eventLocation) setEventLocation(proj.location);

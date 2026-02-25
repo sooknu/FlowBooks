@@ -69,7 +69,23 @@ const NOTIF_TYPE_CONFIG = {
   new_user_signup: { icon: UserPlus, color: 'text-amber-500', bg: 'bg-amber-50', route: '/team?tab=accounts' },
   hub_task_assigned: { icon: CheckSquare, color: 'text-orange-500', bg: 'bg-orange-50', route: '/hub' },
   hub_comment: { icon: MessagesSquare, color: 'text-blue-500', bg: 'bg-blue-50', route: '/hub' },
+  hub_task_completed: { icon: CheckSquare, color: 'text-emerald-500', bg: 'bg-emerald-50', route: '/hub' },
 };
+
+// Deep-link: route to the specific entity when possible
+const ENTITY_ROUTES = {
+  project: (id) => `/projects/${id}`,
+  hub_post: (id) => `/hub?post=${id}`,
+  invoice: (id) => `/invoices`,
+  quote: (id) => `/quotes`,
+  client: (id) => `/clients/${id}`,
+};
+function getNotificationRoute(n, cfg) {
+  if (n.entityType && n.entityId && ENTITY_ROUTES[n.entityType]) {
+    return ENTITY_ROUTES[n.entityType](n.entityId);
+  }
+  return cfg.route || null;
+}
 
 const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, headerLogoDarkUrl, headerLogoSize, faviconUrl, userProfile, user, onSignOut, advancesEnabled, salaryEnabled, can }) => {
   const navigate = useNavigate();
@@ -241,11 +257,8 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
                 key={n.id}
                 onClick={() => {
                   if (!n.isRead) markRead.mutate(n.id);
-                  if (n.entityType === 'project' && n.entityId) {
-                    navigate(`/projects/${n.entityId}`);
-                  } else if (cfg.route) {
-                    navigate(cfg.route);
-                  }
+                  const dest = getNotificationRoute(n, cfg);
+                  if (dest) navigate(dest);
                   setMobileOpen(false);
                 }}
                 className={cn(
