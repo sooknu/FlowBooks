@@ -732,6 +732,8 @@ export const hubPosts = pgTable('hub_posts', {
   assignedToAll: boolean('assigned_to_all').notNull().default(false),
   completed: boolean('completed').notNull().default(false),
   completedBy: jsonb('completed_by').notNull().default([]),
+  thumbsUpIds: jsonb('thumbs_up_ids').notNull().default([]),
+  thumbsDownIds: jsonb('thumbs_down_ids').notNull().default([]),
   dueDate: timestamp('due_date', { withTimezone: true, mode: 'date' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),

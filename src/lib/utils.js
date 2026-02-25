@@ -6,7 +6,7 @@ export function cn(...inputs) {
 }
 
 export function formatPhoneNumber(phoneNumberString) {
-  if (!phoneNumberString) return null;
+  if (!phoneNumberString) return '';
   const cleaned = ('' + phoneNumberString).replace(/\D/g, '');
   const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
   if (match) {

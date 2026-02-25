@@ -45,10 +45,22 @@ export function useNotifications() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
+  const dismissOne = useMutation({
+    mutationFn: (id) => api.delete(`/notifications/${id}`),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ['notifications'] });
+      const prev = qc.getQueryData(['notifications']);
+      qc.setQueryData(['notifications'], (old) => (old || []).filter(n => n.id !== id));
+      return { prev };
+    },
+    onError: (_err, _id, ctx) => qc.setQueryData(['notifications'], ctx.prev),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+
   const clearAll = useMutation({
     mutationFn: () => api.delete('/notifications'),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
-  return { notifications, unreadCount, markRead, markAllRead, clearAll };
+  return { notifications, unreadCount, markRead, markAllRead, dismissOne, clearAll };
 }

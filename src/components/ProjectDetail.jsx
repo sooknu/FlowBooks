@@ -5,14 +5,14 @@ import { motion, useMotionValue, animate, AnimatePresence } from 'framer-motion'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import api from '@/lib/apiClient';
-import { cn, fmtDate, fmtTime, tzDate } from '@/lib/utils';
+import { cn, fmtDate, fmtTime, tzDate, formatPhoneNumber } from '@/lib/utils';
 import { useUpdateProject, useCreateProjectNote, useUpdateProjectNote, useDeleteProjectNote, useDeleteProjectPermanently } from '@/hooks/useMutations';
 import {
   ChevronLeft, ChevronDown, MapPin, Calendar, User2,
   FileText, Receipt, StickyNote, LayoutDashboard, Send,
   Loader2, Trash2, DollarSign, CreditCard,
   Users, Plus, Pencil, TrendingUp, Package, Wallet, ArrowUpDown,
-  Upload, File, Image, ExternalLink, X,
+  Upload, File, Image, ExternalLink, X, Phone, Clock, Mail,
 } from 'lucide-react';
 import { useAppData, useSettings } from '@/hooks/useAppData';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
@@ -32,7 +32,7 @@ const formatDocNumber = (num) => '#' + String(num).padStart(5, '0');
 
 function formatDate(d) {
   if (!d) return '—';
-  return fmtDate(d, { month: 'short', day: 'numeric', year: 'numeric' });
+  return fmtDate(d, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function formatDateRange(startDate, endDate) {
@@ -43,11 +43,12 @@ function formatDateRange(startDate, endDate) {
   const days = Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
   const sameYear = s.getFullYear() === e.getFullYear();
   const sameMonth = sameYear && s.getMonth() === e.getMonth();
+  const wd = (d) => fmtDate(d, { weekday: 'short' });
   let range;
   if (sameMonth) {
-    range = `${fmtDate(startDate, { month: 'short' })} ${s.getDate()}–${e.getDate()}, ${e.getFullYear()}`;
+    range = `${wd(startDate)}, ${fmtDate(startDate, { month: 'short' })} ${s.getDate()} – ${wd(endDate)}, ${e.getDate()}, ${e.getFullYear()}`;
   } else if (sameYear) {
-    range = `${fmtDate(startDate, { month: 'short', day: 'numeric' })} – ${fmtDate(endDate, { month: 'short', day: 'numeric' })}, ${e.getFullYear()}`;
+    range = `${wd(startDate)}, ${fmtDate(startDate, { month: 'short', day: 'numeric' })} – ${wd(endDate)}, ${fmtDate(endDate, { month: 'short', day: 'numeric' })}, ${e.getFullYear()}`;
   } else {
     range = `${formatDate(startDate)} – ${formatDate(endDate)}`;
   }
@@ -135,22 +136,48 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
   const invoices = project.invoices || [];
   const expenses = project.expenses || [];
 
+  // Financial calculations
   const totalInvoiced = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
   const totalPaid = invoices.reduce((sum, inv) => sum + (inv.paidAmount || 0), 0);
   const totalCredits = expenses.filter(e => e.type === 'credit').reduce((sum, e) => sum + (e.amount || 0), 0);
   const totalCosts = expenses.filter(e => e.type !== 'credit').reduce((sum, e) => sum + (e.amount || 0), 0);
-
   const hasProjectPrice = project.projectPrice != null;
   const projectPrice = hasProjectPrice ? project.projectPrice : totalInvoiced;
-  const openBalance = hasProjectPrice
-    ? project.projectPrice - totalCredits
-    : totalInvoiced - totalPaid;
+  const openBalance = hasProjectPrice ? project.projectPrice - totalCredits : totalInvoiced - totalPaid;
   const totalIncome = hasProjectPrice ? project.projectPrice : totalInvoiced + totalCredits;
   const shootDatePassed = project.shootStartDate && new Date(project.shootStartDate) <= new Date();
   const profit = shootDatePassed ? totalIncome - totalCosts : 0;
 
+  // Location / Maps computation
+  const hasLocation = project.location || project.addressStreet || project.addressCity;
+  const addressParts = hasLocation ? [project.addressStreet, project.addressCity, [project.addressState, project.addressZip].filter(Boolean).join(' ')].filter(Boolean) : [];
+  const addressLine = addressParts.join(', ');
+  const mapsQuery = hasLocation ? encodeURIComponent([project.location, addressLine].filter(Boolean).join(', ')) : '';
+  const appleUrl = `https://maps.apple.com/?q=${mapsQuery}`;
+  const googleUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
+  const isApple = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
+  const isMobile = /iPhone|iPad|iPod|Android/.test(navigator.userAgent);
+  const handleMapClick = (e) => {
+    e.preventDefault();
+    if (!isMobile) {
+      window.open(isApple ? appleUrl : googleUrl, '_blank');
+    } else {
+      setMapsChoice({ appleUrl, googleUrl });
+    }
+  };
+
+  // Date / time helpers
+  const hasSessions = project.sessions?.length > 0;
+  const hasAnyDate = project.shootStartDate || project.deliveryDate || hasSessions;
+  const dateRange = !hasSessions ? formatDateRange(project.shootStartDate, project.shootEndDate) : null;
+
+  // Client display
+  const client = project.client;
+  const clientDisplayName = client ? (client.company || `${client.firstName || ''} ${client.lastName || ''}`.trim() || '—') : null;
+  const clientContactName = client?.company ? `${client.firstName || ''} ${client.lastName || ''}`.trim() : null;
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Financial Summary — privileged only */}
       {isPrivileged && (
         <div className="grid grid-cols-3 gap-3">
@@ -160,184 +187,221 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
         </div>
       )}
 
-      {/* Sessions Card — timeline layout for multi-session projects */}
-      {project.sessions?.length > 0 && (
-        <div className="content-card overflow-hidden">
-          <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-[rgb(var(--surface-100))]">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-400">Sessions</h3>
-              <span className="text-[11px] font-medium text-surface-400 tabular-nums">{project.sessions.length} session{project.sessions.length !== 1 ? 's' : ''}</span>
-            </div>
+      {/* ── 1. Time ── */}
+      {!hasSessions && project.shootStartTime && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="content-card overflow-hidden">
+          <div className="px-4 py-3 sm:px-5 border-b border-[rgb(var(--surface-100))]">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-400">Time</h3>
           </div>
-          <div className="px-4 py-3 sm:px-5 sm:py-4">
-            <div className="relative">
-              {/* Timeline line */}
-              {project.sessions.length > 1 && (
-                <div className="absolute left-[7px] top-[10px] bottom-[10px] w-px bg-[rgb(var(--surface-200))]" />
-              )}
-              <div className="space-y-0">
-                {project.sessions.map((s, i) => {
-                  const isPast = s.sessionDate && new Date(s.sessionDate) < new Date(new Date().toDateString());
-                  const isToday = s.sessionDate && new Date(s.sessionDate).toDateString() === new Date().toDateString();
-                  return (
-                    <div key={s.id || i} className="flex items-start gap-3 group relative py-2.5">
-                      {/* Timeline dot */}
-                      <div className={cn(
-                        'w-[15px] h-[15px] rounded-full border-2 flex-shrink-0 mt-0.5 relative z-10 transition-colors',
-                        isToday
-                          ? 'border-blue-500 bg-blue-500'
-                          : isPast
-                            ? 'border-[rgb(var(--surface-300))] bg-[rgb(var(--surface-300))]'
-                            : 'border-[rgb(var(--surface-300))] bg-[rgb(var(--glass-bg))]',
-                      )} />
-                      {/* Content */}
-                      <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-baseline sm:gap-3">
-                        <span className={cn(
-                          'text-sm font-semibold truncate',
-                          isPast ? 'text-surface-400' : 'text-surface-800',
-                        )}>
-                          {s.label || `Session ${i + 1}`}
-                        </span>
-                        <div className="flex items-center gap-2 text-[13px] text-surface-500">
-                          <span className="tabular-nums">{formatDate(s.sessionDate)}</span>
-                          {s.startTime && (
-                            <>
-                              <span className="text-surface-300">·</span>
-                              <span className="tabular-nums text-surface-400">{formatTimeRange(s.startTime, s.endTime)}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+          <div className="px-4 py-5 sm:px-6 sm:py-6">
+            <div className="flex items-center justify-center gap-4 sm:gap-8">
+              <div className="text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 mb-1">Start</p>
+                <p className="event-time-display">{formatTime12(project.shootStartTime)}</p>
               </div>
+              {project.shootEndTime && (
+                <div className="flex flex-col items-center gap-1 pt-4">
+                  <div className="w-8 sm:w-12 h-px bg-surface-200" />
+                </div>
+              )}
+              {project.shootEndTime && (
+                <div className="text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 mb-1">End</p>
+                  <p className="event-time-display">{formatTime12(project.shootEndTime)}</p>
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
-      {/* Project Details — Notion-style property table */}
-      <div className="content-card project-details">
-        {project.description && (
-          <div className="project-details__description">
-            <p>{project.description}</p>
+      {/* ── 2. Date & Location ── */}
+      {(hasAnyDate || hasLocation) && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="content-card overflow-hidden">
+          <div className="px-4 py-3 sm:px-5 border-b border-[rgb(var(--surface-100))]">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-400">Date & Location</h3>
           </div>
-        )}
-        <div className="project-details__props">
-          {(() => {
-            if (project.sessions?.length > 0) return null;
-            const dateRange = formatDateRange(project.shootStartDate, project.shootEndDate);
-            if (dateRange) return (
-              <div className="project-details__prop">
-                <span className="project-details__prop-label"><Calendar className="project-details__prop-icon" /> Shoot</span>
-                <span className="project-details__prop-value">
-                  {dateRange.range}
-                  <span className="project-details__prop-hint">{dateRange.days} days</span>
-                </span>
-              </div>
-            );
-            if (project.shootStartDate) {
-              const timeRange = formatTimeRange(project.shootStartTime, project.shootEndTime);
-              return (
-                <div className="project-details__prop">
-                  <span className="project-details__prop-label"><Calendar className="project-details__prop-icon" /> Shoot</span>
-                  <span className="project-details__prop-value">
-                    {formatDate(project.shootStartDate)}
-                    {timeRange && <span className="project-details__prop-hint">{timeRange}</span>}
-                  </span>
-                </div>
-              );
-            }
-            return null;
-          })()}
-          {project.deliveryDate && (
-            <div className="project-details__prop">
-              <span className="project-details__prop-label"><Send className="project-details__prop-icon" /> Delivery</span>
-              <span className="project-details__prop-value">{formatDate(project.deliveryDate)}</span>
-            </div>
-          )}
-          {(project.location || project.addressStreet || project.addressCity) && (() => {
-            const addressParts = [project.addressStreet, project.addressCity, [project.addressState, project.addressZip].filter(Boolean).join(' ')].filter(Boolean);
-            const addressLine = addressParts.join(', ');
-            const mapsQuery = encodeURIComponent([project.location, addressLine].filter(Boolean).join(', '));
-            const appleUrl = `https://maps.apple.com/?q=${mapsQuery}`;
-            const googleUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
-            const isApple = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
-            const isMobile = /iPhone|iPad|iPod|Android/.test(navigator.userAgent);
-            const handleMapClick = (e) => {
-              e.preventDefault();
-              if (!isMobile) {
-                window.open(isApple ? appleUrl : googleUrl, '_blank');
-              } else {
-                setMapsChoice({ appleUrl, googleUrl });
-              }
-            };
-            return (
-              <div className="project-details__prop">
-                <span className="project-details__prop-label"><MapPin className="project-details__prop-icon" /> Location</span>
-                <span className="project-details__prop-value">
-                  {project.location && <span>{project.location}</span>}
-                  {project.location && addressLine && <br />}
-                  {addressLine && (
-                    <a href="#" onClick={handleMapClick} className="text-blue-500 hover:underline text-xs">
-                      {addressLine}
-                    </a>
-                  )}
-                </span>
-              </div>
-            );
-          })()}
-          {project.projectTypeRel && (
-            <div className="project-details__prop">
-              <span className="project-details__prop-label"><Package className="project-details__prop-icon" /> Type</span>
-              <span className="project-details__prop-value">{project.projectTypeRel.label}</span>
-            </div>
-          )}
-          {project.client && (
-            <div className="project-details__prop">
-              <span className="project-details__prop-label"><User2 className="project-details__prop-icon" /> Client</span>
-              <span className="project-details__prop-value">
-                <a onClick={() => project.client?.id && navigate(`/clients/${project.client.id}`)} style={{ cursor: 'pointer' }}>
-                  {project.client.company || `${project.client.firstName || ''} ${project.client.lastName || ''}`.trim() || '—'}
-                </a>
-              </span>
-            </div>
-          )}
-          {invoices.length > 0 && (
-            <div className="project-details__prop">
-              <span className="project-details__prop-label"><Receipt className="project-details__prop-icon" /> Invoices</span>
-              <span className="project-details__prop-value">
-                {invoices.length}
-                <span className="project-details__prop-hint">
-                  ({invoices.filter(i => i.status === 'paid').length} paid)
-                </span>
-              </span>
-            </div>
-          )}
-          {(project.quotes?.length > 0) && (
-            <div className="project-details__prop">
-              <span className="project-details__prop-label"><FileText className="project-details__prop-icon" /> Quotes</span>
-              <span className="project-details__prop-value">
-                {project.quotes.length}
-                <span className="project-details__prop-hint">
-                  ({project.quotes.filter(q => q.approved).length} approved)
-                </span>
-              </span>
-            </div>
-          )}
-          {(project.assignments?.length > 0) && (
-            <div className="project-details__prop">
-              <span className="project-details__prop-label"><Users className="project-details__prop-icon" /> Team</span>
-              <span className="project-details__prop-value">
-                {project.assignments.map(a => a.teamMember?.user?.profile?.displayName || a.teamMember?.user?.name || a.teamMember?.name).filter(Boolean).join(', ') || `${project.assignments.length} assigned`}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Invoice Line Items */}
+          {/* Date line */}
+          {!hasSessions && project.shootStartDate && (
+            <div className="flex items-center gap-2.5 px-4 py-3 sm:px-5 text-[13px] text-surface-600 border-b border-[rgb(var(--surface-100))]">
+              <Calendar className="w-4 h-4 text-surface-400" />
+              {dateRange ? (
+                <span className="tabular-nums">{dateRange.range} <span className="text-surface-400 text-xs">({dateRange.days} days)</span></span>
+              ) : (
+                <span className="tabular-nums">{formatDate(project.shootStartDate)}</span>
+              )}
+            </div>
+          )}
+
+          {/* Multi-session timeline */}
+          {hasSessions && (
+            <div className="border-b border-[rgb(var(--surface-100))]">
+              <div className="px-4 py-2.5 sm:px-5 flex items-center justify-between">
+                <span className="text-[11px] font-medium text-surface-400 uppercase tracking-wider">Sessions</span>
+                <span className="text-[11px] font-medium text-surface-400 tabular-nums">{project.sessions.length} session{project.sessions.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="px-4 pb-3 sm:px-5">
+                <div className="relative">
+                  {project.sessions.length > 1 && (
+                    <div className="absolute left-[7px] top-[10px] bottom-[10px] w-px bg-[rgb(var(--surface-200))]" />
+                  )}
+                  <div className="space-y-0">
+                    {project.sessions.map((s, i) => {
+                      const isPast = s.sessionDate && new Date(s.sessionDate) < new Date(new Date().toDateString());
+                      const isToday = s.sessionDate && new Date(s.sessionDate).toDateString() === new Date().toDateString();
+                      return (
+                        <div key={s.id || i} className="flex items-start gap-3 group relative py-2.5">
+                          <div className={cn(
+                            'w-[15px] h-[15px] rounded-full border-2 flex-shrink-0 mt-0.5 relative z-10 transition-colors',
+                            isToday ? 'border-blue-500 bg-blue-500'
+                              : isPast ? 'border-[rgb(var(--surface-300))] bg-[rgb(var(--surface-300))]'
+                              : 'border-[rgb(var(--surface-300))] bg-[rgb(var(--glass-bg))]',
+                          )} />
+                          <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-baseline sm:gap-3">
+                            <span className={cn('text-sm font-semibold truncate', isPast ? 'text-surface-400' : 'text-surface-800')}>
+                              {s.label || `Session ${i + 1}`}
+                            </span>
+                            <div className="flex items-center gap-2 text-[13px] text-surface-500">
+                              <span className="tabular-nums">{formatDate(s.sessionDate)}</span>
+                              {s.startTime && (
+                                <>
+                                  <span className="text-surface-300">·</span>
+                                  <span className="tabular-nums text-surface-400">{formatTimeRange(s.startTime, s.endTime)}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Location */}
+          {hasLocation && (
+            <div className="flex items-start gap-2.5 px-4 py-3 sm:px-5 text-[13px] border-b border-[rgb(var(--surface-100))]">
+              <MapPin className="w-4 h-4 text-surface-400 mt-0.5 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                {project.location && <span className="font-medium text-surface-700">{project.location}</span>}
+                {project.location && addressLine && <span className="text-surface-300 mx-1">·</span>}
+                {addressLine && (
+                  <a href="#" onClick={handleMapClick} className="inline-flex items-center gap-1 text-blue-500 hover:text-blue-600 transition-colors">
+                    {addressLine} <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Delivery date */}
+          {project.deliveryDate && (
+            <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3 text-[13px] text-surface-500">
+              <Send className="w-4 h-4 text-surface-400" />
+              <span>Est. Project Delivery: <span className="text-surface-700 font-medium tabular-nums">{formatDate(project.deliveryDate)}</span></span>
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* ── 3. Description ── */}
+      {(project.description || project.projectTypeRel) && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="content-card overflow-hidden">
+          <div className="px-4 py-3 sm:px-5 border-b border-[rgb(var(--surface-100))]">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-400">Description</h3>
+              {project.projectTypeRel && (
+                <span className="text-[11px] font-medium text-surface-500 bg-surface-100 px-2 py-0.5 rounded-full">{project.projectTypeRel.label}</span>
+              )}
+            </div>
+          </div>
+          {project.description && (
+            <div className="px-4 py-3.5 sm:px-5">
+              <p className="text-[13px] leading-relaxed text-surface-600 whitespace-pre-line">{project.description}</p>
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* ── 4. Client ── */}
+      {client && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.13 }} className="content-card overflow-hidden">
+          <div className="px-4 py-3 sm:px-5 border-b border-[rgb(var(--surface-100))]">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-400">Client</h3>
+          </div>
+          <div
+            className="flex items-center gap-2.5 px-4 py-3 sm:px-5 cursor-pointer hover:bg-surface-50/60 transition-colors border-b border-[rgb(var(--surface-100))]"
+            onClick={() => client.id && navigate(`/clients/${client.id}`)}
+          >
+            <div className="w-7 h-7 rounded-full bg-surface-100 flex items-center justify-center flex-shrink-0">
+              <User2 className="w-3.5 h-3.5 text-surface-500" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-surface-800 truncate">{clientDisplayName}</p>
+              {clientContactName && clientContactName !== clientDisplayName && (
+                <p className="text-xs text-surface-400 truncate">{clientContactName}</p>
+              )}
+            </div>
+            <ChevronDown className="w-4 h-4 text-surface-300 -rotate-90" />
+          </div>
+          {client.phone && (
+            <a href={`tel:${client.phone}`} className="flex items-center gap-2.5 px-4 py-3 sm:px-5 border-b border-[rgb(var(--surface-100))] hover:bg-surface-50/60 transition-colors">
+              <Phone className="w-4 h-4 text-blue-500" />
+              <span className="text-[13px] text-surface-700">{formatPhoneNumber(client.phone)}</span>
+            </a>
+          )}
+          {client.phone2 && (
+            <a href={`tel:${client.phone2}`} className="flex items-center gap-2.5 px-4 py-3 sm:px-5 border-b border-[rgb(var(--surface-100))] hover:bg-surface-50/60 transition-colors">
+              <Phone className="w-4 h-4 text-blue-500" />
+              <span className="text-[13px] text-surface-700">{formatPhoneNumber(client.phone2)}</span>
+            </a>
+          )}
+          {client.email && (
+            <a href={`mailto:${client.email}`} className="flex items-center gap-2.5 px-4 py-3 sm:px-5 hover:bg-surface-50/60 transition-colors">
+              <Mail className="w-4 h-4 text-blue-500" />
+              <span className="text-[13px] text-surface-700 truncate">{client.email}</span>
+            </a>
+          )}
+        </motion.div>
+      )}
+
+      {/* ── 5. Team ── */}
+      {project.assignments?.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }} className="content-card overflow-hidden">
+          <div className="px-4 py-3 sm:px-5 border-b border-[rgb(var(--surface-100))]">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-400">Team</h3>
+              <span className="text-[11px] font-medium text-surface-400">{project.assignments.length}</span>
+            </div>
+          </div>
+          <div className="px-4 py-3 sm:px-5">
+            <div className="flex flex-wrap gap-2">
+              {project.assignments.map((a, i) => {
+                const member = a.teamMember;
+                const user = member?.user;
+                const name = user?.profile?.displayName || user?.name || member?.name || 'Unknown';
+                const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                const role = a.role;
+                return (
+                  <div key={a.id || i} className="flex items-center gap-2 rounded-full bg-surface-50 border border-surface-100 pl-1 pr-3 py-1">
+                    <Avatar className="w-6 h-6 text-[10px]">
+                      {user?.image && <AvatarImage src={user.image} alt={name} />}
+                      <AvatarFallback className="text-[10px] font-medium bg-surface-200 text-surface-600">{initials}</AvatarFallback>
+                    </Avatar>
+                    <span className="text-xs font-medium text-surface-700">{name}</span>
+                    {role && <span className="text-[10px] text-surface-400">{role}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── 5. Invoice Items — unchanged ── */}
       {(() => {
         const allItems = invoices.flatMap(inv => (inv.items || []).map(item => ({ ...item, invoiceNumber: inv.invoiceNumber })));
         if (!allItems.length) return null;
@@ -368,6 +432,7 @@ const OverviewTab = ({ project, isPrivileged, canSeePrices }) => {
           </div>
         );
       })()}
+
       {/* Maps choice dialog (mobile) */}
       {mapsChoice && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={() => setMapsChoice(null)}>
@@ -1798,9 +1863,10 @@ const ProjectDetail = () => {
 
   const project = projectRes?.data;
 
-  // Fetch Google Places photo dynamically if project has a placeId but no stored coverPhotoUrl
+  // Fetch Google Places photo dynamically if project has a placeId
+  // Always fetch fresh — stored coverPhotoUrl is a temporary CDN URL that expires
   useEffect(() => {
-    if (!project?.placeId || project.coverPhotoUrl || !mapsLoaded) {
+    if (!project?.placeId || !mapsLoaded) {
       setDynamicPhotoUrl(null);
       return;
     }
@@ -1810,11 +1876,11 @@ const ProjectDetail = () => {
         setDynamicPhotoUrl(place.photos[0].getUrl({ maxWidth: 1200 }));
       }
     });
-  }, [project?.placeId, project?.coverPhotoUrl, mapsLoaded]);
+  }, [project?.placeId, mapsLoaded]);
 
-  // Street View / satellite map fallback for hero photo
+  // Street View / satellite map fallback for hero photo (when no placeId)
   useEffect(() => {
-    if (!mapsApiKey || !project || project.coverPhotoUrl) {
+    if (!mapsApiKey || !project || project.placeId) {
       setStreetViewUrl(null);
       return;
     }
@@ -1844,7 +1910,7 @@ const ProjectDetail = () => {
         }
       });
     return () => { cancelled = true; };
-  }, [project?.addressStreet, project?.addressCity, project?.addressState, project?.addressZip, project?.coverPhotoUrl, mapsApiKey]);
+  }, [project?.addressStreet, project?.addressCity, project?.addressState, project?.addressZip, project?.placeId, mapsApiKey]);
 
   if (isLoading) {
     return (
@@ -1889,7 +1955,7 @@ const ProjectDetail = () => {
 
       {/* Header Card */}
       {(() => {
-        const heroPhoto = project.coverPhotoUrl || dynamicPhotoUrl || streetViewUrl;
+        const heroPhoto = dynamicPhotoUrl || streetViewUrl || project.coverPhotoUrl;
         return (
       <div
         className={cn('project-hero', heroPhoto && 'project-hero--has-photo')}
@@ -1908,56 +1974,10 @@ const ProjectDetail = () => {
               <h1 className="project-hero__title">{project.title}</h1>
             </div>
             <div className="project-hero__meta">
-              {project.clientId && (
-                <button
-                  onClick={() => navigate(`/clients/${project.clientId}`)}
-                  className="project-hero__meta-link"
-                >
-                  <User2 /> {clientName}
-                </button>
-              )}
-              {(() => {
-                if (project.sessions?.length > 0) {
-                  const sorted = [...project.sessions].sort((a, b) => new Date(a.sessionDate) - new Date(b.sessionDate));
-                  return (
-                    <>
-                      <span className="project-hero__dot" />
-                      <span className="project-hero__meta-item">
-                        <Calendar /> {project.sessions.length} sessions · {formatDate(sorted[0].sessionDate)} – {formatDate(sorted[sorted.length - 1].sessionDate)}
-                      </span>
-                    </>
-                  );
-                }
-                const dateRange = formatDateRange(project.shootStartDate, project.shootEndDate);
-                if (dateRange) return (
-                  <>
-                    <span className="project-hero__dot" />
-                    <span className="project-hero__meta-item">
-                      <Calendar /> {dateRange.range} ({dateRange.days}d)
-                    </span>
-                  </>
-                );
-                if (project.shootStartDate) {
-                  const timeRange = formatTimeRange(project.shootStartTime, project.shootEndTime);
-                  return (
-                    <>
-                      <span className="project-hero__dot" />
-                      <span className="project-hero__meta-item">
-                        <Calendar /> {formatDate(project.shootStartDate)}
-                        {timeRange && <> · {timeRange}</>}
-                      </span>
-                    </>
-                  );
-                }
-                return null;
-              })()}
               {project.location && (
-                <>
-                  <span className="project-hero__dot" />
-                  <span className="project-hero__meta-item">
-                    <MapPin /> {project.location}
-                  </span>
-                </>
+                <span className="project-hero__meta-item">
+                  <MapPin /> {project.location}
+                </span>
               )}
             </div>
           </div>

@@ -57,6 +57,8 @@ export default async function hubRoutes(fastify: any) {
         assignedToAll: hubPosts.assignedToAll,
         completed: hubPosts.completed,
         completedBy: hubPosts.completedBy,
+        thumbsUpIds: hubPosts.thumbsUpIds,
+        thumbsDownIds: hubPosts.thumbsDownIds,
         dueDate: hubPosts.dueDate,
         createdAt: hubPosts.createdAt,
         ...authorFields,
@@ -98,6 +100,8 @@ export default async function hubRoutes(fastify: any) {
       assignedToAll: hubPosts.assignedToAll,
       completed: hubPosts.completed,
       completedBy: hubPosts.completedBy,
+      thumbsUpIds: hubPosts.thumbsUpIds,
+      thumbsDownIds: hubPosts.thumbsDownIds,
       dueDate: hubPosts.dueDate,
       createdAt: hubPosts.createdAt,
       updatedAt: hubPosts.updatedAt,
@@ -278,6 +282,43 @@ export default async function hubRoutes(fastify: any) {
       }
     }
 
+    return { data };
+  });
+
+  // PUT /:id/vote — toggle thumbs up/down on idea posts
+  fastify.put('/:id/vote', { preHandler: [viewGuard] }, async (request: any, reply: any) => {
+    const { id } = request.params;
+    const userId = request.user.id;
+    const { vote } = request.body || {};
+    if (!['up', 'down'].includes(vote)) return reply.code(400).send({ error: 'vote must be "up" or "down"' });
+
+    const [existing] = await db.select({
+      type: hubPosts.type,
+      thumbsUpIds: hubPosts.thumbsUpIds,
+      thumbsDownIds: hubPosts.thumbsDownIds,
+    }).from(hubPosts).where(eq(hubPosts.id, id));
+
+    if (!existing) return reply.code(404).send({ error: 'Post not found' });
+    if (existing.type !== 'idea') return reply.code(400).send({ error: 'Only ideas can be voted on' });
+
+    let ups = (existing.thumbsUpIds as string[]) || [];
+    let downs = (existing.thumbsDownIds as string[]) || [];
+
+    if (vote === 'up') {
+      downs = downs.filter((uid: string) => uid !== userId);
+      ups = ups.includes(userId) ? ups.filter((uid: string) => uid !== userId) : [...ups, userId];
+    } else {
+      ups = ups.filter((uid: string) => uid !== userId);
+      downs = downs.includes(userId) ? downs.filter((uid: string) => uid !== userId) : [...downs, userId];
+    }
+
+    const [data] = await db.update(hubPosts).set({
+      thumbsUpIds: ups,
+      thumbsDownIds: downs,
+      updatedAt: new Date(),
+    }).where(eq(hubPosts.id, id)).returning();
+
+    broadcast('hub_post', 'updated', request.user.id, id);
     return { data };
   });
 

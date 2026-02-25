@@ -1211,6 +1211,16 @@ export function useToggleHubTaskComplete() {
   });
 }
 
+export function useVoteHubIdea() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, vote }) => api.put('/hub/' + id + '/vote', { vote }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.hub.all });
+    },
+  });
+}
+
 export function useCreateHubComment() {
   const queryClient = useQueryClient();
   return useMutation({

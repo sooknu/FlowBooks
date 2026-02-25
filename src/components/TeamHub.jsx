@@ -6,6 +6,7 @@ import {
   Lightbulb, CheckSquare, Megaphone, Plus, Pin, PinOff,
   MessageCircle, ChevronLeft, Trash2, Send, Loader2,
   MoreHorizontal, Pencil, Users, Check, Calendar, AlertTriangle,
+  ThumbsUp, ThumbsDown,
 } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -18,7 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAppData } from '@/hooks/useAppData';
 import {
   useCreateHubPost, useUpdateHubPost, useDeleteHubPost,
-  usePinHubPost, useToggleHubTaskComplete,
+  usePinHubPost, useToggleHubTaskComplete, useVoteHubIdea,
   useCreateHubComment, useDeleteHubComment,
 } from '@/hooks/useMutations';
 
@@ -77,7 +78,7 @@ function toDateInputValue(d) {
 
 // ─── Post Card ──────────────────────────────────────────────────────────────
 
-const PostCard = React.memo(({ post, index, onClick, onToggleComplete, onContextMenu, userId }) => {
+const PostCard = React.memo(({ post, index, onClick, onContextMenu, userId, onVote }) => {
   const tc = TYPE_CONFIG[post.type] || TYPE_CONFIG.idea;
   const Icon = tc.icon;
   const myDone = (post.completedBy || []).includes(userId);
@@ -107,24 +108,16 @@ const PostCard = React.memo(({ post, index, onClick, onToggleComplete, onContext
         <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-amber-400 dark:bg-amber-500/60" />
       )}
       <div className="flex items-start gap-3">
-        {/* Task checkbox — shows current user's completion */}
-        {post.type === 'task' ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleComplete?.(post.id); }}
-            className={cn(
-              'mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all',
-              myDone
-                ? 'bg-blue-500 border-blue-500 text-white'
-                : 'border-surface-300 hover:border-blue-400'
-            )}
-          >
-            {myDone && <Check className="w-3 h-3" />}
-          </button>
-        ) : (
-          <div className={cn('mt-0.5 w-5 h-5 rounded-md flex items-center justify-center shrink-0', tc.bg)}>
-            <Icon className={cn('w-3 h-3', tc.text)} />
-          </div>
-        )}
+        {/* Post type icon badge */}
+        <div className={cn(
+          'mt-0.5 w-5 h-5 rounded-md flex items-center justify-center shrink-0',
+          post.type === 'task' && myDone ? 'bg-emerald-100 dark:bg-emerald-950/40' : tc.bg,
+        )}>
+          {post.type === 'task' && myDone
+            ? <Check className="w-3 h-3 text-emerald-500" />
+            : <Icon className={cn('w-3 h-3', tc.text)} />
+          }
+        </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
@@ -153,7 +146,16 @@ const PostCard = React.memo(({ post, index, onClick, onToggleComplete, onContext
               </span>
             ) : post.assigneeNames?.length > 0 ? (
               <span className="text-[11px] text-blue-500 flex items-center gap-0.5 font-medium">
-                <Users className="w-3 h-3" /> Assigned to {post.assigneeNames.join(', ')}
+                <Users className="w-3 h-3" /> Assigned to{' '}
+                {post.assigneeNames.map((name, idx) => {
+                  const isMe = post.assigneeIds?.[idx] === userId;
+                  return (
+                    <span key={idx}>
+                      {idx > 0 && ', '}
+                      <span className={isMe ? 'text-red-500 dark:text-red-400' : ''}>{name}</span>
+                    </span>
+                  );
+                })}
               </span>
             ) : null}
             {(post.assignedToAll || post.assigneeNames?.length > 0) && <span className="text-surface-300">·</span>}
@@ -180,6 +182,41 @@ const PostCard = React.memo(({ post, index, onClick, onToggleComplete, onContext
                 </span>
               </>
             )}
+            {post.type === 'idea' && (() => {
+              const ups = (post.thumbsUpIds || []);
+              const downs = (post.thumbsDownIds || []);
+              const myUp = ups.includes(userId);
+              const myDown = downs.includes(userId);
+              return (
+                <>
+                  {(ups.length > 0 || downs.length > 0) && <span className="text-surface-300">·</span>}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onVote?.({ id: post.id, vote: 'up' }); }}
+                    className={cn(
+                      'inline-flex items-center gap-0.5 text-[11px] font-medium px-1.5 py-0.5 rounded transition-colors',
+                      myUp
+                        ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
+                        : 'text-surface-400 hover:text-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20'
+                    )}
+                  >
+                    <ThumbsUp className="w-3 h-3" />
+                    {ups.length > 0 && ups.length}
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onVote?.({ id: post.id, vote: 'down' }); }}
+                    className={cn(
+                      'inline-flex items-center gap-0.5 text-[11px] font-medium px-1.5 py-0.5 rounded transition-colors',
+                      myDown
+                        ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400'
+                        : 'text-surface-400 hover:text-red-500 hover:bg-red-50/50 dark:hover:bg-red-950/20'
+                    )}
+                  >
+                    <ThumbsDown className="w-3 h-3" />
+                    {downs.length > 0 && downs.length}
+                  </button>
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -208,6 +245,7 @@ const PostDetail = ({ postId, onBack, userId, canManage }) => {
 
   const pinPost = usePinHubPost();
   const toggleComplete = useToggleHubTaskComplete();
+  const voteIdea = useVoteHubIdea();
   const updatePost = useUpdateHubPost();
   const deletePost = useDeleteHubPost();
   const createComment = useCreateHubComment();
@@ -500,6 +538,42 @@ const PostDetail = ({ postId, onBack, userId, canManage }) => {
             </div>
           );
         })()}
+
+        {/* Idea vote buttons */}
+        {detail.type === 'idea' && !isEditing && (() => {
+          const ups = detail.thumbsUpIds || [];
+          const downs = detail.thumbsDownIds || [];
+          const myUp = ups.includes(userId);
+          const myDown = downs.includes(userId);
+          return (
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                onClick={() => voteIdea.mutate({ id: postId, vote: 'up' })}
+                className={cn(
+                  'flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors',
+                  myUp
+                    ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
+                    : 'bg-surface-100 text-surface-500 hover:bg-surface-200/60'
+                )}
+              >
+                <ThumbsUp className="w-3.5 h-3.5" />
+                {myUp ? 'Liked' : 'Like'}{ups.length > 0 && ` (${ups.length})`}
+              </button>
+              <button
+                onClick={() => voteIdea.mutate({ id: postId, vote: 'down' })}
+                className={cn(
+                  'flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors',
+                  myDown
+                    ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400'
+                    : 'bg-surface-100 text-surface-500 hover:bg-surface-200/60'
+                )}
+              >
+                <ThumbsDown className="w-3.5 h-3.5" />
+                {myDown ? 'Disliked' : 'Dislike'}{downs.length > 0 && ` (${downs.length})`}
+              </button>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Comments section */}
@@ -780,6 +854,7 @@ const TeamHub = () => {
 
   const toggleComplete = useToggleHubTaskComplete();
   const pinPost = usePinHubPost();
+  const voteIdea = useVoteHubIdea();
   const deletePost = useDeleteHubPost();
 
   // Context menu state
@@ -942,23 +1017,88 @@ const TeamHub = () => {
             <Plus className="w-4 h-4 mr-2" /> Create Post
           </button>
         </motion.div>
-      ) : (
-        <div className="space-y-1.5">
-          <AnimatePresence>
-            {posts.map((post, i) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                index={i}
-                userId={user?.id}
-                onClick={() => setSelectedPostId(post.id)}
-                onToggleComplete={(id) => toggleComplete.mutate(id)}
-                onContextMenu={handleContextMenu}
-              />
-            ))}
-          </AnimatePresence>
-        </div>
-      )}
+      ) : (() => {
+        const uid = user?.id;
+        const pinned = posts.filter(p => p.pinned);
+        const unpinned = posts.filter(p => !p.pinned);
+        const isAssignedToMe = (p) => p.type === 'task' && !p.completed && (p.assignedToAll || (p.assigneeIds || []).includes(uid));
+        const myTasks = unpinned.filter(isAssignedToMe);
+        const rest = unpinned.filter(p => !isAssignedToMe(p));
+        const hasSections = myTasks.length > 0 && rest.length > 0;
+        const handleVote = (payload) => voteIdea.mutate(payload);
+        let idx = 0;
+        return (
+          <div className="space-y-1.5">
+            {/* Pinned posts — always on top */}
+            {pinned.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 pt-1 pb-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-500 dark:text-amber-400">Pinned</span>
+                  <div className="flex-1 h-px bg-amber-200/50 dark:bg-amber-800/30" />
+                </div>
+                <AnimatePresence>
+                  {pinned.map((post) => (
+                    <PostCard
+                      key={post.id}
+                      post={post}
+                      index={idx++}
+                      userId={uid}
+                      onClick={() => setSelectedPostId(post.id)}
+                      onContextMenu={handleContextMenu}
+                      onVote={handleVote}
+                    />
+                  ))}
+                </AnimatePresence>
+              </>
+            )}
+            {/* Your Tasks section */}
+            {myTasks.length > 0 && (
+              <>
+                {(hasSections || pinned.length > 0) && (
+                  <div className="flex items-center gap-2 pt-2 pb-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-red-500 dark:text-red-400">Your Tasks</span>
+                    <span className="text-[10px] font-medium text-red-400/60 dark:text-red-500/40 tabular-nums">{myTasks.length}</span>
+                    <div className="flex-1 h-px bg-red-200/50 dark:bg-red-800/30" />
+                  </div>
+                )}
+                <AnimatePresence>
+                  {myTasks.map((post) => (
+                    <PostCard
+                      key={post.id}
+                      post={post}
+                      index={idx++}
+                      userId={uid}
+                      onClick={() => setSelectedPostId(post.id)}
+                      onContextMenu={handleContextMenu}
+                      onVote={handleVote}
+                    />
+                  ))}
+                </AnimatePresence>
+              </>
+            )}
+            {/* Everything Else */}
+            {(hasSections || (pinned.length > 0 && rest.length > 0)) && (
+              <div className="flex items-center gap-2 pt-2 pb-1">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-surface-400">Everything Else</span>
+                <div className="flex-1 h-px bg-surface-200/60 dark:bg-surface-200/30" />
+              </div>
+            )}
+            <AnimatePresence>
+              {rest.map((post) => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  index={idx++}
+                  userId={uid}
+                  onClick={() => setSelectedPostId(post.id)}
+                  onContextMenu={handleContextMenu}
+                  onVote={handleVote}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
+        );
+      })()}
 
       <CreatePostDialog open={showCreate} onOpenChange={setShowCreate} canManage={canManage} />
 

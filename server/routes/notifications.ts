@@ -37,6 +37,14 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     return { success: true };
   });
 
+  // DELETE /api/notifications/:id — dismiss a single notification
+  fastify.delete('/:id', async (request: any) => {
+    const userId = request.user.id;
+    const { id } = request.params;
+    await db.delete(notifications).where(and(eq(notifications.id, id), eq(notifications.userId, userId)));
+    return { success: true };
+  });
+
   // DELETE /api/notifications — clear all notifications for current user
   fastify.delete('/', async (request: any) => {
     const userId = request.user.id;

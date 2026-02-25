@@ -61,15 +61,15 @@ const ALL_NAV_ITEMS = [
 ];
 
 const NOTIF_TYPE_CONFIG = {
-  quote_approved: { icon: FileText, color: 'text-emerald-500', bg: 'bg-emerald-50', route: '/quotes' },
-  payment_received: { icon: CreditCard, color: 'text-blue-500', bg: 'bg-blue-50', route: '/invoices' },
-  project_booked: { icon: FolderKanban, color: 'text-indigo-500', bg: 'bg-indigo-50', route: '/projects' },
-  advance_created: { icon: Banknote, color: 'text-amber-500', bg: 'bg-amber-50', route: '/finance' },
-  salary_accrued: { icon: Wallet, color: 'text-emerald-500', bg: 'bg-emerald-50', route: '/salary' },
-  new_user_signup: { icon: UserPlus, color: 'text-amber-500', bg: 'bg-amber-50', route: '/team?tab=accounts' },
-  hub_task_assigned: { icon: CheckSquare, color: 'text-orange-500', bg: 'bg-orange-50', route: '/hub' },
-  hub_comment: { icon: MessagesSquare, color: 'text-blue-500', bg: 'bg-blue-50', route: '/hub' },
-  hub_task_completed: { icon: CheckSquare, color: 'text-emerald-500', bg: 'bg-emerald-50', route: '/hub' },
+  quote_approved: { icon: FileText, color: 'text-emerald-500 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40', route: '/quotes' },
+  payment_received: { icon: CreditCard, color: 'text-blue-500 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40', route: '/invoices' },
+  project_booked: { icon: FolderKanban, color: 'text-indigo-500 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950/40', route: '/projects' },
+  advance_created: { icon: Banknote, color: 'text-amber-500 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40', route: '/finance' },
+  salary_accrued: { icon: Wallet, color: 'text-emerald-500 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40', route: '/salary' },
+  new_user_signup: { icon: UserPlus, color: 'text-amber-500 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40', route: '/team?tab=accounts' },
+  hub_task_assigned: { icon: CheckSquare, color: 'text-orange-500 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/40', route: '/hub' },
+  hub_comment: { icon: MessagesSquare, color: 'text-blue-500 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40', route: '/hub' },
+  hub_task_completed: { icon: CheckSquare, color: 'text-emerald-500 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40', route: '/hub' },
 };
 
 // Deep-link: route to the specific entity when possible
@@ -93,7 +93,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState(() => new Set(['Sales', 'Management', 'Finance', 'System']));
-  const { notifications: notifs, unreadCount, markRead, markAllRead, clearAll } = useNotifications();
+  const { notifications: notifs, unreadCount, markRead, markAllRead, dismissOne, clearAll } = useNotifications();
   const { isImpersonating, stopImpersonating } = useAuth();
   const { theme, resolvedTheme, cycleTheme } = useTheme();
   const effectiveHeaderLogo = resolvedTheme === 'dark' ? (headerLogoDarkUrl || headerLogoUrl) : headerLogoUrl;
@@ -222,13 +222,13 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
   // ── Notification popover content (shared between desktop & mobile) ──
   const notifList = (
     <>
-      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-surface-200/80">
+      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-surface-200/80 dark:border-surface-200/40">
         <span className="text-[13px] font-semibold text-surface-800 tracking-tight">Notifications</span>
         <div className="flex items-center gap-2">
           {unreadCount > 0 && (
             <button
               onClick={() => markAllRead.mutate()}
-              className="text-[11px] text-blue-600 hover:text-blue-700 font-medium tracking-tight"
+              className="text-[11px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium tracking-tight"
             >
               Mark all read
             </button>
@@ -253,33 +253,46 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
             const cfg = NOTIF_TYPE_CONFIG[n.type] || NOTIF_TYPE_CONFIG.quote_approved;
             const NIcon = cfg.icon;
             return (
-              <button
+              <div
                 key={n.id}
-                onClick={() => {
-                  if (!n.isRead) markRead.mutate(n.id);
-                  const dest = getNotificationRoute(n, cfg);
-                  if (dest) navigate(dest);
-                  setMobileOpen(false);
-                }}
                 className={cn(
-                  "w-full flex items-start gap-2.5 px-3.5 py-2.5 text-left hover:bg-surface-50 transition-colors border-b border-surface-100/80 last:border-b-0",
-                  !n.isRead && "bg-blue-50/30"
+                  "group relative w-full flex items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors border-b border-surface-100/80 dark:border-surface-200/30 last:border-b-0",
+                  !n.isRead
+                    ? "bg-blue-50/30 dark:bg-blue-950/20 hover:bg-blue-50/50 dark:hover:bg-blue-950/30"
+                    : "hover:bg-surface-50 dark:hover:bg-surface-200/20"
                 )}
               >
-                <div className={cn("mt-0.5 flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center", cfg.bg)}>
-                  <NIcon className={cn("w-3.5 h-3.5", cfg.color)} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[13px] font-medium text-surface-800 truncate">{n.title}</span>
-                    {!n.isRead && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
-                    )}
+                <button
+                  onClick={() => {
+                    if (!n.isRead) markRead.mutate(n.id);
+                    const dest = getNotificationRoute(n, cfg);
+                    if (dest) navigate(dest);
+                    setMobileOpen(false);
+                  }}
+                  className="flex items-start gap-2.5 flex-1 min-w-0 text-left"
+                >
+                  <div className={cn("mt-0.5 flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center", cfg.bg)}>
+                    <NIcon className={cn("w-3.5 h-3.5", cfg.color)} />
                   </div>
-                  <p className="text-[12px] text-surface-500 truncate">{n.message}</p>
-                  <span className="text-[11px] text-surface-400">{timeAgo(n.createdAt)}</span>
-                </div>
-              </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[13px] font-medium text-surface-800 truncate">{n.title}</span>
+                      {!n.isRead && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                      )}
+                    </div>
+                    <p className="text-[12px] text-surface-500 truncate">{n.message}</p>
+                    <span className="text-[11px] text-surface-400">{timeAgo(n.createdAt)}</span>
+                  </div>
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); dismissOne.mutate(n.id); }}
+                  className="flex-shrink-0 mt-1 p-1 rounded-md opacity-0 group-hover:opacity-100 text-surface-400 hover:text-red-500 hover:bg-surface-100 dark:hover:bg-surface-200/30 transition-all"
+                  title="Dismiss"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
             );
           })
         )}
