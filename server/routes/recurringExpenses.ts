@@ -8,7 +8,7 @@ import { parseDateInput } from '../lib/dates';
 const guard = requirePermission('manage_expenses');
 
 /** Find or create the "Uncategorized" expense category. */
-async function getOrCreateUncategorizedId(): Promise<string> {
+async function getOrCreateUncategorizedId(userId: string): Promise<string> {
   const [existing] = await db
     .select({ id: expenseCategories.id })
     .from(expenseCategories)
@@ -17,13 +17,13 @@ async function getOrCreateUncategorizedId(): Promise<string> {
   if (existing) return existing.id;
   const [created] = await db
     .insert(expenseCategories)
-    .values({ name: 'Uncategorized', color: 'slate', sortOrder: 9999 })
+    .values({ userId, name: 'Uncategorized', color: 'slate', sortOrder: 9999 })
     .returning({ id: expenseCategories.id });
   return created.id;
 }
 
-async function mapBody(body: any) {
-  const categoryId = body.categoryId || await getOrCreateUncategorizedId();
+async function mapBody(body: any, userId: string) {
+  const categoryId = body.categoryId || await getOrCreateUncategorizedId(userId);
   return {
     categoryId,
     projectId: body.projectId || null,
@@ -87,7 +87,7 @@ export default async function recurringExpenseRoutes(fastify: any) {
 
   // POST / — create recurring expense + first entry
   fastify.post('/', { preHandler: [guard] }, async (request: any) => {
-    const mapped = await mapBody(request.body);
+    const mapped = await mapBody(request.body, request.user.id);
 
     const [template] = await db
       .insert(recurringExpenses)
@@ -121,7 +121,7 @@ export default async function recurringExpenseRoutes(fastify: any) {
   fastify.put('/:id', { preHandler: [guard] }, async (request: any) => {
     const [data] = await db
       .update(recurringExpenses)
-      .set({ ...await mapBody(request.body), updatedAt: new Date() })
+      .set({ ...await mapBody(request.body, request.user.id), updatedAt: new Date() })
       .where(and(eq(recurringExpenses.id, request.params.id), eq(recurringExpenses.userId, request.user.id)))
       .returning();
     if (data) logActivity({ ...actorFromRequest(request), action: 'updated', entityType: 'recurring_expense', entityId: data.id, entityLabel: data.description });
