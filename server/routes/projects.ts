@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { projects, projectNotes, projectAssignments, projectSessions, teamMembers, user, notifications, expenses } from '../db/schema';
-import { eq, ilike, or, and, asc as ascFn, desc as descFn, count, ne, exists, sql, gte, lt } from 'drizzle-orm';
+import { eq, ilike, or, and, asc as ascFn, desc as descFn, count, ne, notInArray, exists, sql, gte, lt } from 'drizzle-orm';
 import { logActivity, actorFromRequest } from '../lib/activityLog';
 import { requireRole, requirePermission, hasPermission } from '../lib/permissions';
 import { notifyUsers, getPrivilegedUserIds } from '../lib/notifications';
@@ -87,11 +87,11 @@ export default async function projectRoutes(fastify: any) {
 
     const conditions: any[] = [];
 
-    // Exclude archived by default unless explicitly requested
+    // Exclude archived + completed + delivered by default ("All Active")
     if (status) {
       conditions.push(eq(projects.status, status));
     } else {
-      conditions.push(ne(projects.status, 'archived'));
+      conditions.push(notInArray(projects.status, ['archived', 'completed', 'delivered']));
     }
 
     if (clientId) {
@@ -182,11 +182,13 @@ export default async function projectRoutes(fastify: any) {
     }
 
     const col = projects[orderBy as keyof typeof projects] as any;
-    // Push NULLs to the end regardless of sort direction
+    // For shoot date: upcoming dates first (ascending), then past dates (descending), nulls last
     const orderFn = orderBy === 'shootStartDate'
-      ? asc === 'true'
-        ? sql`${col} ASC NULLS LAST`
-        : sql`${col} DESC NULLS LAST`
+      ? [
+          sql`CASE WHEN ${col} >= CURRENT_DATE THEN 0 WHEN ${col} IS NULL THEN 2 ELSE 1 END ASC`,
+          sql`CASE WHEN ${col} >= CURRENT_DATE THEN ${col} END ASC`,
+          sql`CASE WHEN ${col} < CURRENT_DATE THEN ${col} END DESC`,
+        ]
       : asc === 'true' ? ascFn(col) : descFn(col);
 
     const balanceSql = sql`COALESCE(${projects.projectPrice}, 0) - COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.project_id = ${projects.id} AND e.type = 'credit'), 0)`;
@@ -456,5 +458,59 @@ export default async function projectRoutes(fastify: any) {
     await db.delete(projectNotes).where(eq(projectNotes.id, request.params.noteId));
     broadcast('project_note', 'deleted', request.user.id, request.params.noteId);
     return { success: true };
+  });
+
+  // GET /api/projects/upcoming-anniversary — next anniversary within 30 days
+  fastify.get('/upcoming-anniversary', async (request: any) => {
+    const rows = await db.execute(sql`
+      WITH anniversaries AS (
+        SELECT
+          p.id,
+          p.title,
+          p.shoot_start_date,
+          p.project_type,
+          c.id AS client_id,
+          COALESCE(c.display_name, c.company, TRIM(CONCAT(c.first_name, ' ', COALESCE(c.last_name, '')))) AS client_name,
+          c.email AS client_email,
+          EXTRACT(YEAR FROM AGE(
+            CASE
+              WHEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, EXTRACT(MONTH FROM p.shoot_start_date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date)::int = 2 THEN 28 ELSE 30 END)) >= CURRENT_DATE
+              THEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, EXTRACT(MONTH FROM p.shoot_start_date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date)::int = 2 THEN 28 ELSE 30 END))
+              ELSE MAKE_DATE((EXTRACT(YEAR FROM CURRENT_DATE)::int + 1), EXTRACT(MONTH FROM p.shoot_start_date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date)::int = 2 THEN 28 ELSE 30 END))
+            END,
+            p.shoot_start_date
+          ))::int AS years_ago,
+          CASE
+            WHEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, EXTRACT(MONTH FROM p.shoot_start_date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date)::int = 2 THEN 28 ELSE 30 END)) >= CURRENT_DATE
+            THEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, EXTRACT(MONTH FROM p.shoot_start_date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date)::int = 2 THEN 28 ELSE 30 END))
+            ELSE MAKE_DATE((EXTRACT(YEAR FROM CURRENT_DATE)::int + 1), EXTRACT(MONTH FROM p.shoot_start_date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date)::int = 2 THEN 28 ELSE 30 END))
+          END AS anniversary_date
+        FROM ${projects} p
+        LEFT JOIN clients c ON p.client_id = c.id
+        WHERE p.shoot_start_date IS NOT NULL
+          AND p.status != 'archived'
+          AND EXTRACT(YEAR FROM p.shoot_start_date) < EXTRACT(YEAR FROM CURRENT_DATE)
+      )
+      SELECT * FROM anniversaries
+      WHERE anniversary_date - CURRENT_DATE BETWEEN 0 AND 30
+      ORDER BY anniversary_date - CURRENT_DATE ASC
+      LIMIT 1
+    `);
+
+    if (!rows.length) return { data: null };
+
+    const row = rows[0];
+    return {
+      data: {
+        projectId: row.id,
+        projectTitle: row.title,
+        clientId: row.client_id,
+        clientName: row.client_name,
+        clientEmail: row.client_email,
+        shootDate: row.shoot_start_date,
+        anniversaryDate: row.anniversary_date,
+        yearsAgo: row.years_ago,
+      },
+    };
   });
 }

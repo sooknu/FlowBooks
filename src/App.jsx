@@ -39,6 +39,7 @@ const FinanceManager = React.lazy(() => import('@/components/FinanceManager'));
 const SalaryManager = React.lazy(() => import('@/components/SalaryManager'));
 const PermissionsManager = React.lazy(() => import('@/components/PermissionsManager'));
 const BackupManager = React.lazy(() => import('@/components/BackupManager'));
+const AISettings = React.lazy(() => import('@/components/AISettings'));
 const SetupWizard = React.lazy(() => import('@/components/SetupWizard'));
 const ReportsManager = React.lazy(() => import('@/components/ReportsManager'));
 const TeamHub = React.lazy(() => import('@/components/TeamHub'));
@@ -111,6 +112,7 @@ function App() {
               <Route path="payments" element={<Lazy><PaymentGatewayManager /></Lazy>} />
               <Route path="email" element={<Lazy><EmailManager /></Lazy>} />
               <Route path="backup" element={<Lazy><BackupManager /></Lazy>} />
+              <Route path="ai" element={<Lazy><AISettings /></Lazy>} />
             </Route>
           </Route>
 

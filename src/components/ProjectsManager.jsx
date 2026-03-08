@@ -1,13 +1,13 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback, memo } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { motion, useMotionValue, animate, AnimatePresence } from 'framer-motion';
 import { cn, fmtDate, tzDate } from '@/lib/utils';
 import { useProjectTypes } from '@/lib/projectTypes';
 import {
-  FolderKanban, Plus, Search, X, ArrowUpDown, Loader2, Camera,
+  FolderKanban, Plus, Search, X, Loader2, Camera,
   Pencil, Archive, ArchiveRestore, Trash2, DollarSign, TrendingUp, ChevronDown,
-  Calendar, Tag, Filter, XCircle,
+  Calendar, Tag, Filter, XCircle, Heart, Send, Sparkles, Copy, Check,
 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -39,10 +39,7 @@ const STATUS_COLORS = {
 
 /* Status border colors are now in BEM CSS via data-status attribute */
 
-const SORT_OPTIONS = [
-  { label: 'Newest First', orderBy: 'shootStartDate', asc: false },
-  { label: 'Oldest First', orderBy: 'shootStartDate', asc: true },
-];
+const DEFAULT_SORT = { orderBy: 'shootStartDate', asc: true };
 
 const currentYear = new Date().getFullYear();
 const YEAR_OPTIONS = [
@@ -190,6 +187,134 @@ const ProjectRow = memo(({ project, onEdit, onArchive, onRestore, onDelete, onCo
 });
 ProjectRow.displayName = 'ProjectRow';
 
+// ─── AnniversaryBanner ──────────────────────────────────────────────────────
+
+const AnniversaryBanner = ({ anniversary, navigate, saveScroll }) => {
+  const [drafting, setDrafting] = useState(false);
+  const [draftMessage, setDraftMessage] = useState(null);
+  const [draftError, setDraftError] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  const ordinal = anniversary.yearsAgo === 1 ? '1st' : anniversary.yearsAgo === 2 ? '2nd' : anniversary.yearsAgo === 3 ? '3rd' : `${anniversary.yearsAgo}th`;
+
+  const daysUntil = Math.round((new Date(anniversary.anniversaryDate) - new Date(new Date().toDateString())) / 86400000);
+
+  const handleDraft = async (e) => {
+    e.stopPropagation();
+    if (draftMessage || draftError) {
+      setDraftMessage(null);
+      setDraftError(null);
+      return;
+    }
+    setDrafting(true);
+    setDraftError(null);
+    try {
+      const res = await api.post('/ai/draft-congrats', {
+        clientName: anniversary.clientName,
+        projectTitle: anniversary.projectTitle,
+        shootDate: anniversary.shootDate,
+        yearsAgo: anniversary.yearsAgo,
+      });
+      setDraftMessage(res.message);
+    } catch (err) {
+      setDraftError(err?.message || 'Could not generate message. Check AI settings.');
+    } finally {
+      setDrafting(false);
+    }
+  };
+
+  const handleCopy = (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(draftMessage);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSendEmail = (e) => {
+    e.stopPropagation();
+    const subject = encodeURIComponent(`Happy ${ordinal} Anniversary!`);
+    const body = encodeURIComponent(draftMessage || '');
+    window.open(`mailto:${anniversary.clientEmail}?subject=${subject}&body=${body}`, '_self');
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-0"
+    >
+      <div
+        onClick={() => { saveScroll?.(); navigate(`/projects/${anniversary.projectId}`); }}
+        className="flat-card p-4 flex items-center gap-3 border-l-4 border-l-pink-400 cursor-pointer hover:border-pink-500 transition-colors"
+      >
+        <div className="w-9 h-9 rounded-full bg-pink-50 flex items-center justify-center flex-shrink-0">
+          <Heart className="w-4 h-4 text-pink-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-surface-800">
+            {anniversary.clientName || anniversary.projectTitle}'s {ordinal} anniversary is{' '}
+            {daysUntil === 0 ? <span className="font-semibold text-pink-600">today!</span>
+              : daysUntil === 1 ? <span className="font-semibold text-pink-600">tomorrow!</span>
+              : <>on <span className="font-semibold text-pink-600">{fmtDate(anniversary.anniversaryDate, { month: 'long', day: 'numeric' })}</span></>}
+          </p>
+          <p className="text-xs text-surface-400 mt-0.5">
+            {anniversary.projectTitle} — {fmtDate(anniversary.shootDate, { month: 'long', day: 'numeric', year: 'numeric' })}
+          </p>
+        </div>
+        <button
+          onClick={handleDraft}
+          disabled={drafting}
+          className="action-btn text-xs flex-shrink-0"
+        >
+          {drafting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5" />}
+          <span className="hidden sm:inline">{draftMessage || draftError ? 'Close' : 'Draft Message'}</span>
+          <span className="sm:hidden">{draftMessage || draftError ? 'Close' : 'Draft'}</span>
+        </button>
+      </div>
+
+      {/* AI-drafted message panel */}
+      <AnimatePresence>
+        {draftMessage && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="flat-card p-4 rounded-t-none -mt-1 border-l-4 border-l-pink-200 space-y-3">
+              <p className="text-sm text-surface-700 whitespace-pre-wrap leading-relaxed">{draftMessage}</p>
+              <div className="flex items-center gap-2">
+                {anniversary.clientEmail && (
+                  <button onClick={handleSendEmail} className="action-btn text-xs">
+                    <Send className="w-3.5 h-3.5 mr-1.5" /> Send Email
+                  </button>
+                )}
+                <button onClick={handleCopy} className={cn(anniversary.clientEmail ? 'glass-button-secondary' : 'action-btn', 'text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5')}>
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+        {draftError && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="flat-card p-3 rounded-t-none -mt-1 border-l-4 border-l-red-200">
+              <p className="text-xs text-red-600">{draftError}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
 // ─── ProjectsManager ─────────────────────────────────────────────────────────
 
 const ProjectsManager = () => {
@@ -204,20 +329,26 @@ const ProjectsManager = () => {
   const { user } = useAuth();
 
   const { types: projectTypes, getTypeColor } = useProjectTypes();
+
+  const { data: anniversary } = useQuery({
+    queryKey: ['projects', 'upcoming-anniversary'],
+    queryFn: () => api.get('/projects/upcoming-anniversary'),
+    staleTime: 10 * 60 * 1000,
+    select: (res) => res.data,
+  });
+
   const [searchTerm, setSearchTerm] = useState('');
   const statusFilter = searchParams.get('status') || '';
   const mineFilter = isCrew || searchParams.get('mine') === 'true';
   const yearFilter = searchParams.get('year') || '';
   const typeFilter = searchParams.get('typeId') || '';
   const financialFilter = searchParams.get('financial') || ''; // 'balanceOwed' | 'profit' | ''
-  const [sortIndex, setSortIndex] = useState(0);
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const [contextMenu, setContextMenu] = useState(null);
 
   const debouncedSearch = useDebounce(searchTerm, 300);
-  const currentSort = SORT_OPTIONS[sortIndex];
 
   const tabScrollRef = useRef(null);
   const contextMenuRef = useRef(null);
@@ -230,8 +361,8 @@ const ProjectsManager = () => {
   }, []);
 
   // When a financial sort is active, override the normal sort
-  const effectiveOrderBy = financialFilter || currentSort.orderBy;
-  const effectiveAsc = financialFilter ? false : currentSort.asc;
+  const effectiveOrderBy = financialFilter || DEFAULT_SORT.orderBy;
+  const effectiveAsc = financialFilter ? false : DEFAULT_SORT.asc;
 
   const {
     data,
@@ -354,21 +485,13 @@ const ProjectsManager = () => {
           <p className="text-surface-400 text-sm">Manage your photography projects</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setSortIndex((sortIndex + 1) % SORT_OPTIONS.length)}
-            className="action-btn action-btn--secondary"
-            title={`Sort: ${currentSort.label}`}
-          >
-            <ArrowUpDown className="action-btn__icon" />
-            <span className="hidden sm:inline">{currentSort.label}</span>
-          </button>
           {can('manage_projects') && (
             <button
               onClick={() => navigate('/projects/new')}
               className="action-btn"
             >
               <Plus className="action-btn__icon" />
-              <span className="hidden md:inline">New Project</span>
+              New Project
             </button>
           )}
         </div>
@@ -595,6 +718,11 @@ const ProjectsManager = () => {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Anniversary Banner */}
+      {anniversary && (
+        <AnniversaryBanner anniversary={anniversary} navigate={navigate} saveScroll={saveScroll} />
+      )}
 
       {/* List */}
       {isLoading ? (

@@ -1842,6 +1842,7 @@ const ProjectDetail = () => {
   const tabScrollRef = useRef(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const queryClient = useQueryClient();
   const updateProject = useUpdateProject();
   const deleteProjectPermanently = useDeleteProjectPermanently();
   const { isPrivileged, canSeePrices, teamRole, can } = useAppData();
@@ -1853,6 +1854,7 @@ const ProjectDetail = () => {
   const mapsApiKey = settingsData?.google_maps_api_key;
   const mapsLoaded = useGoogleMaps(mapsApiKey);
   const [dynamicPhotoUrl, setDynamicPhotoUrl] = useState(null);
+  const [placePhotoFailed, setPlacePhotoFailed] = useState(false);
   const [streetViewUrl, setStreetViewUrl] = useState(null);
 
   const { data: projectRes, isLoading } = useQuery({
@@ -1868,19 +1870,24 @@ const ProjectDetail = () => {
   useEffect(() => {
     if (!project?.placeId || !mapsLoaded) {
       setDynamicPhotoUrl(null);
+      setPlacePhotoFailed(false);
       return;
     }
     const service = new window.google.maps.places.PlacesService(document.createElement('div'));
     service.getDetails({ placeId: project.placeId, fields: ['photos'] }, (place, status) => {
       if (status === window.google.maps.places.PlacesServiceStatus.OK && place?.photos?.length) {
         setDynamicPhotoUrl(place.photos[0].getUrl({ maxWidth: 1200 }));
+        setPlacePhotoFailed(false);
+      } else {
+        setDynamicPhotoUrl(null);
+        setPlacePhotoFailed(true);
       }
     });
   }, [project?.placeId, mapsLoaded]);
 
-  // Street View / satellite map fallback for hero photo (when no placeId)
+  // Street View / satellite map fallback for hero photo (when no placeId, or place has no photos)
   useEffect(() => {
-    if (!mapsApiKey || !project || project.placeId) {
+    if (!mapsApiKey || !project || (project.placeId && !placePhotoFailed)) {
       setStreetViewUrl(null);
       return;
     }
@@ -1910,7 +1917,7 @@ const ProjectDetail = () => {
         }
       });
     return () => { cancelled = true; };
-  }, [project?.addressStreet, project?.addressCity, project?.addressState, project?.addressZip, project?.placeId, mapsApiKey]);
+  }, [project?.addressStreet, project?.addressCity, project?.addressState, project?.addressZip, project?.placeId, placePhotoFailed, mapsApiKey]);
 
   if (isLoading) {
     return (
@@ -1936,6 +1943,11 @@ const ProjectDetail = () => {
   const canEdit = can('manage_projects');
 
   const handleStatusChange = (newStatus) => {
+    // Optimistically update the cache so the select doesn't flash back
+    queryClient.setQueryData(queryKeys.projects.detail(projectId), (old) => {
+      if (!old?.data) return old;
+      return { ...old, data: { ...old.data, status: newStatus } };
+    });
     updateProject.mutate({ id: project.id, status: newStatus });
   };
 

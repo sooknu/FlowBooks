@@ -3,8 +3,12 @@ import { EventEmitter } from 'node:events';
 
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
-const pubClient = new IORedis(redisUrl);
-const subClient = new IORedis(redisUrl);
+const pubClient = new IORedis(redisUrl, { retryStrategy: (times) => Math.min(times * 200, 5000) });
+const subClient = new IORedis(redisUrl, { retryStrategy: (times) => Math.min(times * 200, 5000) });
+
+// Suppress noisy unhandled error events — ioredis auto-reconnects
+pubClient.on('error', () => {});
+subClient.on('error', () => {});
 
 const CHANNEL = 'flowbooks:changes';
 
@@ -12,17 +16,13 @@ const CHANNEL = 'flowbooks:changes';
 export const localBus = new EventEmitter();
 localBus.setMaxListeners(0); // unlimited SSE connections
 
-// One-time Redis subscription setup
-let subscribed = false;
-function ensureSubscribed() {
-  if (subscribed) return;
-  subscribed = true;
+// Subscribe on connect (and re-subscribe after reconnect)
+subClient.on('ready', () => {
   subClient.subscribe(CHANNEL);
-  subClient.on('message', (channel, message) => {
-    if (channel === CHANNEL) localBus.emit('change', message);
-  });
-}
-ensureSubscribed();
+});
+subClient.on('message', (channel, message) => {
+  if (channel === CHANNEL) localBus.emit('change', message);
+});
 
 /**
  * Fire-and-forget broadcast. Never throws — errors logged to console.

@@ -105,9 +105,11 @@ const ProjectForm = () => {
   const [showAvailable, setShowAvailable] = useState(false);
   const availableRef = useRef(null);
 
-  // Populate form for edit mode or apply defaults for create
+  // Populate form for edit mode or apply defaults for create (only on first load)
+  const populatedRef = useRef(false);
   useEffect(() => {
-    if (isEdit && project) {
+    if (isEdit && project && !populatedRef.current) {
+      populatedRef.current = true;
       const hasSessions = project.sessions?.length > 0;
       const hasEnd = hasSessions || !!project.shootEndDate;
       setIsMultiDay(hasEnd);
@@ -233,13 +235,15 @@ const ProjectForm = () => {
   }, [showClientDropdown]);
 
   const handleCreateClient = async () => {
-    if (!newClientName.trim()) return;
+    if (!newClientName.trim() || creatingClient) return;
     setCreatingClient(true);
     try {
       const parts = newClientName.trim().split(/\s+/);
       const firstName = parts[0];
       const lastName = parts.slice(1).join(' ') || null;
       const res = await api.post('/clients', { firstName, lastName, email: newClientEmail.trim() || null });
+      // Optimistically add to catalog cache so the picker reflects immediately
+      queryClient.setQueryData(queryKeys.clients.catalog(), (old = []) => [...old, res.data]);
       queryClient.invalidateQueries({ queryKey: queryKeys.clients.catalog() });
       setForm(prev => ({ ...prev, clientId: res.data.id }));
       setClientSearch('');

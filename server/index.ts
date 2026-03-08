@@ -52,6 +52,7 @@ import gdriveAuthRoutes from './routes/gdriveAuth';
 import setupRoutes from './routes/setup';
 import reportsRoutes from './routes/reports';
 import hubRoutes from './routes/hub';
+import aiRoutes from './routes/ai';
 import sseRoutes from './routes/sse';
 import { db } from './db';
 import { appSettings, invoices, quotes } from './db/schema';
@@ -277,13 +278,14 @@ if (fs.existsSync(distPath)) {
     root: distPath,
     prefix: '/',
     wildcard: false,
+    cacheControl: false, // Disable send's default cache-control — we set it ourselves in setHeaders
     setHeaders: (res: any, filePath: string) => {
-      if (filePath.endsWith('index.html')) {
-        // Never cache index.html — ensures browser always gets fresh chunk references after deploys
-        res.setHeader('Cache-Control', 'no-cache');
-      } else if (filePath.includes('/assets/') && /\-[a-f0-9]{8}\.(js|css)$/.test(filePath)) {
+      if (filePath.includes('/assets/') && /\-[a-f0-9]{8}\.(js|css)$/.test(filePath)) {
         // Immutable caching for Vite's hashed assets (e.g. index-12266eec.js)
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else {
+        // Everything else (index.html, favicon, etc.) — never cache
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       }
     },
   });
@@ -388,6 +390,7 @@ await app.register(gdriveAuthRoutes, { prefix: '/api/backup/gdrive' });
 await app.register(setupRoutes, { prefix: '/api/setup' });
 await app.register(reportsRoutes, { prefix: '/api/reports' });
 await app.register(hubRoutes, { prefix: '/api/hub' });
+await app.register(aiRoutes, { prefix: '/api/ai' });
 await app.register(sseRoutes, { prefix: '/api/sse' });
 
 const port = parseInt(process.env.API_PORT || '3001', 10);

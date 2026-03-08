@@ -143,13 +143,15 @@ const ProjectFormDialog = ({ open, onOpenChange, project, defaultValues }) => {
   }, [showClientDropdown]);
 
   const handleCreateClient = async () => {
-    if (!newClientName.trim()) return;
+    if (!newClientName.trim() || creatingClient) return;
     setCreatingClient(true);
     try {
       const parts = newClientName.trim().split(/\s+/);
       const firstName = parts[0];
       const lastName = parts.slice(1).join(' ') || null;
       const res = await api.post('/clients', { firstName, lastName, email: newClientEmail.trim() || null });
+      // Optimistically add to catalog cache so the picker reflects immediately
+      queryClient.setQueryData(queryKeys.clients.catalog(), (old = []) => [...old, res.data]);
       queryClient.invalidateQueries({ queryKey: queryKeys.clients.catalog() });
       setForm(prev => ({ ...prev, clientId: res.data.id }));
       setClientSearch('');

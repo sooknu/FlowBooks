@@ -2,7 +2,10 @@ import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6380';
-export const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
+export const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null, retryStrategy: (times) => Math.min(times * 200, 5000) });
+
+// Suppress noisy unhandled error events — ioredis auto-reconnects
+connection.on('error', () => {});
 
 export const emailQueue = new Queue('email', { connection });
 export const cleanupQueue = new Queue('cleanup', { connection });

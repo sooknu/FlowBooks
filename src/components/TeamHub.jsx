@@ -6,7 +6,7 @@ import {
   Lightbulb, CheckSquare, Megaphone, Plus, Pin, PinOff,
   MessageCircle, ChevronLeft, Trash2, Send, Loader2,
   MoreHorizontal, Pencil, Users, Check, Calendar, AlertTriangle,
-  ThumbsUp, ThumbsDown,
+  ThumbsUp, ThumbsDown, ArchiveRestore, BadgeCheck, XCircle,
 } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -18,8 +18,8 @@ import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppData } from '@/hooks/useAppData';
 import {
-  useCreateHubPost, useUpdateHubPost, useDeleteHubPost,
-  usePinHubPost, useToggleHubTaskComplete, useVoteHubIdea,
+  useCreateHubPost, useUpdateHubPost, useDeleteHubPost, useRestoreHubPost,
+  usePinHubPost, useToggleHubTaskComplete, useVoteHubIdea, useApproveHubIdea,
   useCreateHubComment, useDeleteHubComment,
 } from '@/hooks/useMutations';
 
@@ -36,6 +36,7 @@ const FILTER_TABS = [
   { key: 'idea', label: 'Ideas' },
   { key: 'task', label: 'Tasks' },
   { key: 'announcement', label: 'Announcements' },
+  { key: 'archived', label: 'Archived' },
 ];
 
 function getInitials(name) {
@@ -131,9 +132,14 @@ const PostCard = React.memo(({ post, index, onClick, onContextMenu, userId, onVo
               </span>
             )}
           </div>
-          <h3 className={cn('text-sm font-semibold text-surface-800 leading-snug', post.completed && 'line-through opacity-50')}>
-            {post.title}
-          </h3>
+          <div className="flex items-center gap-1.5">
+            <h3 className={cn('text-sm font-semibold text-surface-800 leading-snug', post.completed && 'line-through opacity-50')}>
+              {post.title}
+            </h3>
+            {post.approved && (
+              <BadgeCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            )}
+          </div>
           {post.body && (
             <p className="text-xs text-surface-400 mt-1 line-clamp-2 leading-relaxed">{post.body}</p>
           )}
@@ -246,10 +252,13 @@ const PostDetail = ({ postId, onBack, userId, canManage }) => {
   const pinPost = usePinHubPost();
   const toggleComplete = useToggleHubTaskComplete();
   const voteIdea = useVoteHubIdea();
+  const approveIdea = useApproveHubIdea();
   const updatePost = useUpdateHubPost();
   const deletePost = useDeleteHubPost();
   const createComment = useCreateHubComment();
   const deleteComment = useDeleteHubComment();
+  const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [approveDescription, setApproveDescription] = useState('');
 
   // Load team members for task assignee editing
   const { data: teamMembers = [] } = useQuery({
@@ -355,9 +364,14 @@ const PostDetail = ({ postId, onBack, userId, canManage }) => {
                     {(detail.completedBy || []).includes(userId) ? 'Undo complete' : 'Mark done'}
                   </DropdownMenuItem>
                 )}
+                {detail.type === 'idea' && canManage && (
+                  <DropdownMenuItem onClick={() => setShowApproveDialog(true)} className={detail.approved ? '' : 'text-emerald-600 focus:text-emerald-600'}>
+                    {detail.approved ? <><XCircle className="w-3.5 h-3.5 mr-2" /> Unapprove</> : <><BadgeCheck className="w-3.5 h-3.5 mr-2" /> Approve as Feature</>}
+                  </DropdownMenuItem>
+                )}
                 {(isAuthor || canManage) && (
                   <DropdownMenuItem onClick={() => setDeleteTarget('post')} className="text-red-600 focus:text-red-600">
-                    <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete
+                    <Trash2 className="w-3.5 h-3.5 mr-2" /> Archive
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
@@ -461,11 +475,26 @@ const PostDetail = ({ postId, onBack, userId, canManage }) => {
           </div>
         ) : (
           <>
-            <h2 className={cn('text-lg font-bold text-surface-900 mb-2', detail.completed && 'line-through opacity-50')}>
-              {detail.title}
-            </h2>
+            <div className="flex items-center gap-2 mb-2">
+              <h2 className={cn('text-lg font-bold text-surface-900', detail.completed && 'line-through opacity-50')}>
+                {detail.title}
+              </h2>
+              {detail.approved && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">
+                  <BadgeCheck className="w-3 h-3" /> Approved
+                </span>
+              )}
+            </div>
             {detail.body && (
               <p className="text-sm text-surface-600 whitespace-pre-wrap leading-relaxed mb-4">{detail.body}</p>
+            )}
+            {detail.type === 'idea' && !detail.approved && canManage && (
+              <button
+                onClick={() => { setApproveDescription(detail.body || ''); setShowApproveDialog(true); }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors mb-4 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800 dark:hover:bg-emerald-950/60"
+              >
+                <BadgeCheck className="w-3.5 h-3.5" /> Approve as Future Feature
+              </button>
             )}
           </>
         )}
@@ -642,21 +671,55 @@ const PostDetail = ({ postId, onBack, userId, canManage }) => {
         </form>
       </div>
 
-      {/* Delete confirmation */}
+      {/* Archive/Delete confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deleteTarget === 'post' ? 'post' : 'comment'}?</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+            <AlertDialogTitle>{deleteTarget === 'post' ? 'Archive post?' : 'Delete comment?'}</AlertDialogTitle>
+            <AlertDialogDescription>{deleteTarget === 'post' ? 'The post will be moved to the Archived tab.' : 'This action cannot be undone.'}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white">
-              Delete
+              {deleteTarget === 'post' ? 'Archive' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Approve idea dialog */}
+      <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{detail?.approved ? 'Unapprove Idea' : 'Approve as Future Feature'}</DialogTitle>
+            <DialogDescription>
+              {detail?.approved
+                ? 'This will remove the approved status from this idea.'
+                : 'Add a description for this feature. The team can continue to comment on it.'}
+            </DialogDescription>
+          </DialogHeader>
+          {!detail?.approved && (
+            <textarea
+              value={approveDescription}
+              onChange={(e) => setApproveDescription(e.target.value)}
+              className="glass-input w-full text-sm min-h-[100px] resize-none"
+              placeholder="Describe the feature, scope, or implementation notes..."
+            />
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <button onClick={() => setShowApproveDialog(false)} className="glass-button-secondary text-sm px-3 py-1.5">Cancel</button>
+            <button
+              onClick={() => {
+                approveIdea.mutate({ id: postId, body: detail?.approved ? undefined : approveDescription, approved: detail?.approved ? false : true });
+                setShowApproveDialog(false);
+              }}
+              className={cn('text-sm px-3 py-1.5 rounded-lg font-medium text-white', detail?.approved ? 'bg-surface-500 hover:bg-surface-600' : 'bg-emerald-600 hover:bg-emerald-700')}
+            >
+              {approveIdea.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : detail?.approved ? 'Unapprove' : 'Approve'}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 };
@@ -856,6 +919,7 @@ const TeamHub = () => {
   const pinPost = usePinHubPost();
   const voteIdea = useVoteHubIdea();
   const deletePost = useDeleteHubPost();
+  const restorePost = useRestoreHubPost();
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState(null);
@@ -905,10 +969,12 @@ const TeamHub = () => {
     setDeleteTarget(null);
   };
 
+  const isArchived = filterType === 'archived';
   const { data: feedData, isLoading } = useQuery({
-    queryKey: queryKeys.hub.list({ type: filterType === 'all' ? undefined : filterType }),
+    queryKey: queryKeys.hub.list({ type: isArchived ? undefined : (filterType === 'all' ? undefined : filterType), archived: isArchived || undefined }),
     queryFn: () => api.get('/hub', {
-      ...(filterType !== 'all' ? { type: filterType } : {}),
+      ...(!isArchived && filterType !== 'all' ? { type: filterType } : {}),
+      ...(isArchived ? { archived: 'true' } : {}),
       page: '0',
       pageSize: '100',
     }),
@@ -1005,12 +1071,16 @@ const TeamHub = () => {
             <MessageCircle className="w-6 h-6 text-surface-400" />
           </div>
           <h3 className="text-lg font-semibold text-surface-700 mb-1">
-            {filterType === 'all' ? 'No posts yet' : `No ${filterType}s yet`}
+            {isArchived ? 'No archived posts' : filterType === 'all' ? 'No posts yet' : `No ${filterType}s yet`}
           </h3>
-          <p className="text-surface-400 text-sm mb-4">Be the first to share something with the team.</p>
-          <button onClick={() => setShowCreate(true)} className="action-btn mx-auto">
-            <Plus className="w-4 h-4 mr-2" /> Create Post
-          </button>
+          <p className="text-surface-400 text-sm mb-4">
+            {isArchived ? 'Archived posts will appear here.' : 'Be the first to share something with the team.'}
+          </p>
+          {!isArchived && (
+            <button onClick={() => setShowCreate(true)} className="action-btn mx-auto">
+              <Plus className="w-4 h-4 mr-2" /> Create Post
+            </button>
+          )}
         </motion.div>
       ) : (() => {
         const uid = user?.id;
@@ -1018,8 +1088,9 @@ const TeamHub = () => {
         const unpinned = posts.filter(p => !p.pinned);
         const isAssignedToMe = (p) => p.type === 'task' && !p.completed && (p.assignedToAll || (p.assigneeIds || []).includes(uid));
         const myTasks = unpinned.filter(isAssignedToMe);
-        const rest = unpinned.filter(p => !isAssignedToMe(p));
-        const hasSections = myTasks.length > 0 && rest.length > 0;
+        const approvedFeatures = unpinned.filter(p => p.approved && !isAssignedToMe(p));
+        const rest = unpinned.filter(p => !isAssignedToMe(p) && !p.approved);
+        const hasSections = (myTasks.length > 0 || approvedFeatures.length > 0) && rest.length > 0;
         const handleVote = (payload) => voteIdea.mutate(payload);
         let idx = 0;
         return (
@@ -1058,6 +1129,29 @@ const TeamHub = () => {
                 )}
                 <AnimatePresence>
                   {myTasks.map((post) => (
+                    <PostCard
+                      key={post.id}
+                      post={post}
+                      index={idx++}
+                      userId={uid}
+                      onClick={() => setSelectedPostId(post.id)}
+                      onContextMenu={handleContextMenu}
+                      onVote={handleVote}
+                    />
+                  ))}
+                </AnimatePresence>
+              </>
+            )}
+            {/* Upcoming App Features */}
+            {approvedFeatures.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 pt-2 pb-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-500 dark:text-emerald-400">Upcoming App Features</span>
+                  <span className="text-[10px] font-medium text-emerald-400/60 dark:text-emerald-500/40 tabular-nums">{approvedFeatures.length}</span>
+                  <div className="flex-1 h-px bg-emerald-200/50 dark:bg-emerald-800/30" />
+                </div>
+                <AnimatePresence>
+                  {approvedFeatures.map((post) => (
                     <PostCard
                       key={post.id}
                       post={post}
@@ -1124,25 +1218,31 @@ const TeamHub = () => {
           {(contextMenu.post.authorId === user?.id || canManage) && (
             <>
               <div className="context-menu__separator" />
-              <button className="context-menu__item context-menu__item--danger" onClick={() => { setDeleteTarget(contextMenu.post.id); closeContextMenu(); }}>
-                <Trash2 className="w-3.5 h-3.5" /> Delete
-              </button>
+              {isArchived ? (
+                <button className="context-menu__item" onClick={() => { restorePost.mutate(contextMenu.post.id); closeContextMenu(); }}>
+                  <ArchiveRestore className="w-3.5 h-3.5" /> Restore
+                </button>
+              ) : (
+                <button className="context-menu__item context-menu__item--danger" onClick={() => { setDeleteTarget(contextMenu.post.id); closeContextMenu(); }}>
+                  <Trash2 className="w-3.5 h-3.5" /> Archive
+                </button>
+              )}
             </>
           )}
         </div>
       )}
 
-      {/* Delete confirmation (from context menu) */}
+      {/* Archive confirmation (from context menu) */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete post?</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+            <AlertDialogTitle>Archive post?</AlertDialogTitle>
+            <AlertDialogDescription>The post will be moved to the Archived tab. You can restore it later.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700 text-white">
-              Delete
+              Archive
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

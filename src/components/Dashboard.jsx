@@ -479,18 +479,31 @@ const Dashboard = () => {
     { label: 'Invoices', value: stats.invoicesCount, view: 'invoices' },
   ] : [];
 
-  // Upcoming projects (admin-style)
-  const upcomingProjects = stats?.upcomingProjects || [];
+  // Upcoming projects (admin-style) — split into today vs future
+  const allUpcoming = stats?.upcomingProjects || [];
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+  const todayShoots = allUpcoming.filter(p => {
+    if (!p.shootStartDate) return false;
+    const d = new Date(p.shootStartDate);
+    return d >= todayStart && d <= todayEnd;
+  });
+  const upcomingProjects = allUpcoming.filter(p => !todayShoots.includes(p));
 
   // Recent docs
   const recentQuotes = stats?.recentQuotes || [];
   const recentInvoices = stats?.recentInvoices || [];
   const hasRecentDocs = recentQuotes.length > 0 || recentInvoices.length > 0;
 
-  // My gigs (projects I'm assigned to as a team member)
+  // My shoots (projects I'm assigned to as a team member)
   const myAssignments = stats?.myAssignments || [];
   const now = new Date();
-  const upcomingGigs = myAssignments.filter(a => a.shootStartDate && new Date(a.shootStartDate) >= now);
+  const myTodayShoots = myAssignments.filter(a => {
+    if (!a.shootStartDate) return false;
+    const d = new Date(a.shootStartDate);
+    return d >= todayStart && d <= todayEnd;
+  });
+  const upcomingGigs = myAssignments.filter(a => a.shootStartDate && new Date(a.shootStartDate) > todayEnd);
   const recentGigs = [...myAssignments].sort((a, b) => {
     const da = a.shootStartDate ? new Date(a.shootStartDate) : new Date(0);
     const db_ = b.shootStartDate ? new Date(b.shootStartDate) : new Date(0);
@@ -616,7 +629,24 @@ const Dashboard = () => {
         </motion.div>
       )}
 
-      {/* 6. Upcoming shoots (admin-style) */}
+      {/* 6a. Today's shoots (admin-style) */}
+      {todayShoots.length > 0 && (
+        <motion.div variants={stagger.item}>
+          <SectionLabel>Today's shoots</SectionLabel>
+          <div className="grid gap-2.5 mt-2">
+            {todayShoots.map(project => (
+              <GigCard
+                key={project.id}
+                gig={projectToGig(project)}
+                getTypeColor={getTypeColor}
+                onClick={() => navigate(`/projects/${project.id}`)}
+              />
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* 6b. Upcoming shoots (admin-style) */}
       {upcomingProjects.length > 0 && (
         <motion.div variants={stagger.item}>
           <SectionLabel action={<ViewAllLink onClick={() => navigate('/projects')} />}>
@@ -635,12 +665,23 @@ const Dashboard = () => {
         </motion.div>
       )}
 
-      {/* 7. My gigs (anyone with teamMemberId) */}
+      {/* 7. My shoots (anyone with teamMemberId) */}
       {hasTeamMember && myAssignments.length > 0 && (
         <>
+          {myTodayShoots.length > 0 && (
+            <motion.div variants={stagger.item}>
+              <SectionLabel>Today's shoots</SectionLabel>
+              <div className="grid gap-2.5 mt-2">
+                {myTodayShoots.map(gig => (
+                  <GigCard key={gig.id} gig={gig} getTypeColor={getTypeColor} onClick={() => navigate(`/projects/${gig.projectId}`)} />
+                ))}
+              </div>
+            </motion.div>
+          )}
+
           {upcomingGigs.length > 0 && (
             <motion.div variants={stagger.item}>
-              <SectionLabel>Upcoming gigs</SectionLabel>
+              <SectionLabel>Upcoming shoots</SectionLabel>
               <div className="grid gap-2.5 mt-2">
                 {upcomingGigs.slice(0, 5).map(gig => (
                   <GigCard key={gig.id} gig={gig} getTypeColor={getTypeColor} onClick={() => navigate(`/projects/${gig.projectId}`)} />

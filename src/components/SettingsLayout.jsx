@@ -1,7 +1,7 @@
 import React, { Suspense, useMemo } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Settings as SettingsIcon, CreditCard, Mail, Loader2, Layers, HardDrive } from 'lucide-react';
+import { Settings as SettingsIcon, CreditCard, Mail, Loader2, Layers, HardDrive, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppData } from '@/hooks/useAppData';
 
@@ -11,6 +11,7 @@ const ALL_TABS = [
   { path: '/settings/payments', label: 'Payments & Auth', icon: CreditCard, permission: 'manage_payment_settings' },
   { path: '/settings/email', label: 'Email', icon: Mail, permissions: ['manage_email_smtp', 'manage_email_templates'] },
   { path: '/settings/backup', label: 'Backup', icon: HardDrive, permission: 'manage_backups' },
+  { path: '/settings/ai', label: 'AI', icon: Sparkles, permission: 'manage_ai_settings' },
 ];
 
 const SettingsLayout = () => {

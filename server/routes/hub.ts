@@ -40,10 +40,15 @@ export default async function hubRoutes(fastify: any) {
     const commentCountSql = sql<number>`(SELECT COUNT(*) FROM hub_comments WHERE hub_comments.post_id = hub_posts.id)::int`;
 
     const conditions: any[] = [];
+    if (request.query.archived === 'true') {
+      conditions.push(eq(hubPosts.archived, true));
+    } else {
+      conditions.push(eq(hubPosts.archived, false));
+    }
     if (type && ['idea', 'task', 'announcement'].includes(type)) {
       conditions.push(eq(hubPosts.type, type));
     }
-    const where = conditions.length ? and(...conditions) : undefined;
+    const where = and(...conditions);
 
     const [data, [{ total }]] = await Promise.all([
       db.select({
@@ -59,6 +64,9 @@ export default async function hubRoutes(fastify: any) {
         completedBy: hubPosts.completedBy,
         thumbsUpIds: hubPosts.thumbsUpIds,
         thumbsDownIds: hubPosts.thumbsDownIds,
+        approved: hubPosts.approved,
+        approvedAt: hubPosts.approvedAt,
+        approvedBy: hubPosts.approvedBy,
         dueDate: hubPosts.dueDate,
         createdAt: hubPosts.createdAt,
         ...authorFields,
@@ -102,6 +110,9 @@ export default async function hubRoutes(fastify: any) {
       completedBy: hubPosts.completedBy,
       thumbsUpIds: hubPosts.thumbsUpIds,
       thumbsDownIds: hubPosts.thumbsDownIds,
+      approved: hubPosts.approved,
+      approvedAt: hubPosts.approvedAt,
+      approvedBy: hubPosts.approvedBy,
       dueDate: hubPosts.dueDate,
       createdAt: hubPosts.createdAt,
       updatedAt: hubPosts.updatedAt,
@@ -322,7 +333,51 @@ export default async function hubRoutes(fastify: any) {
     return { data };
   });
 
-  // DELETE /:id — delete post (author or manager only)
+  // PUT /:id/approve — approve an idea (manager only), optionally update body
+  fastify.put('/:id/approve', { preHandler: [manageGuard] }, async (request: any, reply: any) => {
+    const { id } = request.params;
+    const { body } = request.body || {};
+
+    const [existing] = await db.select({
+      type: hubPosts.type,
+      title: hubPosts.title,
+      approved: hubPosts.approved,
+      authorId: hubPosts.authorId,
+    }).from(hubPosts).where(eq(hubPosts.id, id));
+
+    if (!existing) return reply.code(404).send({ error: 'Post not found' });
+    if (existing.type !== 'idea') return reply.code(400).send({ error: 'Only ideas can be approved' });
+
+    const nowApproved = !existing.approved;
+    const updates: any = {
+      approved: nowApproved,
+      approvedAt: nowApproved ? new Date() : null,
+      approvedBy: nowApproved ? request.user.id : null,
+      updatedAt: new Date(),
+    };
+    if (body !== undefined) updates.body = body;
+
+    const [data] = await db.update(hubPosts).set(updates).where(eq(hubPosts.id, id)).returning();
+
+    logActivity({ ...actorFromRequest(request), action: nowApproved ? 'approved' : 'unapproved', entityType: 'hub_post', entityId: id, entityLabel: existing.title });
+    broadcast('hub_post', 'updated', request.user.id, id);
+
+    // Notify the idea author when approved
+    if (nowApproved && existing.authorId !== request.user.id) {
+      notifyUsers({
+        userIds: [existing.authorId],
+        type: 'hub_idea_approved',
+        title: 'Idea Approved',
+        message: `Your idea "${existing.title}" has been approved!`,
+        entityType: 'hub_post',
+        entityId: id,
+      });
+    }
+
+    return { data };
+  });
+
+  // DELETE /:id — archive post (author or manager only)
   fastify.delete('/:id', { preHandler: [viewGuard] }, async (request: any, reply: any) => {
     const { id } = request.params;
     const canManage = hasPermission(request, 'manage_hub');
@@ -333,9 +388,26 @@ export default async function hubRoutes(fastify: any) {
       return reply.code(403).send({ error: 'Not authorized' });
     }
 
-    await db.delete(hubPosts).where(eq(hubPosts.id, id));
-    logActivity({ ...actorFromRequest(request), action: 'deleted', entityType: 'hub_post', entityId: id, entityLabel: existing.title });
+    await db.update(hubPosts).set({ archived: true, updatedAt: new Date() }).where(eq(hubPosts.id, id));
+    logActivity({ ...actorFromRequest(request), action: 'archived', entityType: 'hub_post', entityId: id, entityLabel: existing.title });
     broadcast('hub_post', 'deleted', request.user.id, id);
+    return { success: true };
+  });
+
+  // PUT /:id/restore — restore archived post (author or manager only)
+  fastify.put('/:id/restore', { preHandler: [viewGuard] }, async (request: any, reply: any) => {
+    const { id } = request.params;
+    const canManage = hasPermission(request, 'manage_hub');
+
+    const [existing] = await db.select({ authorId: hubPosts.authorId, title: hubPosts.title }).from(hubPosts).where(eq(hubPosts.id, id));
+    if (!existing) return reply.code(404).send({ error: 'Post not found' });
+    if (existing.authorId !== request.user.id && !canManage) {
+      return reply.code(403).send({ error: 'Not authorized' });
+    }
+
+    await db.update(hubPosts).set({ archived: false, updatedAt: new Date() }).where(eq(hubPosts.id, id));
+    logActivity({ ...actorFromRequest(request), action: 'restored', entityType: 'hub_post', entityId: id, entityLabel: existing.title });
+    broadcast('hub_post', 'updated', request.user.id, id);
     return { success: true };
   });
 

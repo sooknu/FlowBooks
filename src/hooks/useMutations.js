@@ -48,12 +48,27 @@ export function useDeleteClient() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id) => api.delete('/clients/' + id),
+    onMutate: (id) => {
+      // Optimistically remove client from all cached lists
+      queryClient.setQueriesData({ queryKey: queryKeys.clients.all }, (old) => {
+        if (!old) return old;
+        // Infinite query structure: { pages: [...], pageParams: [...] }
+        if (old.pages) {
+          return { ...old, pages: old.pages.map(page => ({ ...page, data: (page.data || []).filter(c => c.id !== id) })) };
+        }
+        // Catalog array
+        if (Array.isArray(old)) return old.filter(c => c.id !== id);
+        return old;
+      });
+    },
     onSuccess: () => {
       toast({ title: "Client deleted successfully!" });
       invalidateAll(queryClient);
     },
     onError: (error) => {
       toast({ title: "Error deleting client", description: error.message, variant: "destructive" });
+      // Refetch to restore correct state on error
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.all });
     },
   });
 }
@@ -386,6 +401,16 @@ export function useArchiveProject() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id) => api.delete('/projects/' + id),
+    onMutate: (id) => {
+      // Optimistically remove from project lists
+      queryClient.setQueriesData({ queryKey: queryKeys.projects.all }, (old) => {
+        if (!old) return old;
+        if (old.pages) {
+          return { ...old, pages: old.pages.map(page => ({ ...page, data: (page.data || []).filter(p => p.id !== id) })) };
+        }
+        return old;
+      });
+    },
     onSuccess: () => {
       toast({ title: "Project archived successfully!" });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
@@ -393,6 +418,7 @@ export function useArchiveProject() {
     },
     onError: (error) => {
       toast({ title: "Error archiving project", description: error.message, variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
     },
   });
 }
@@ -1182,11 +1208,25 @@ export function useDeleteHubPost() {
   return useMutation({
     mutationFn: (id) => api.delete('/hub/' + id),
     onSuccess: () => {
-      toast({ title: "Post deleted" });
+      toast({ title: "Post archived" });
       queryClient.invalidateQueries({ queryKey: queryKeys.hub.all });
     },
     onError: (error) => {
-      toast({ title: "Error deleting post", description: error.message, variant: "destructive" });
+      toast({ title: "Error archiving post", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useRestoreHubPost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => api.put('/hub/' + id + '/restore'),
+    onSuccess: () => {
+      toast({ title: "Post restored" });
+      queryClient.invalidateQueries({ queryKey: queryKeys.hub.all });
+    },
+    onError: (error) => {
+      toast({ title: "Error restoring post", description: error.message, variant: "destructive" });
     },
   });
 }
@@ -1197,6 +1237,20 @@ export function usePinHubPost() {
     mutationFn: (id) => api.put('/hub/' + id + '/pin'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.hub.all });
+    },
+  });
+}
+
+export function useApproveHubIdea() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }) => api.put('/hub/' + id + '/approve', { body }),
+    onSuccess: (_, { approved }) => {
+      toast({ title: approved === false ? "Idea unapproved" : "Idea approved as future feature!" });
+      queryClient.invalidateQueries({ queryKey: queryKeys.hub.all });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 }

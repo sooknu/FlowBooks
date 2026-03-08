@@ -6,7 +6,7 @@ import { logActivity, actorFromRequest } from '../lib/activityLog';
 import { broadcast } from '../lib/pubsub';
 import type { PermissionKey } from '../lib/permissionConfig';
 
-const SENSITIVE_KEYS = ['oidc_client_secret', 'google_client_secret', 'smtp_pass', 'stripe_secret_key', 'stripe_test_secret_key', 'paypal_client_secret', 'paypal_test_client_secret', 'unsplash_api_key', 'backup_s3_secret_key', 'backup_b2_app_key', 'backup_gdrive_credentials'];
+const SENSITIVE_KEYS = ['oidc_client_secret', 'google_client_secret', 'smtp_pass', 'stripe_secret_key', 'stripe_test_secret_key', 'paypal_client_secret', 'paypal_test_client_secret', 'unsplash_api_key', 'backup_s3_secret_key', 'backup_b2_app_key', 'backup_gdrive_credentials', 'ai_openai_key', 'ai_anthropic_key'];
 
 // Map settings keys to the permission required to write them.
 // Keys not listed here require only `access_settings` (the base permission).
@@ -41,6 +41,9 @@ const KEY_PERMISSION: Record<string, PermissionKey> = {
   backup_gdrive_credentials: 'manage_backups', backup_gdrive_folder_id: 'manage_backups',
   backup_schedule_enabled: 'manage_backups', backup_schedule_cron: 'manage_backups',
   backup_schedule_destinations: 'manage_backups',
+  // AI settings
+  ai_enabled: 'manage_ai_settings', ai_openai_key: 'manage_ai_settings', ai_anthropic_key: 'manage_ai_settings',
+  ai_feature_draft_congrats: 'manage_ai_settings', ai_model_draft_congrats: 'manage_ai_settings',
 };
 
 export default async function settingRoutes(fastify: any) {
