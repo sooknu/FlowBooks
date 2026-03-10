@@ -3,7 +3,7 @@
 /**
  * Restore Script — Disaster Recovery CLI
  *
- * Restores a backup from cloud storage (AWS S3, Backblaze B2, or Google Drive).
+ * Restores a backup from AWS S3 (or S3-compatible storage).
  * Run after cloning the repo and running `npm install` on a fresh VPS.
  *
  * Usage:  npm run restore
@@ -14,7 +14,7 @@ import readline from 'node:readline';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -76,7 +76,7 @@ function info(msg) { console.log(`  \x1b[34mℹ\x1b[0m ${msg}`); }
 function warn(msg) { console.log(`  \x1b[33m⚠\x1b[0m ${msg}`); }
 function error(msg) { console.log(`  \x1b[31m✗\x1b[0m ${msg}`); }
 
-// ─── Provider factories ────────────────────────────────────────────────────
+// ─── S3 Provider ────────────────────────────────────────────────────────
 
 async function createS3Provider(config) {
   const {
@@ -128,129 +128,33 @@ async function createS3Provider(config) {
   };
 }
 
-async function createGDriveProvider(config) {
-  const { google } = await import('googleapis');
-
-  const auth = new google.auth.GoogleAuth({
-    credentials: JSON.parse(config.credentialsJson),
-    scopes: ['https://www.googleapis.com/auth/drive.file'],
-  });
-  const drive = google.drive({ version: 'v3', auth });
-
-  return {
-    async list() {
-      const response = await drive.files.list({
-        q: `'${config.folderId}' in parents and name contains 'backup-' and trashed = false`,
-        fields: 'files(id, name, size, modifiedTime)',
-        orderBy: 'modifiedTime desc',
-      });
-      if (!response.data.files) return [];
-      return response.data.files.map((file) => ({
-        key: file.name,
-        fileId: file.id,
-        size: parseInt(file.size || '0', 10),
-        lastModified: new Date(file.modifiedTime || Date.now()),
-      }));
-    },
-
-    async download(key, destPath, fileId) {
-      const id = fileId || (await this.list()).find((f) => f.key === key)?.fileId;
-      if (!id) throw new Error(`File not found: ${key}`);
-      const response = await drive.files.get(
-        { fileId: id, alt: 'media' },
-        { responseType: 'stream' },
-      );
-      const writeStream = fs.createWriteStream(destPath);
-      await pipeline(response.data, writeStream);
-    },
-  };
-}
-
 // ─── Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
   banner('Backup Restore — Disaster Recovery');
 
-  info('This script restores your app from a cloud backup.');
-  info('You need your cloud storage credentials to proceed.\n');
+  info('This script restores your app from an S3 backup.');
+  info('You need your AWS S3 (or S3-compatible) credentials to proceed.\n');
 
-  // 1. Select provider
-  console.log('  Select your backup storage provider:\n');
-  console.log('    1) AWS S3');
-  console.log('    2) Backblaze B2');
-  console.log('    3) Google Drive');
-  console.log();
+  // 1. Collect S3 credentials
+  banner('S3 Credentials');
+  const accessKeyId = await ask('  Access Key ID: ');
+  const secretAccessKey = await askPassword('  Secret Access Key: ');
+  const bucket = await ask('  Bucket name: ');
+  const region = (await ask('  Region [us-east-1]: ')) || 'us-east-1';
+  const endpoint = await ask('  Endpoint (leave blank for AWS): ');
 
-  const providerChoice = await ask('  Choice (1-3): ');
-  const providerMap = { '1': 's3', '2': 'b2', '3': 'gdrive' };
-  const providerType = providerMap[providerChoice.trim()];
+  const provider = await createS3Provider({
+    accessKeyId: accessKeyId.trim(),
+    secretAccessKey: secretAccessKey.trim(),
+    bucket: bucket.trim(),
+    region: region.trim(),
+    endpoint: endpoint.trim() || undefined,
+  });
 
-  if (!providerType) {
-    error('Invalid choice. Exiting.');
-    process.exit(1);
-  }
-
-  // 2. Collect credentials
-  let provider;
-
-  if (providerType === 's3') {
-    banner('AWS S3 Credentials');
-    const accessKeyId = await ask('  Access Key ID: ');
-    const secretAccessKey = await askPassword('  Secret Access Key: ');
-    const bucket = await ask('  Bucket name: ');
-    const region = (await ask('  Region [us-east-1]: ')) || 'us-east-1';
-    const endpoint = await ask('  Endpoint (leave blank for AWS): ');
-
-    provider = await createS3Provider({
-      accessKeyId: accessKeyId.trim(),
-      secretAccessKey: secretAccessKey.trim(),
-      bucket: bucket.trim(),
-      region: region.trim(),
-      endpoint: endpoint.trim() || undefined,
-    });
-  } else if (providerType === 'b2') {
-    banner('Backblaze B2 Credentials');
-    const keyId = await ask('  Key ID: ');
-    const appKey = await askPassword('  Application Key: ');
-    const bucket = await ask('  Bucket name: ');
-    const endpoint = await ask('  Endpoint (e.g. https://s3.us-west-004.backblazeb2.com): ');
-
-    provider = await createS3Provider({
-      accessKeyId: keyId.trim(),
-      secretAccessKey: appKey.trim(),
-      bucket: bucket.trim(),
-      region: 'auto',
-      endpoint: endpoint.trim(),
-    });
-  } else {
-    banner('Google Drive Credentials');
-    info('Paste your service account JSON (then press Enter twice):');
-    let jsonInput = '';
-    while (true) {
-      const line = await ask('');
-      if (line === '' && jsonInput.trim().endsWith('}')) break;
-      jsonInput += line + '\n';
-    }
-
-    const folderId = await ask('  Folder ID: ');
-
-    // Validate JSON
-    try {
-      JSON.parse(jsonInput.trim());
-    } catch {
-      error('Invalid JSON credentials. Exiting.');
-      process.exit(1);
-    }
-
-    provider = await createGDriveProvider({
-      credentialsJson: jsonInput.trim(),
-      folderId: folderId.trim(),
-    });
-  }
-
-  // 3. List available backups
+  // 2. List available backups
   banner('Available Backups');
-  info('Connecting to cloud storage...\n');
+  info('Connecting to S3...\n');
 
   let backupList;
   try {
@@ -261,7 +165,7 @@ async function main() {
   }
 
   if (backupList.length === 0) {
-    warn('No backups found in the configured storage.');
+    warn('No backups found in the configured bucket.');
     process.exit(0);
   }
 
@@ -294,7 +198,7 @@ async function main() {
   console.log();
   info(`Selected: ${selectedBackup.key}`);
 
-  // 4. Confirm restore
+  // 3. Confirm restore
   banner('Confirm Restore');
   warn('This will overwrite the following:');
   console.log('    - .env file (environment variables & secrets)');
@@ -308,14 +212,14 @@ async function main() {
     process.exit(0);
   }
 
-  // 5. Download
+  // 4. Download
   banner('Downloading Backup');
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'restore-'));
   const archivePath = path.join(tempDir, 'backup.tar.gz');
 
   try {
     info(`Downloading ${selectedBackup.key}...`);
-    await provider.download(selectedBackup.key, archivePath, selectedBackup.fileId);
+    await provider.download(selectedBackup.key, archivePath);
     success(`Downloaded (${formatSize(fs.statSync(archivePath).size)})`);
   } catch (err) {
     error(`Download failed: ${err.message}`);
@@ -323,13 +227,13 @@ async function main() {
     process.exit(1);
   }
 
-  // 6. Extract
+  // 5. Extract
   info('Extracting archive...');
   const extractDir = path.join(tempDir, 'extracted');
   fs.mkdirSync(extractDir, { recursive: true });
 
   try {
-    execSync(`tar -xzf "${archivePath}" -C "${extractDir}"`, {
+    execFileSync('tar', ['-xzf', archivePath, '-C', extractDir], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     success('Archive extracted');
@@ -349,7 +253,7 @@ async function main() {
     info(`Database: ${manifest.dbName || 'unknown'}`);
   }
 
-  // 7. Restore .env
+  // 6. Restore .env
   banner('Restoring .env');
   const envBackupPath = path.join(extractDir, '.env');
   const envDestPath = path.join(PROJECT_ROOT, '.env');
@@ -367,7 +271,7 @@ async function main() {
     warn('No .env found in backup — you may need to configure manually');
   }
 
-  // 8. Restore database
+  // 7. Restore database
   banner('Restoring Database');
   const sqlPath = path.join(extractDir, 'database.sql');
 
@@ -395,22 +299,28 @@ async function main() {
     const dbName = dbUrl.pathname.replace(/^\//, '');
 
     info(`Restoring to database "${dbName}" on ${host}:${port}...`);
+    const pgEnv = { ...process.env, PGPASSWORD: password };
 
     // Ensure the database exists
     try {
-      execSync(
-        `psql -h ${host} -p ${port} -U ${username} -tc "SELECT 1 FROM pg_database WHERE datname='${dbName}'" | grep -q 1 || createdb -h ${host} -p ${port} -U ${username} ${dbName}`,
-        { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, PGPASSWORD: password } },
-      );
+      const result = execFileSync('psql', [
+        '-h', host, '-p', port, '-U', username,
+        '-tc', `SELECT 1 FROM pg_database WHERE datname='${dbName}'`,
+      ], { stdio: ['pipe', 'pipe', 'pipe'], env: pgEnv, encoding: 'utf-8' });
+
+      if (!result.includes('1')) {
+        execFileSync('createdb', ['-h', host, '-p', port, '-U', username, dbName], {
+          stdio: ['pipe', 'pipe', 'pipe'], env: pgEnv,
+        });
+      }
     } catch {
       warn(`Could not verify/create database "${dbName}" — it may already exist`);
     }
 
     try {
-      execSync(
-        `psql -h ${host} -p ${port} -U ${username} -d ${dbName} -f "${sqlPath}"`,
-        { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, PGPASSWORD: password } },
-      );
+      execFileSync('psql', [
+        '-h', host, '-p', port, '-U', username, '-d', dbName, '-f', sqlPath,
+      ], { stdio: ['pipe', 'pipe', 'pipe'], env: pgEnv });
       success('Database restored');
     } catch (err) {
       // psql often emits warnings on STDERR even on success
@@ -425,7 +335,7 @@ async function main() {
     warn('No database.sql found in backup');
   }
 
-  // 9. Restore uploads
+  // 8. Restore uploads
   banner('Restoring Uploads');
   const uploadsBackupPath = path.join(extractDir, 'uploads');
   const uploadsDestPath = path.join(PROJECT_ROOT, 'server/uploads');
@@ -438,10 +348,10 @@ async function main() {
     warn('No uploads directory found in backup');
   }
 
-  // 10. Clean up
+  // 9. Clean up
   fs.rmSync(tempDir, { recursive: true, force: true });
 
-  // 11. Next steps
+  // 10. Next steps
   banner('Restore Complete!');
   success('Your data has been restored.\n');
   console.log('  Next steps:\n');

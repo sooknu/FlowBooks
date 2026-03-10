@@ -59,7 +59,6 @@
     "drizzle-orm": "^0.45.1",
     "fastify": "^5.7.4",
     "framer-motion": "^10.16.4",
-    "googleapis": "^171.4.0",
     "ioredis": "^5.9.2",
     "isomorphic-dompurify": "^2.36.0",
     "jsonwebtoken": "^9.0.3",

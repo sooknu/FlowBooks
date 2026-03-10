@@ -79,11 +79,11 @@ export const AuthProvider = ({ children }) => {
         title: 'Sign out Failed',
         description: error.message || 'Something went wrong',
       });
+      return { error };
     }
-    // Clear all cached data so the next user doesn't see stale profile/settings
-    queryClient.clear();
-    return { error };
-  }, [toast, queryClient]);
+    // Hard reload to clear all cached state cleanly
+    window.location.href = '/';
+  }, [toast]);
 
   const value = useMemo(
     () => ({

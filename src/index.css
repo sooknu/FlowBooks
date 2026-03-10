@@ -862,40 +862,12 @@
     box-shadow: 0 1px 2px rgba(0,0,0,0.06);
   }
 
-  /* Second row: year + type + financial */
+  /* Second row: dropdowns + chips */
   .project-filter-bar__filters {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.375rem;
-  }
-
-  /* Year button group */
-  .project-filter-bar__group {
-    display: flex;
-    gap: 0.125rem;
-    padding: 0.125rem;
-    border-radius: 0.5rem;
-    background: rgb(var(--surface-100));
-  }
-
-  .project-filter-bar__year-btn {
-    padding: 0.3125rem 0.625rem;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    border-radius: 0.375rem;
-    color: rgb(var(--surface-500));
-    transition: all 0.15s ease;
-    white-space: nowrap;
-  }
-  .project-filter-bar__year-btn:hover {
-    color: rgb(var(--surface-700));
-  }
-  .project-filter-bar__year-btn--active {
-    background: rgb(var(--glass-bg));
-    color: rgb(var(--surface-800));
-    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
   }
 
   /* Vertical divider */
@@ -906,10 +878,26 @@
     flex-shrink: 0;
   }
 
-  /* Select (event type) */
+  /* Select wrapper */
+  .project-filter-bar__select-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+  .project-filter-bar__select-icon {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0.75rem;
+    height: 0.75rem;
+    pointer-events: none;
+    opacity: 0.5;
+  }
+
+  /* Select (year, event type, assigned to) */
   .project-filter-bar__select {
     appearance: none;
-    padding: 0.3125rem 1.5rem 0.3125rem 0.625rem;
+    padding: 0.375rem 1.625rem 0.375rem 0.625rem;
     font-size: 0.6875rem;
     font-weight: 600;
     border-radius: 0.5rem;
@@ -918,6 +906,7 @@
     color: rgb(var(--surface-500));
     cursor: pointer;
     transition: all 0.15s ease;
+    max-width: 9rem;
   }
   .project-filter-bar__select:hover {
     color: rgb(var(--surface-700));
@@ -1029,6 +1018,11 @@
     color: #047857;
     border-color: #a7f3d0;
   }
+  .project-filter-bar__active-chip--member {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fde68a;
+  }
 
   .project-filter-bar__active-x {
     display: inline-flex;
@@ -1054,13 +1048,6 @@
     background: rgba(var(--surface-200) / 0.3);
   }
   .dark .project-filter-bar__status-btn--active {
-    background: rgba(var(--surface-300) / 0.3);
-    color: #C8C6C2;
-  }
-  .dark .project-filter-bar__group {
-    background: rgba(var(--surface-200) / 0.3);
-  }
-  .dark .project-filter-bar__year-btn--active {
     background: rgba(var(--surface-300) / 0.3);
     color: #C8C6C2;
   }
@@ -1112,6 +1099,11 @@
     background: rgba(4, 120, 87, 0.12);
     color: #34d399;
     border-color: rgba(52, 211, 153, 0.25);
+  }
+  .dark .project-filter-bar__active-chip--member {
+    background: rgba(146, 64, 14, 0.12);
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.25);
   }
 
   /* ── Project Documents ────────────── */

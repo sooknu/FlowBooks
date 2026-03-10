@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
@@ -8,7 +8,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import api from '@/lib/apiClient';
 import {
   Plus, ArrowRight, ArrowUpRight, Aperture, Camera, Briefcase,
-  Users, FileText, Receipt, Banknote, Wallet,
+  Users, FileText, Receipt, Banknote, Wallet, Heart, X,
 } from 'lucide-react';
 import { cn, fmtDate } from '@/lib/utils';
 import { useProjectTypes, COLOR_PALETTE } from '@/lib/projectTypes';
@@ -440,6 +440,24 @@ const Dashboard = () => {
     staleTime: 60_000,
   });
 
+  const [dismissedAnniversary, setDismissedAnniversary] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('dismissed-anniversaries') || '[]'); } catch { return []; }
+  });
+  const { data: anniversaryData } = useQuery({
+    queryKey: ['projects', 'upcoming-anniversary'],
+    queryFn: () => api.get('/projects/upcoming-anniversary'),
+    staleTime: 600_000,
+  });
+  const anniversaryRaw = anniversaryData?.data;
+  const anniversary = anniversaryRaw && !dismissedAnniversary.includes(`${anniversaryRaw.projectId}-${anniversaryRaw.yearsAgo}`) ? anniversaryRaw : null;
+  const dismissAnniversary = useCallback(() => {
+    if (!anniversaryRaw) return;
+    const key = `${anniversaryRaw.projectId}-${anniversaryRaw.yearsAgo}`;
+    const updated = [...dismissedAnniversary, key];
+    setDismissedAnniversary(updated);
+    try { localStorage.setItem('dismissed-anniversaries', JSON.stringify(updated)); } catch {}
+  }, [anniversaryRaw, dismissedAnniversary]);
+
   if (isLoading) {
     return (
       <div className="flex flex-col justify-center items-center h-[60vh] gap-3">
@@ -490,25 +508,16 @@ const Dashboard = () => {
   });
   const upcomingProjects = allUpcoming.filter(p => !todayShoots.includes(p));
 
+  // Recent projects (past shoots)
+  const recentProjects = stats?.recentProjects || [];
+
   // Recent docs
   const recentQuotes = stats?.recentQuotes || [];
   const recentInvoices = stats?.recentInvoices || [];
   const hasRecentDocs = recentQuotes.length > 0 || recentInvoices.length > 0;
 
-  // My shoots (projects I'm assigned to as a team member)
+  // My assignments (for "View my projects" link)
   const myAssignments = stats?.myAssignments || [];
-  const now = new Date();
-  const myTodayShoots = myAssignments.filter(a => {
-    if (!a.shootStartDate) return false;
-    const d = new Date(a.shootStartDate);
-    return d >= todayStart && d <= todayEnd;
-  });
-  const upcomingGigs = myAssignments.filter(a => a.shootStartDate && new Date(a.shootStartDate) > todayEnd);
-  const recentGigs = [...myAssignments].sort((a, b) => {
-    const da = a.shootStartDate ? new Date(a.shootStartDate) : new Date(0);
-    const db_ = b.shootStartDate ? new Date(b.shootStartDate) : new Date(0);
-    return db_ - da;
-  });
 
   return (
     <motion.div className="space-y-5" variants={stagger.container} initial="initial" animate="animate">
@@ -537,6 +546,42 @@ const Dashboard = () => {
           )}
         </div>
       </motion.div>
+
+      {/* Anniversary reminder */}
+      {anniversary && (() => {
+        const ordinal = anniversary.yearsAgo === 1 ? '1st' : anniversary.yearsAgo === 2 ? '2nd' : anniversary.yearsAgo === 3 ? '3rd' : `${anniversary.yearsAgo}th`;
+        const daysUntil = Math.round((new Date(anniversary.anniversaryDate) - new Date(new Date().toDateString())) / 86400000);
+        return (
+          <motion.div variants={stagger.item}>
+            <div
+              onClick={() => navigate(`/projects/${anniversary.projectId}`)}
+              className="flat-card p-4 flex items-center gap-3 border-l-4 border-l-pink-400 cursor-pointer hover:border-pink-500 transition-colors"
+            >
+              <div className="w-9 h-9 rounded-full bg-pink-50 flex items-center justify-center flex-shrink-0">
+                <Heart className="w-4 h-4 text-pink-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-surface-800">
+                  {anniversary.clientName || anniversary.projectTitle}'s {ordinal} anniversary is{' '}
+                  {daysUntil === 0 ? <span className="font-semibold text-pink-600">today!</span>
+                    : daysUntil === 1 ? <span className="font-semibold text-pink-600">tomorrow!</span>
+                    : <>on <span className="font-semibold text-pink-600">{fmtDate(anniversary.anniversaryDate, { month: 'long', day: 'numeric' })}</span></>}
+                </p>
+                <p className="text-xs text-surface-400 mt-0.5">
+                  {anniversary.projectTitle} — {fmtDate(anniversary.shootDate, { month: 'long', day: 'numeric', year: 'numeric' })}
+                </p>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); dismissAnniversary(); }}
+                className="p-1.5 rounded-md hover:bg-surface-100 text-surface-300 hover:text-surface-500 transition-colors flex-shrink-0"
+                title="Dismiss"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        );
+      })()}
 
       {/* 2. Financial hero */}
       {hasFinancials && (
@@ -665,46 +710,39 @@ const Dashboard = () => {
         </motion.div>
       )}
 
-      {/* 7. My shoots (anyone with teamMemberId) */}
+      {/* 7. Recent projects (past shoots, visible to anyone with view_projects) */}
+      {recentProjects.length > 0 && (
+        <motion.div variants={stagger.item}>
+          <SectionLabel action={<ViewAllLink onClick={() => navigate('/projects')} />}>
+            Recent projects
+          </SectionLabel>
+          <div className="grid gap-2.5 mt-2">
+            {recentProjects.map(project => (
+              <GigCard
+                key={project.id}
+                gig={projectToGig(project)}
+                getTypeColor={getTypeColor}
+                onClick={() => navigate(`/projects/${project.id}`)}
+              />
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* "View my projects" link for team members */}
       {hasTeamMember && myAssignments.length > 0 && (
-        <>
-          {myTodayShoots.length > 0 && (
-            <motion.div variants={stagger.item}>
-              <SectionLabel>Today's shoots</SectionLabel>
-              <div className="grid gap-2.5 mt-2">
-                {myTodayShoots.map(gig => (
-                  <GigCard key={gig.id} gig={gig} getTypeColor={getTypeColor} onClick={() => navigate(`/projects/${gig.projectId}`)} />
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {upcomingGigs.length > 0 && (
-            <motion.div variants={stagger.item}>
-              <SectionLabel>Upcoming shoots</SectionLabel>
-              <div className="grid gap-2.5 mt-2">
-                {upcomingGigs.slice(0, 5).map(gig => (
-                  <GigCard key={gig.id} gig={gig} getTypeColor={getTypeColor} onClick={() => navigate(`/projects/${gig.projectId}`)} />
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          <motion.div variants={stagger.item}>
-            <SectionLabel action={<ViewAllLink onClick={() => navigate('/projects?mine=true')} />}>
-              My recent projects
-            </SectionLabel>
-            {recentGigs.length > 0 ? (
-              <div className="grid gap-2.5 mt-2">
-                {recentGigs.slice(0, 5).map(gig => (
-                  <GigCard key={gig.id} gig={gig} getTypeColor={getTypeColor} onClick={() => navigate(`/projects/${gig.projectId}`)} />
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground py-6 text-center">No projects yet</p>
-            )}
-          </motion.div>
-        </>
+        <motion.div variants={stagger.item}>
+          <button
+            onClick={() => navigate('/projects?assignedTo=mine')}
+            className="w-full flat-card px-4 py-3 flex items-center justify-between text-sm text-surface-600 hover:text-surface-800 hover:border-surface-200 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <Camera className="w-4 h-4" />
+              View projects I was assigned to
+            </span>
+            <ArrowRight className="w-4 h-4 text-surface-300" />
+          </button>
+        </motion.div>
       )}
 
       {/* 8. Recent quotes + invoices */}

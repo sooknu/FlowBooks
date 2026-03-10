@@ -48,7 +48,7 @@ import recurringExpenseRoutes from './routes/recurringExpenses';
 import permissionRoutes from './routes/permissions';
 import errorRoutes from './routes/errors';
 import backupRoutes from './routes/backup';
-import gdriveAuthRoutes from './routes/gdriveAuth';
+
 import setupRoutes from './routes/setup';
 import reportsRoutes from './routes/reports';
 import hubRoutes from './routes/hub';
@@ -139,8 +139,6 @@ app.addHook('onRequest', async (request: any, reply: any) => {
   if (request.url.startsWith('/api/approve/')) return;
   if (request.url.startsWith('/api/unsplash/background')) return;
   if (request.url.startsWith('/api/setup')) return;
-  if (request.url.startsWith('/api/backup/gdrive/callback')) return;
-  if (request.url.startsWith('/api/backup/gdrive/authorize-setup')) return;
   if (!request.url.startsWith('/api/')) return;
 
   try {
@@ -386,7 +384,7 @@ await app.register(recurringExpenseRoutes, { prefix: '/api/recurring-expenses' }
 await app.register(permissionRoutes, { prefix: '/api/permissions' });
 await app.register(errorRoutes, { prefix: '/api/errors' });
 await app.register(backupRoutes, { prefix: '/api/backup' });
-await app.register(gdriveAuthRoutes, { prefix: '/api/backup/gdrive' });
+
 await app.register(setupRoutes, { prefix: '/api/setup' });
 await app.register(reportsRoutes, { prefix: '/api/reports' });
 await app.register(hubRoutes, { prefix: '/api/hub' });

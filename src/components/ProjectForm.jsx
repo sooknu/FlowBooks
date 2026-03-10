@@ -75,6 +75,7 @@ const ProjectForm = () => {
   const mapsApiKey = settingsData?.google_maps_api_key;
   const mapsLoaded = useGoogleMaps(mapsApiKey);
   const addressInputRef = useRef(null);
+  const locationInputRef = useRef(null);
   const { user } = useAuth();
   const { types: projectTypes, getTypeById } = useProjectTypes();
   const { roles: assignmentRoles } = useProjectRoles();
@@ -157,14 +158,17 @@ const ProjectForm = () => {
     }
   }, [isEdit, project]);
 
-  // Google Places Autocomplete
+  // Google Places Autocomplete — shared handler for both inputs
   useEffect(() => {
-    if (!mapsLoaded || !addressInputRef.current) return;
-    const autocomplete = new window.google.maps.places.Autocomplete(
-      addressInputRef.current,
-      { componentRestrictions: { country: 'us' }, fields: ['address_components', 'name', 'place_id', 'photos'] }
+    if (!mapsLoaded) return;
+    const cleanups = [];
+    // California bias (roughly LA metro area center)
+    const caBounds = new window.google.maps.LatLngBounds(
+      new window.google.maps.LatLng(33.5, -118.8), // SW corner
+      new window.google.maps.LatLng(34.4, -117.5), // NE corner
     );
-    autocomplete.addListener('place_changed', () => {
+
+    const handlePlaceChanged = (autocomplete) => {
       const place = autocomplete.getPlace();
       if (!place.place_id) return;
       const get = (type) => (place.address_components || []).find(c => c.types.includes(type));
@@ -183,7 +187,7 @@ const ProjectForm = () => {
         placeId: place.place_id || '',
         coverPhotoUrl: photoUrl,
       };
-      // Only set location from place name if it looks like a venue (not a bare address)
+      // Set location from place name if it looks like a venue (not a bare address)
       if (place.name && !/^\d/.test(place.name)) updates.location = place.name;
 
       setForm(prev => {
@@ -194,7 +198,7 @@ const ProjectForm = () => {
         return next;
       });
 
-      // If no photos from autocomplete, try a Place Details request for the photo
+      // If no photos from autocomplete, try Place Details
       if (!photoUrl && place.place_id) {
         const service = new window.google.maps.places.PlacesService(document.createElement('div'));
         service.getDetails({ placeId: place.place_id, fields: ['photos'] }, (details, status) => {
@@ -204,8 +208,29 @@ const ProjectForm = () => {
           }
         });
       }
-    });
-    return () => window.google.maps.event.clearInstanceListeners(autocomplete);
+    };
+
+    // Autocomplete on Location Name — biased to establishments
+    if (locationInputRef.current) {
+      const locAc = new window.google.maps.places.Autocomplete(
+        locationInputRef.current,
+        { componentRestrictions: { country: 'us' }, fields: ['address_components', 'name', 'place_id', 'photos'], types: ['establishment'], bounds: caBounds }
+      );
+      locAc.addListener('place_changed', () => handlePlaceChanged(locAc));
+      cleanups.push(() => window.google.maps.event.clearInstanceListeners(locAc));
+    }
+
+    // Autocomplete on Street Address — any address
+    if (addressInputRef.current) {
+      const addrAc = new window.google.maps.places.Autocomplete(
+        addressInputRef.current,
+        { componentRestrictions: { country: 'us' }, fields: ['address_components', 'name', 'place_id', 'photos'], bounds: caBounds }
+      );
+      addrAc.addListener('place_changed', () => handlePlaceChanged(addrAc));
+      cleanups.push(() => window.google.maps.event.clearInstanceListeners(addrAc));
+    }
+
+    return () => cleanups.forEach(fn => fn());
   }, [mapsLoaded]);
 
   // Client search
@@ -704,7 +729,7 @@ const ProjectForm = () => {
       <Section icon={MapPin} title="Location" delay={0.15}>
         <div>
           <label className="text-xs font-medium text-surface-600 mb-1 block">Location Name</label>
-          <input type="text" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} className="glass-input w-full" placeholder="e.g. The Grand Venue" />
+          <input ref={locationInputRef} type="text" autoComplete="off" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} className="glass-input w-full" placeholder="e.g. The Grand Venue" />
         </div>
         <div>
           <label className="text-xs font-medium text-surface-600 mb-1 block">Street Address</label>

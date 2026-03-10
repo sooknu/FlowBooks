@@ -170,6 +170,38 @@ export default async function statsRoutes(fastify: any) {
         .limit(6);
     }
 
+    // --- Recent projects (past shoots, anyone with view_projects) ---
+    if (perms.view_projects) {
+      queries.recentProjects = db.select({
+        id: projects.id,
+        title: projects.title,
+        status: projects.status,
+        projectType: projects.projectType,
+        projectTypeId: projects.projectTypeId,
+        projectTypeSlug: projectTypes.slug,
+        projectTypeLabel: projectTypes.label,
+        projectTypeColor: projectTypes.color,
+        shootStartDate: projects.shootStartDate,
+        shootEndDate: projects.shootEndDate,
+        location: projects.location,
+        clientFirstName: clients.firstName,
+        clientLastName: clients.lastName,
+        clientCompany: clients.company,
+      })
+        .from(projects)
+        .leftJoin(clients, eq(projects.clientId, clients.id))
+        .leftJoin(projectTypes, eq(projects.projectTypeId, projectTypes.id))
+        .where(
+          and(
+            ne(projects.status, 'archived'),
+            isNotNull(projects.shootStartDate),
+            sql`${projects.shootStartDate} <= NOW()`,
+          ),
+        )
+        .orderBy(desc(projects.shootStartDate))
+        .limit(5);
+    }
+
     // --- Recent docs (gated by edit_quotes / edit_invoices) ---
     if (perms.edit_quotes) {
       queries.recentQuotes = db.select({
@@ -262,6 +294,14 @@ export default async function statsRoutes(fastify: any) {
           clientName: p.clientCompany || [p.clientFirstName, p.clientLastName].filter(Boolean).join(' ') || null,
         }));
       }
+    }
+
+    // Recent projects (past shoots)
+    if (d.recentProjects) {
+      result.recentProjects = d.recentProjects.map((p: any) => ({
+        ...p,
+        clientName: p.clientCompany || [p.clientFirstName, p.clientLastName].filter(Boolean).join(' ') || null,
+      }));
     }
 
     // Recent docs

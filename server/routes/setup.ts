@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { eq, count } from 'drizzle-orm';
 import { db } from '../db';
 import { appSettings, user } from '../db/schema';
@@ -142,15 +142,15 @@ export default async function setupRoutes(fastify: any) {
           const pgEnv = { ...process.env, PGPASSWORD: decodeURIComponent(dbUrl.password) };
 
           // Drop all existing tables first (handles old backups without --clean flag)
-          execSync(
-            `psql -h ${pgHost} -p ${pgPort} -U ${pgUser} -d ${pgDb} -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO ${pgUser};"`,
-            { stdio: ['pipe', 'pipe', 'pipe'], env: pgEnv },
-          );
+          execFileSync('psql', [
+            '-h', pgHost, '-p', pgPort, '-U', pgUser, '-d', pgDb,
+            '-c', 'DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO current_user;',
+          ], { stdio: ['pipe', 'pipe', 'pipe'], env: pgEnv });
 
-          execSync(
-            `psql -h ${pgHost} -p ${pgPort} -U ${pgUser} -d ${pgDb} -f "${sqlPath}"`,
-            { stdio: ['pipe', 'pipe', 'pipe'], env: pgEnv },
-          );
+          execFileSync('psql', [
+            '-h', pgHost, '-p', pgPort, '-U', pgUser, '-d', pgDb,
+            '-f', sqlPath,
+          ], { stdio: ['pipe', 'pipe', 'pipe'], env: pgEnv });
         }
 
         // 6. Restore uploads

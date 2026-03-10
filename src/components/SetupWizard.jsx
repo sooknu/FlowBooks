@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Sparkles, HardDrive, Cloud, Database, Loader2, CheckCircle,
-  ArrowLeft, AlertTriangle, RefreshCw, Link2, Unlink,
+  Sparkles, HardDrive, Cloud, Loader2, CheckCircle,
+  ArrowLeft, AlertTriangle, RefreshCw,
 } from 'lucide-react';
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
@@ -23,35 +23,15 @@ function formatDate(dateStr) {
   });
 }
 
-/* ─── Provider definitions ───────────────────────────────────────────────── */
+/* ─── Credential field definitions for S3 ────────────────────────────────── */
 
-const PROVIDERS = [
-  { id: 's3', label: 'AWS S3', description: 'Amazon S3 or compatible', icon: Cloud },
-  { id: 'b2', label: 'Backblaze B2', description: 'Backblaze B2 Cloud Storage', icon: Database },
-  { id: 'gdrive', label: 'Google Drive', description: 'Link your Google account', icon: HardDrive },
+const CREDENTIAL_FIELDS = [
+  { key: 'accessKeyId', label: 'Access Key ID', type: 'text', placeholder: 'AKIAIOSFODNN7EXAMPLE' },
+  { key: 'secretAccessKey', label: 'Secret Access Key', type: 'password', placeholder: 'wJalrXUtnFEMI/K7MDENG/...' },
+  { key: 'bucket', label: 'Bucket', type: 'text', placeholder: 'my-backups' },
+  { key: 'region', label: 'Region', type: 'text', placeholder: 'us-east-1', defaultValue: 'us-east-1' },
+  { key: 'endpoint', label: 'Endpoint', type: 'text', placeholder: 'Leave empty for AWS', optional: true },
 ];
-
-/* ─── Credential field definitions per provider ──────────────────────────── */
-
-const CREDENTIAL_FIELDS = {
-  s3: [
-    { key: 'accessKeyId', label: 'Access Key ID', type: 'text', placeholder: 'AKIAIOSFODNN7EXAMPLE' },
-    { key: 'secretAccessKey', label: 'Secret Access Key', type: 'password', placeholder: 'wJalrXUtnFEMI/K7MDENG/...' },
-    { key: 'bucket', label: 'Bucket', type: 'text', placeholder: 'my-backups' },
-    { key: 'region', label: 'Region', type: 'text', placeholder: 'us-east-1', defaultValue: 'us-east-1' },
-    { key: 'endpoint', label: 'Endpoint', type: 'text', placeholder: 'Leave empty for AWS', optional: true },
-  ],
-  b2: [
-    { key: 'applicationKeyId', label: 'Application Key ID', type: 'text', placeholder: '0012345678abcdef0000000001' },
-    { key: 'applicationKey', label: 'Application Key', type: 'password', placeholder: 'K001...' },
-    { key: 'bucket', label: 'Bucket', type: 'text', placeholder: 'my-backups' },
-  ],
-  gdrive: [
-    { key: 'clientId', label: 'Google Client ID', type: 'text', placeholder: '123456789.apps.googleusercontent.com' },
-    { key: 'clientSecret', label: 'Google Client Secret', type: 'password', placeholder: 'GOCSPX-...' },
-    { key: 'folderId', label: 'Folder ID', type: 'text', placeholder: '1AbC-dEfGhIjKlMnOpQrStUvWxYz' },
-  ],
-};
 
 /* ─── SetupWizard ────────────────────────────────────────────────────────── */
 
@@ -67,8 +47,8 @@ const SetupWizard = () => {
   const [freshSubmitting, setFreshSubmitting] = useState(false);
 
   // Restore state
-  const [provider, setProvider] = useState('');
-  const [credentials, setCredentials] = useState({});
+  const provider = 's3';
+  const [credentials, setCredentials] = useState({ region: 'us-east-1' });
   const [testResult, setTestResult] = useState(null); // { ok, message }
   const [testPending, setTestPending] = useState(false);
   const [backups, setBackups] = useState([]);
@@ -204,62 +184,6 @@ const SetupWizard = () => {
     setTestResult(null);
   };
 
-  /* ── Google Drive OAuth link (setup mode) ── */
-  const handleLinkGoogleSetup = async () => {
-    try {
-      const res = await fetch('/api/backup/gdrive/authorize-setup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId: credentials.clientId,
-          clientSecret: credentials.clientSecret,
-        }),
-      });
-      const json = await res.json();
-      const url = json.data?.url;
-      if (!url) {
-        setTestResult({ ok: false, message: json.error || 'Failed to start OAuth' });
-        return;
-      }
-      window.open(url, 'gdrive-auth', 'popup,width=500,height=650');
-    } catch (err) {
-      setTestResult({ ok: false, message: err.message || 'Failed to start OAuth' });
-    }
-  };
-
-  const handleUnlinkGoogleSetup = () => {
-    setCredentials(prev => {
-      const next = { ...prev };
-      delete next.refreshToken;
-      delete next.email;
-      return next;
-    });
-    setTestResult(null);
-  };
-
-  // Listen for OAuth popup result via localStorage
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.key !== 'gdrive-auth-result' || !e.newValue) return;
-      try {
-        const data = JSON.parse(e.newValue);
-        if (data.type === 'gdrive-linked') {
-          setCredentials(prev => ({
-            ...prev,
-            refreshToken: data.refreshToken,
-            email: data.email,
-          }));
-          setTestResult(null);
-        }
-        if (data.type === 'gdrive-error') {
-          setTestResult({ ok: false, message: data.message });
-        }
-      } catch { /* ignore */ }
-      localStorage.removeItem('gdrive-auth-result');
-    };
-    window.addEventListener('storage', handler);
-    return () => window.removeEventListener('storage', handler);
-  }, []);
 
   /* ── Render helpers ── */
 
@@ -321,14 +245,14 @@ const SetupWizard = () => {
             {/* Restore from Backup */}
             <button
               type="button"
-              onClick={() => setStep('provider')}
+              onClick={() => setStep('credentials')}
               className="flex flex-col items-center gap-2 rounded-lg border border-surface-200 bg-[rgb(var(--glass-bg))] px-4 py-6 text-center transition-colors hover:bg-surface-100 cursor-pointer"
             >
               <div className="bg-surface-100 rounded-xl p-2.5">
                 <HardDrive className="w-5 h-5 text-surface-400" />
               </div>
               <span className="text-sm font-medium text-surface-700">Restore from Backup</span>
-              <span className="text-xs text-surface-500">Restore from a cloud backup</span>
+              <span className="text-xs text-surface-500">Restore from an S3 backup</span>
             </button>
           </div>
         </div>
@@ -412,169 +336,36 @@ const SetupWizard = () => {
     );
   }
 
-  /* ─── Provider Selection ───────────────────────────────────────────────── */
-
-  if (step === 'provider') {
-    return (
-      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
-        <div className="glass-card p-8 max-w-md w-full mx-4">
-          <h1 className="text-xl font-semibold text-surface-800 mb-1">Choose Storage Provider</h1>
-          <p className="text-sm text-surface-500 mb-6">
-            Select where your backup is stored.
-          </p>
-
-          <div className="space-y-2">
-            {PROVIDERS.map((p) => {
-              const Icon = p.icon;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => {
-                    setProvider(p.id);
-                    // Initialize default values for credential fields
-                    const defaults = {};
-                    (CREDENTIAL_FIELDS[p.id] || []).forEach((field) => {
-                      if (field.defaultValue) defaults[field.key] = field.defaultValue;
-                    });
-                    setCredentials(defaults);
-                    setTestResult(null);
-                    setStep('credentials');
-                  }}
-                  className="w-full flex items-center gap-3 rounded-lg border border-surface-200 bg-[rgb(var(--glass-bg))] px-4 py-4 text-left transition-colors hover:bg-surface-100 cursor-pointer"
-                >
-                  <div className="bg-surface-100 rounded-xl p-2.5">
-                    <Icon className="w-5 h-5 text-surface-400" />
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-surface-700 block">{p.label}</span>
-                    <span className="text-xs text-surface-500">{p.description}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-6">
-            {renderBackButton('welcome')}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ─── Credentials ──────────────────────────────────────────────────────── */
+  /* ─── S3 Credentials ──────────────────────────────────────────────────── */
 
   if (step === 'credentials') {
-    const fields = CREDENTIAL_FIELDS[provider] || [];
+    const fields = CREDENTIAL_FIELDS;
     const connectionTested = testResult?.ok === true;
 
     return (
       <div className="min-h-screen bg-surface-50 flex items-center justify-center">
         <div className="glass-card p-8 max-w-md w-full mx-4">
-          <h1 className="text-xl font-semibold text-surface-800 mb-1">
-            {PROVIDERS.find(p => p.id === provider)?.label} Credentials
-          </h1>
+          <h1 className="text-xl font-semibold text-surface-800 mb-1">S3 Credentials</h1>
           <p className="text-sm text-surface-500 mb-6">
-            Enter your storage credentials to access your backups.
+            Enter your AWS S3 (or S3-compatible) credentials to access your backups.
           </p>
 
           <div className="space-y-4">
-            {provider === 'gdrive' ? (
-              <>
-                {/* Client ID */}
-                <div>
-                  <label className="block text-sm font-medium text-surface-700 mb-1">Google Client ID</label>
-                  <input
-                    type="text"
-                    value={credentials.clientId || ''}
-                    onChange={(e) => updateCredential('clientId', e.target.value)}
-                    className="glass-input w-full"
-                    placeholder="123456789.apps.googleusercontent.com"
-                  />
-                </div>
-                {/* Client Secret */}
-                <div>
-                  <label className="block text-sm font-medium text-surface-700 mb-1">Google Client Secret</label>
-                  <input
-                    type="password"
-                    value={credentials.clientSecret || ''}
-                    onChange={(e) => updateCredential('clientSecret', e.target.value)}
-                    className="glass-input w-full"
-                    placeholder="GOCSPX-..."
-                  />
-                </div>
-
-                {/* OAuth Link Section */}
-                {credentials.refreshToken ? (
-                  <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm text-emerald-700">
-                      <CheckCircle className="w-4 h-4" />
-                      <span>Linked{credentials.email ? ` as ${credentials.email}` : ''}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleUnlinkGoogleSetup}
-                      className="text-xs text-surface-500 hover:text-red-600 inline-flex items-center gap-1 transition-colors"
-                    >
-                      <Unlink className="w-3.5 h-3.5" />
-                      Unlink
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleLinkGoogleSetup}
-                    disabled={!credentials.clientId || !credentials.clientSecret}
-                    className="glass-button-secondary w-full inline-flex items-center justify-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Link2 className="w-4 h-4" />
-                    Link Google Account
-                  </button>
-                )}
-
-                {/* Folder ID */}
-                <div>
-                  <label className="block text-sm font-medium text-surface-700 mb-1">Folder ID</label>
-                  <input
-                    type="text"
-                    value={credentials.folderId || ''}
-                    onChange={(e) => updateCredential('folderId', e.target.value)}
-                    className="glass-input w-full"
-                    placeholder="1AbC-dEfGhIjKlMnOpQrStUvWxYz"
-                  />
-                  <p className="text-xs text-surface-400 mt-1">
-                    From the Google Drive folder URL: drive.google.com/drive/folders/<strong>THIS_PART</strong>
-                  </p>
-                </div>
-              </>
-            ) : (
-              fields.map((field) => (
-                <div key={field.key}>
-                  <label className="block text-sm font-medium text-surface-700 mb-1">
-                    {field.label}
-                    {field.optional && <span className="text-surface-400 font-normal"> (optional)</span>}
-                  </label>
-                  {field.type === 'textarea' ? (
-                    <textarea
-                      value={credentials[field.key] || ''}
-                      onChange={(e) => updateCredential(field.key, e.target.value)}
-                      className="glass-input w-full font-mono text-xs"
-                      rows={6}
-                      placeholder={field.placeholder}
-                    />
-                  ) : (
-                    <input
-                      type={field.type}
-                      value={credentials[field.key] || ''}
-                      onChange={(e) => updateCredential(field.key, e.target.value)}
-                      className="glass-input w-full"
-                      placeholder={field.placeholder}
-                    />
-                  )}
-                </div>
-              ))
-            )}
+            {fields.map((field) => (
+              <div key={field.key}>
+                <label className="block text-sm font-medium text-surface-700 mb-1">
+                  {field.label}
+                  {field.optional && <span className="text-surface-400 font-normal"> (optional)</span>}
+                </label>
+                <input
+                  type={field.type}
+                  value={credentials[field.key] || ''}
+                  onChange={(e) => updateCredential(field.key, e.target.value)}
+                  className="glass-input w-full"
+                  placeholder={field.placeholder}
+                />
+              </div>
+            ))}
           </div>
 
           {/* Test Connection */}
@@ -582,7 +373,7 @@ const SetupWizard = () => {
             <button
               type="button"
               onClick={handleTestConnection}
-              disabled={testPending || (provider === 'gdrive' && (!credentials.refreshToken || !credentials.folderId))}
+              disabled={testPending}
               className="glass-button-secondary inline-flex items-center gap-1.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {testPending
@@ -604,7 +395,7 @@ const SetupWizard = () => {
 
           {/* Navigation */}
           <div className="flex items-center gap-3 mt-6">
-            {renderBackButton('provider')}
+            {renderBackButton('welcome')}
             <button
               type="button"
               disabled={!connectionTested}

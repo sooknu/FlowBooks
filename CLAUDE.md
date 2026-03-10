@@ -180,7 +180,6 @@ No test framework is configured.
 - `users.ts` — Profile + admin user management at `/api/users`
 - `oidc.ts` — Custom OIDC authentication flow at `/api/oidc`
 - `google.ts` — Google OAuth flow at `/api/google`
-- `gdriveAuth.ts` — Google Drive OAuth callback for backup authentication at `/api/gdrive`
 - `permissions.ts` — GET/PUT role defaults, GET/PUT user overrides at `/api/permissions` (owner only)
 
 *Infrastructure:*
@@ -189,7 +188,7 @@ No test framework is configured.
 - `pdf.ts` — PDF generation at `/api/pdf/generate`, token-based download at `/api/pdf/download/:token`
 - `activityLog.ts` — Paginated admin-only log at `/api/activity-log`
 - `notifications.ts` — User notification CRUD (list, mark read, delete, dismiss individual) at `/api/notifications`
-- `backup.ts` — Multi-destination backup management (S3, B2, Google Drive), scheduling, history at `/api/backup`
+- `backup.ts` — Multi-destination backup management (S3-only), scheduling, history at `/api/backup`
 - `unsplash.ts` — Random background image caching at `/api/unsplash`
 - `errors.ts` — POST `/api/errors` (auth-optional). Frontend errors logged to `activity_log`
 - `setup.ts` — Setup wizard routes for initial configuration
@@ -209,7 +208,7 @@ No test framework is configured.
 - `teamCalc.ts` — `recalculateProjectTeamFinancials()` — computes teamCost and margin from paid team payments
 - `expenseSync.ts` — Syncs team payments with linked expense records
 - `backupArchive.ts` — Archive creation for backups (database + uploads)
-- `backupStorage.ts` — Multi-provider cloud storage abstraction (S3, B2, Google Drive)
+- `backupStorage.ts` — S3 cloud storage abstraction for backups (supports S3-compatible endpoints)
 - `dates.ts` — `parseDateInput()` date parsing utility
 - `companyInfo.ts` — Company/profile information helpers
 - `items.ts` — Serializes DB→API and parses API→DB for quote/invoice line items

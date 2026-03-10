@@ -10,8 +10,6 @@ import { createProviderForDestination } from '../lib/backupStorage';
 
 const SENSITIVE_FIELDS: Record<string, string[]> = {
   s3: ['secretAccessKey'],
-  b2: ['appKey'],
-  gdrive: ['credentialsJson', 'refreshToken'],
 };
 
 function maskCredentials(provider: string, creds: Record<string, any>): Record<string, any> {
@@ -51,12 +49,6 @@ const LEGACY_BACKUP_KEYS = [
   'backup_s3_bucket',
   'backup_s3_region',
   'backup_s3_endpoint',
-  'backup_b2_key_id',
-  'backup_b2_app_key',
-  'backup_b2_bucket',
-  'backup_b2_endpoint',
-  'backup_gdrive_credentials',
-  'backup_gdrive_folder_id',
 ];
 
 // ── Migration from flat config to destinations table ──
@@ -78,42 +70,17 @@ async function migrateToMultiDestination() {
   }
 
   const provider = settings.backup_provider;
-  if (!provider || provider === 'none') return;
+  if (!provider || provider === 'none' || provider !== 's3') return;
 
   // Build credentials JSONB from flat keys
-  let credentials: Record<string, string> = {};
-  let name = '';
-
-  switch (provider) {
-    case 's3':
-      credentials = {
-        accessKeyId: settings.backup_s3_access_key || '',
-        secretAccessKey: settings.backup_s3_secret_key || '',
-        bucket: settings.backup_s3_bucket || '',
-        region: settings.backup_s3_region || 'us-east-1',
-        endpoint: settings.backup_s3_endpoint || '',
-      };
-      name = `S3 — ${credentials.bucket || 'Migrated'}`;
-      break;
-    case 'b2':
-      credentials = {
-        keyId: settings.backup_b2_key_id || '',
-        appKey: settings.backup_b2_app_key || '',
-        bucket: settings.backup_b2_bucket || '',
-        endpoint: settings.backup_b2_endpoint || '',
-      };
-      name = `B2 — ${credentials.bucket || 'Migrated'}`;
-      break;
-    case 'gdrive':
-      credentials = {
-        credentialsJson: settings.backup_gdrive_credentials || '',
-        folderId: settings.backup_gdrive_folder_id || '',
-      };
-      name = 'Google Drive — Migrated';
-      break;
-    default:
-      return;
-  }
+  const credentials: Record<string, string> = {
+    accessKeyId: settings.backup_s3_access_key || '',
+    secretAccessKey: settings.backup_s3_secret_key || '',
+    bucket: settings.backup_s3_bucket || '',
+    region: settings.backup_s3_region || 'us-east-1',
+    endpoint: settings.backup_s3_endpoint || '',
+  };
+  const name = `S3 — ${credentials.bucket || 'Migrated'}`;
 
   // Only migrate if at least one credential field has a value
   const hasValues = Object.values(credentials).some((v) => v && v.length > 0);

@@ -346,7 +346,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
               Profile
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onSignOut} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50">
+            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onSignOut(); }} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50">
               <LogOut className="w-4 h-4 mr-2" />
               Sign Out
             </DropdownMenuItem>
@@ -486,7 +486,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
                     Profile
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={onSignOut} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50">
+                  <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onSignOut(); }} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50">
                     <LogOut className="w-4 h-4 mr-2" />
                     Sign Out
                   </DropdownMenuItem>

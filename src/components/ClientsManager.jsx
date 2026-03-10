@@ -1,17 +1,16 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from '@/components/ui/use-toast';
 import api from '@/lib/apiClient';
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { useCreateClient, useUpdateClient, useDeleteClient, useImportClients } from '@/hooks/useMutations';
 import { useAuth } from '@/contexts/AuthContext';
-import { Edit2, Trash2, Mail, Phone, Loader2, Search, Eye, Upload, Download, X, ChevronDown, ChevronRight, FileText, Receipt, ArrowUpDown } from 'lucide-react';
+import { cn, formatPhoneNumber, parseCsvLine } from '@/lib/utils';
+import { Edit2, Trash2, Mail, Phone, Loader2, Search, Upload, Download, X, ChevronDown, ChevronRight, FileText, Receipt, ArrowUpDown, Plus, Users } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
-import { parseCsvLine, formatPhoneNumber } from '@/lib/utils';
 import { US_STATE_NAMES } from '@/lib/usStateTaxRates';
-import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const PAGE_SIZE = 50;
@@ -19,43 +18,81 @@ const PAGE_SIZE = 50;
 const ClientRow = React.memo(({ client, onViewProfile, onEdit, onDelete, onNewQuote, onNewInvoice }) => {
   const clientFullName = client.displayName || `${client.firstName || ''} ${client.lastName || ''}`.trim();
   const initials = ((client.firstName?.[0] || '') + (client.lastName?.[0] || '')).toUpperCase() || '?';
+
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="list-card list-card--accent p-3 px-4 group" onClick={() => onViewProfile(client.id)}>
+    <div
+      className="list-card list-card--accent p-3 px-4 group cursor-pointer"
+      onClick={() => onViewProfile(client.id)}
+    >
       <div className="flex items-center gap-3">
-        {/* Initials avatar */}
-        <div className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-xs font-bold" style={{ background: 'rgba(var(--accent-rgb) / 0.15)', color: 'rgba(var(--accent-rgb) / 0.9)' }}>
+        {/* Avatar */}
+        <div
+          className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-xs font-bold"
+          style={{ background: 'rgba(var(--accent-rgb) / 0.12)', color: 'rgba(var(--accent-rgb) / 0.85)' }}
+        >
           {initials}
         </div>
-        <div className="flex-grow min-w-0">
-          {/* Top line: name + email */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <span className="text-sm font-bold truncate block">{clientFullName || 'Unnamed Client'}</span>
-            </div>
-            <div className="hidden md:flex items-center gap-1.5 text-xs text-surface-500 shrink-0">
-              {client.email && <><Mail className="w-3 h-3 text-surface-400" /><span className="truncate max-w-[200px]">{client.email}</span></>}
-            </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-surface-800 truncate">
+              {clientFullName || 'Unnamed Client'}
+            </span>
+            {client.company && clientFullName !== client.company && (
+              <span className="hidden lg:inline text-xs text-surface-400 truncate">{client.company}</span>
+            )}
           </div>
-          {/* Bottom line: company, phone, email (mobile), actions */}
-          <div className="flex items-center justify-between mt-0.5">
-            <div className="flex items-center gap-3 min-w-0 text-xs text-surface-400">
-              {client.company && <span className="truncate">{client.company}</span>}
-              {client.phone && <span className="hidden md:flex items-center gap-1"><Phone className="w-3 h-3" />{formatPhoneNumber(client.phone)}</span>}
-              {client.email && <span className="md:hidden truncate">{client.email}</span>}
-            </div>
-            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-              <button onClick={(e) => { e.stopPropagation(); onNewQuote(client); }} className="icon-button !p-1.5" title="New Estimate"><FileText className="w-3.5 h-3.5 text-emerald-400" /></button>
-              <button onClick={(e) => { e.stopPropagation(); onNewInvoice(client); }} className="icon-button !p-1.5" title="New Invoice"><Receipt className="w-3.5 h-3.5 text-amber-400" /></button>
-              <button onClick={(e) => { e.stopPropagation(); onEdit(client); }} className="icon-button !p-1.5" title="Edit Client"><Edit2 className="w-3.5 h-3.5 text-blue-400" /></button>
-              <button onClick={(e) => { e.stopPropagation(); onDelete(client.id); }} className="icon-button !p-1.5" title="Delete Client"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
-            </div>
+
+          <div className="flex items-center gap-3 mt-0.5">
+            {client.phone && (
+              <a
+                href={`tel:${client.phone}`}
+                onClick={e => e.stopPropagation()}
+                className="flex items-center gap-1 text-xs text-surface-500 hover:text-primary transition-colors"
+              >
+                <Phone className="w-3 h-3" />
+                <span>{formatPhoneNumber(client.phone)}</span>
+              </a>
+            )}
+            {client.email && (
+              <a
+                href={`mailto:${client.email}`}
+                onClick={e => e.stopPropagation()}
+                className="hidden sm:flex items-center gap-1 text-xs text-surface-400 hover:text-primary transition-colors truncate max-w-[200px]"
+              >
+                <Mail className="w-3 h-3 shrink-0" />
+                <span className="truncate">{client.email}</span>
+              </a>
+            )}
           </div>
         </div>
-        <ChevronRight className="w-4 h-4 text-surface-500 opacity-0 group-hover:opacity-50 group-hover:translate-x-0.5 transition-all shrink-0" />
+
+        {/* Quick actions — desktop hover */}
+        <div
+          className="hidden md:flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+          onClick={e => e.stopPropagation()}
+        >
+          <button onClick={() => onNewQuote(client)} className="icon-button !p-1.5" title="New Estimate">
+            <FileText className="w-3.5 h-3.5 text-emerald-500" />
+          </button>
+          <button onClick={() => onNewInvoice(client)} className="icon-button !p-1.5" title="New Invoice">
+            <Receipt className="w-3.5 h-3.5 text-amber-500" />
+          </button>
+          <button onClick={() => onEdit(client)} className="icon-button !p-1.5" title="Edit">
+            <Edit2 className="w-3.5 h-3.5 text-blue-400" />
+          </button>
+          <button onClick={() => onDelete(client.id)} className="icon-button !p-1.5" title="Delete">
+            <Trash2 className="w-3.5 h-3.5 text-red-400" />
+          </button>
+        </div>
+
+        <ChevronRight className="w-4 h-4 text-surface-300 shrink-0 md:opacity-0 md:group-hover:opacity-60 transition-opacity" />
       </div>
-    </motion.div>
+    </div>
   );
 });
+ClientRow.displayName = 'ClientRow';
 
 const SORT_OPTIONS = [
   { label: 'Last Name A-Z', orderBy: 'lastName', asc: true },
@@ -83,6 +120,7 @@ const ClientsManager = () => {
   const updateClient = useUpdateClient();
   const deleteClientMutation = useDeleteClient();
   const importClients = useImportClients();
+  const sentinelRef = useRef(null);
 
   const currentSort = SORT_OPTIONS[sortIndex];
 
@@ -112,6 +150,7 @@ const ClientsManager = () => {
   });
 
   const clients = useMemo(() => clientsData?.pages.flatMap(p => p.data || []) ?? [], [clientsData]);
+  const totalCount = clientsData?.pages[0]?.count ?? 0;
   const isSubmitting = createClient.isPending || updateClient.isPending;
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
@@ -121,6 +160,18 @@ const ClientsManager = () => {
       setIsFormVisible(true);
     }
   }, [showFormProp]);
+
+  // Auto-load next page on scroll
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting && hasMore && !isFetchingNextPage) fetchNextPage(); },
+      { rootMargin: '200px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, isFetchingNextPage, fetchNextPage]);
 
   const handlePhoneInputChange = useCallback((field) => (e) => {
     const input = e.target.value;
@@ -223,28 +274,15 @@ const ClientsManager = () => {
             return;
         }
 
-        // Map CSV snake_case headers to camelCase field names
         const headerMap = {
-            'first_name': 'firstName',
-            'last_name': 'lastName',
-            'email': 'email',
-            'phone': 'phone',
-            'phone2': 'phone2',
-            'phone_2': 'phone2',
-            'company': 'company',
-            'billing_street': 'billingStreet',
-            'billing_city': 'billingCity',
-            'billing_state': 'billingState',
-            'billing_postal_code': 'billingPostalCode',
-            'billing_country': 'billingCountry',
-            'shipping_street': 'shippingStreet',
-            'shipping_city': 'shippingCity',
-            'shipping_state': 'shippingState',
-            'shipping_postal_code': 'shippingPostalCode',
-            'shipping_country': 'shippingCountry',
-            'address': 'billingStreet', // backward compat for old CSVs
-            'firstname': 'firstName',
-            'lastname': 'lastName',
+            'first_name': 'firstName', 'last_name': 'lastName', 'email': 'email',
+            'phone': 'phone', 'phone2': 'phone2', 'phone_2': 'phone2', 'company': 'company',
+            'billing_street': 'billingStreet', 'billing_city': 'billingCity',
+            'billing_state': 'billingState', 'billing_postal_code': 'billingPostalCode',
+            'billing_country': 'billingCountry', 'shipping_street': 'shippingStreet',
+            'shipping_city': 'shippingCity', 'shipping_state': 'shippingState',
+            'shipping_postal_code': 'shippingPostalCode', 'shipping_country': 'shippingCountry',
+            'address': 'billingStreet', 'firstname': 'firstName', 'lastname': 'lastName',
         };
 
         const clientsToProcess = lines.slice(1).map(line => {
@@ -254,9 +292,7 @@ const ClientsManager = () => {
             headers.forEach((header, index) => {
                 const h = header.trim().toLowerCase();
                 const fieldName = headerMap[h];
-                if (fieldName) {
-                    client[fieldName] = values[index];
-                }
+                if (fieldName) client[fieldName] = values[index];
             });
             client.email = client.email?.trim().toLowerCase();
             return client.email && client.firstName ? client : null;
@@ -272,7 +308,6 @@ const ClientsManager = () => {
     reader.readAsText(file);
     e.target.value = '';
   };
-
 
   const handleViewProfile = useCallback((clientId) => {
     const main = document.querySelector('main');
@@ -293,7 +328,7 @@ const ClientsManager = () => {
   }, []);
 
   return (
-    <div className="w-full">
+    <div className="space-y-5">
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -308,22 +343,28 @@ const ClientsManager = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <div className="flex items-center justify-between mb-4">
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div className="hidden md:block">
-          <h2 className="text-3xl font-bold">Clients</h2>
+          <h2 className="text-2xl font-bold text-surface-800">Clients</h2>
           <p className="text-surface-400 text-sm">Manage your client information</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={handleCycleSort} className="action-btn action-btn--secondary text-xs" title={`Sort: ${currentSort.label}`}>
             <ArrowUpDown className="w-4 h-4 mr-1.5" /><span className="hidden sm:inline">{currentSort.label}</span>
           </button>
-          <label htmlFor="client-import" className="action-btn action-btn--secondary cursor-pointer"><Upload className="w-4 h-4 mr-2" /> <span className="hidden sm:inline">Import</span></label>
+          <label htmlFor="client-import" className="action-btn action-btn--secondary cursor-pointer text-xs"><Upload className="w-4 h-4 sm:mr-1.5" /><span className="hidden sm:inline">Import</span></label>
           <input id="client-import" type="file" className="hidden" accept=".csv" onChange={handleFileUpload} />
-          <button onClick={handleExport} className="action-btn action-btn--secondary"><Download className="w-4 h-4 mr-2" /> <span className="hidden sm:inline">Export</span></button>
-          <button onClick={() => { resetForm(); setIsFormVisible(!isFormVisible); }} className="action-btn">{isFormVisible ? 'Cancel' : 'Add'}</button>
+          <button onClick={handleExport} className="action-btn action-btn--secondary text-xs"><Download className="w-4 h-4 sm:mr-1.5" /><span className="hidden sm:inline">Export</span></button>
+          <button onClick={() => { resetForm(); setIsFormVisible(!isFormVisible); }} className="action-btn">
+            <Plus className="action-btn__icon" />
+            {isFormVisible ? 'Cancel' : 'Add Client'}
+          </button>
         </div>
       </div>
 
+      {/* Form */}
       <AnimatePresence>
         {isFormVisible && (
           <motion.div
@@ -332,8 +373,8 @@ const ClientsManager = () => {
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="glass-card p-4 mb-6">
-              <h3 className="text-xl font-bold mb-4">{editingClient ? 'Edit Client' : 'Add New Client'}</h3>
+            <div className="flat-card p-5">
+              <h3 className="text-base font-bold text-surface-800 mb-4">{editingClient ? 'Edit Client' : 'Add New Client'}</h3>
               <form onSubmit={handleSubmit} className="space-y-3">
                 <div>
                   <input type="text" placeholder="Display / Business Name (optional — e.g. &quot;Sarah &amp; Mike Thompson&quot;)" value={formData.displayName} onChange={(e) => setFormData({ ...formData, displayName: e.target.value })} className="glass-input w-full" />
@@ -406,7 +447,8 @@ const ClientsManager = () => {
         )}
       </AnimatePresence>
 
-      <div className="relative mb-4">
+      {/* Search */}
+      <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-500" />
         <input type="text" placeholder="Search clients..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="glass-input w-full pl-10 pr-9" />
         {searchTerm && (
@@ -416,20 +458,53 @@ const ClientsManager = () => {
         )}
       </div>
 
-      {loading ? <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 animate-spin" /></div> : (
-        <>
-        <div className="space-y-3">
-          {clients.map((client) => (
-            <ClientRow key={client.id} client={client} onViewProfile={handleViewProfile} onEdit={handleEdit} onDelete={confirmDelete} onNewQuote={handleNewQuote} onNewInvoice={handleNewInvoice} />
-          ))}
+      {/* List */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
-        {hasMore && (
-          <div className="mt-6 flex justify-center">
-            <Button onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
-              {isFetchingNextPage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Load More'}
-            </Button>
+      ) : clients.length === 0 ? (
+        <div className="text-center py-20">
+          <div className="w-16 h-16 rounded-2xl bg-surface-100 flex items-center justify-center mx-auto mb-4">
+            <Users className="w-8 h-8 text-surface-400" />
           </div>
-        )}
+          <h3 className="text-lg font-semibold text-surface-700 mb-1">
+            {searchTerm ? 'No clients found' : 'No clients yet'}
+          </h3>
+          <p className="text-surface-400 text-sm mb-4">
+            {searchTerm ? 'Try a different search term.' : 'Add your first client to get started.'}
+          </p>
+          {!searchTerm && (
+            <button onClick={() => { resetForm(); setIsFormVisible(true); }} className="action-btn">
+              <Plus className="w-4 h-4 mr-2" /> Add Client
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          <p className="text-xs text-surface-400">{totalCount} client{totalCount !== 1 ? 's' : ''}</p>
+          <div className="space-y-2">
+            {clients.map(client => (
+              <ClientRow
+                key={client.id}
+                client={client}
+                onViewProfile={handleViewProfile}
+                onEdit={handleEdit}
+                onDelete={confirmDelete}
+                onNewQuote={handleNewQuote}
+                onNewInvoice={handleNewInvoice}
+              />
+            ))}
+          </div>
+          {(hasMore || clients.length > 6) && (
+            <div className="sticky bottom-0 h-16 -mt-16 pointer-events-none z-10" style={{ background: 'linear-gradient(to bottom, transparent, rgb(var(--surface-50)))' }} />
+          )}
+          <div ref={sentinelRef} className="h-1" />
+          {isFetchingNextPage && (
+            <div className="flex justify-center py-4">
+              <Loader2 className="w-5 h-5 animate-spin text-surface-300" />
+            </div>
+          )}
         </>
       )}
     </div>
