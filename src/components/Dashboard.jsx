@@ -8,10 +8,11 @@ import { queryKeys } from '@/lib/queryKeys';
 import api from '@/lib/apiClient';
 import {
   Plus, ArrowRight, ArrowUpRight, Aperture, Camera, Briefcase,
-  Users, FileText, Receipt, Banknote, Wallet, Heart, X,
+  Users, FileText, Receipt, Banknote, Wallet,
 } from 'lucide-react';
 import { cn, fmtDate } from '@/lib/utils';
 import { useProjectTypes, COLOR_PALETTE } from '@/lib/projectTypes';
+import AnniversaryBanner from '@/components/AnniversaryBanner';
 
 // ── Animation ────────────────────────────────────────────────────
 
@@ -440,8 +441,9 @@ const Dashboard = () => {
     staleTime: 60_000,
   });
 
+  const today = new Date().toISOString().slice(0, 10);
   const [dismissedAnniversary, setDismissedAnniversary] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('dismissed-anniversaries') || '[]'); } catch { return []; }
+    try { return JSON.parse(localStorage.getItem('dismissed-anniversaries') || '{}'); } catch { return {}; }
   });
   const { data: anniversaryData } = useQuery({
     queryKey: ['projects', 'upcoming-anniversary'],
@@ -449,14 +451,14 @@ const Dashboard = () => {
     staleTime: 600_000,
   });
   const anniversaryRaw = anniversaryData?.data;
-  const anniversary = anniversaryRaw && !dismissedAnniversary.includes(`${anniversaryRaw.projectId}-${anniversaryRaw.yearsAgo}`) ? anniversaryRaw : null;
+  const anniversary = anniversaryRaw && dismissedAnniversary[`${anniversaryRaw.projectId}-${anniversaryRaw.yearsAgo}`] !== today ? anniversaryRaw : null;
   const dismissAnniversary = useCallback(() => {
     if (!anniversaryRaw) return;
     const key = `${anniversaryRaw.projectId}-${anniversaryRaw.yearsAgo}`;
-    const updated = [...dismissedAnniversary, key];
+    const updated = { ...dismissedAnniversary, [key]: today };
     setDismissedAnniversary(updated);
     try { localStorage.setItem('dismissed-anniversaries', JSON.stringify(updated)); } catch {}
-  }, [anniversaryRaw, dismissedAnniversary]);
+  }, [anniversaryRaw, dismissedAnniversary, today]);
 
   if (isLoading) {
     return (
@@ -548,40 +550,11 @@ const Dashboard = () => {
       </motion.div>
 
       {/* Anniversary reminder */}
-      {anniversary && (() => {
-        const ordinal = anniversary.yearsAgo === 1 ? '1st' : anniversary.yearsAgo === 2 ? '2nd' : anniversary.yearsAgo === 3 ? '3rd' : `${anniversary.yearsAgo}th`;
-        const daysUntil = Math.round((new Date(anniversary.anniversaryDate) - new Date(new Date().toDateString())) / 86400000);
-        return (
-          <motion.div variants={stagger.item}>
-            <div
-              onClick={() => navigate(`/projects/${anniversary.projectId}`)}
-              className="flat-card p-4 flex items-center gap-3 border-l-4 border-l-pink-400 cursor-pointer hover:border-pink-500 transition-colors"
-            >
-              <div className="w-9 h-9 rounded-full bg-pink-50 flex items-center justify-center flex-shrink-0">
-                <Heart className="w-4 h-4 text-pink-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-surface-800">
-                  {anniversary.clientName || anniversary.projectTitle}'s {ordinal} anniversary is{' '}
-                  {daysUntil === 0 ? <span className="font-semibold text-pink-600">today!</span>
-                    : daysUntil === 1 ? <span className="font-semibold text-pink-600">tomorrow!</span>
-                    : <>on <span className="font-semibold text-pink-600">{fmtDate(anniversary.anniversaryDate, { month: 'long', day: 'numeric' })}</span></>}
-                </p>
-                <p className="text-xs text-surface-400 mt-0.5">
-                  {anniversary.projectTitle} — {fmtDate(anniversary.shootDate, { month: 'long', day: 'numeric', year: 'numeric' })}
-                </p>
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); dismissAnniversary(); }}
-                className="p-1.5 rounded-md hover:bg-surface-100 text-surface-300 hover:text-surface-500 transition-colors flex-shrink-0"
-                title="Dismiss"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </motion.div>
-        );
-      })()}
+      {anniversary && (
+        <motion.div variants={stagger.item}>
+          <AnniversaryBanner anniversary={anniversary} navigate={navigate} onDismiss={dismissAnniversary} />
+        </motion.div>
+      )}
 
       {/* 2. Financial hero */}
       {hasFinancials && (

@@ -27,9 +27,9 @@ export default async function aiRoutes(fastify: any) {
     return result;
   });
 
-  // POST /api/ai/draft-congrats — draft a personalized anniversary congratulations email
+  // POST /api/ai/draft-congrats — draft a personalized follow-up message for a past event
   fastify.post('/draft-congrats', async (request: any, reply: any) => {
-    const { clientName, projectTitle, shootDate, yearsAgo } = request.body || {};
+    const { clientName, projectTitle, shootDate, yearsAgo, projectType, projectTypeLabel } = request.body || {};
 
     if (!yearsAgo || (!clientName && !projectTitle)) {
       return reply.code(400).send({ error: 'Not enough project info to write a message. Add a client name or project title first.' });
@@ -46,19 +46,33 @@ export default async function aiRoutes(fastify: any) {
 
     const ordinal = yearsAgo === 1 ? '1st' : yearsAgo === 2 ? '2nd' : yearsAgo === 3 ? '3rd' : `${yearsAgo}th`;
 
-    const prompt = `Write a short, warm, and professional congratulations email for a photography client's ${ordinal} anniversary.
+    const prompt = `Write a short, warm, and professional follow-up email to a past photography client. It has been ${yearsAgo} year${yearsAgo > 1 ? 's' : ''} since we covered their event.
 
 Details:
 - Client name: ${clientName}
-- Original event: ${projectTitle || 'their special day'}
+- Project title: ${projectTitle || 'their special day'}
+- Event type: ${projectTypeLabel || projectType || 'event'}
 - Event date: ${shootDateStr}
-- Years ago: ${yearsAgo}
+- Years since event: ${yearsAgo}
 - From: ${companyName}
+
+Context for the event type — use this to craft the right tone and message:
+- "Quinceañera" / "XV" = a Hispanic 15th birthday celebration for a girl. Say something like "It's been ${yearsAgo} year${yearsAgo > 1 ? 's' : ''} since [name]'s Quinceañera" — do NOT call it an "anniversary"
+- "Sweet 16" = a 16th birthday party. Reference the birthday milestone, not an anniversary
+- "Wedding" = a wedding. Here "anniversary" IS appropriate (e.g., "Happy ${ordinal} wedding anniversary!")
+- "Anniversary" = an anniversary celebration (couple's milestone). "Anniversary" wording is appropriate
+- "Birthday" = a birthday party. Reference the birthday, not an anniversary
+- "Engagement" = engagement party/photos. Say something about the journey since their engagement
+- "Baby Shower" = baby shower. Ask how the little one is doing
+- "Graduation" = graduation event. Reference their achievement
+- "Corporate" / "Event" / "Portrait" / other = general event. Just say it's been X year${yearsAgo > 1 ? 's' : ''} since the event
+- For any type, the goal is to reconnect warmly and remind them we'd love to work together again
 
 Guidelines:
 - Keep it 3-5 sentences max
 - Warm and genuine tone, not overly formal
-- Reference their event naturally
+- Reference the specific type of event naturally — DO NOT generically say "anniversary" unless it was actually a wedding or anniversary event
+- Subtly express interest in working together again (new milestones, future events)
 - End with a brief, friendly sign-off from the studio
 - Do NOT include a subject line — just the email body
 - Do NOT use placeholder brackets like [Name]`;

@@ -222,27 +222,25 @@ export default async function projectRoutes(fastify: any) {
           p.title,
           p.shoot_start_date,
           p.project_type,
+          pt.label AS project_type_label,
           c.id AS client_id,
           COALESCE(c.display_name, c.company, TRIM(CONCAT(c.first_name, ' ', COALESCE(c.last_name, '')))) AS client_name,
           c.email AS client_email,
-          EXTRACT(YEAR FROM AGE(
-            CASE
-              WHEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, EXTRACT(MONTH FROM p.shoot_start_date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date)::int = 2 THEN 28 ELSE 30 END)) >= CURRENT_DATE
-              THEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, EXTRACT(MONTH FROM p.shoot_start_date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date)::int = 2 THEN 28 ELSE 30 END))
-              ELSE MAKE_DATE((EXTRACT(YEAR FROM CURRENT_DATE)::int + 1), EXTRACT(MONTH FROM p.shoot_start_date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date)::int = 2 THEN 28 ELSE 30 END))
-            END,
-            p.shoot_start_date
-          ))::int AS years_ago,
+          EXTRACT(YEAR FROM CURRENT_DATE)::int - EXTRACT(YEAR FROM p.shoot_start_date::date)::int +
+            CASE WHEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, EXTRACT(MONTH FROM p.shoot_start_date::date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date::date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date::date)::int = 2 THEN 28 ELSE 30 END)) < CURRENT_DATE
+              THEN 1 ELSE 0
+            END AS years_ago,
           CASE
-            WHEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, EXTRACT(MONTH FROM p.shoot_start_date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date)::int = 2 THEN 28 ELSE 30 END)) >= CURRENT_DATE
-            THEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, EXTRACT(MONTH FROM p.shoot_start_date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date)::int = 2 THEN 28 ELSE 30 END))
-            ELSE MAKE_DATE((EXTRACT(YEAR FROM CURRENT_DATE)::int + 1), EXTRACT(MONTH FROM p.shoot_start_date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date)::int = 2 THEN 28 ELSE 30 END))
+            WHEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, EXTRACT(MONTH FROM p.shoot_start_date::date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date::date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date::date)::int = 2 THEN 28 ELSE 30 END)) >= CURRENT_DATE
+            THEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, EXTRACT(MONTH FROM p.shoot_start_date::date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date::date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date::date)::int = 2 THEN 28 ELSE 30 END))
+            ELSE MAKE_DATE((EXTRACT(YEAR FROM CURRENT_DATE)::int + 1), EXTRACT(MONTH FROM p.shoot_start_date::date)::int, LEAST(EXTRACT(DAY FROM p.shoot_start_date::date)::int, CASE WHEN EXTRACT(MONTH FROM p.shoot_start_date::date)::int = 2 THEN 28 ELSE 30 END))
           END AS anniversary_date
         FROM ${projects} p
         LEFT JOIN clients c ON p.client_id = c.id
+        LEFT JOIN project_types pt ON p.project_type_id = pt.id
         WHERE p.shoot_start_date IS NOT NULL
           AND p.status != 'archived'
-          AND EXTRACT(YEAR FROM p.shoot_start_date) < EXTRACT(YEAR FROM CURRENT_DATE)
+          AND EXTRACT(YEAR FROM p.shoot_start_date::date) < EXTRACT(YEAR FROM CURRENT_DATE)
       )
       SELECT * FROM anniversaries
       WHERE anniversary_date - CURRENT_DATE BETWEEN 0 AND 30
@@ -257,6 +255,8 @@ export default async function projectRoutes(fastify: any) {
       data: {
         projectId: row.id,
         projectTitle: row.title,
+        projectType: row.project_type,
+        projectTypeLabel: row.project_type_label,
         clientId: row.client_id,
         clientName: row.client_name,
         clientEmail: row.client_email,
