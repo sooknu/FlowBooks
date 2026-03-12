@@ -401,7 +401,7 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
         {renderNavItems(items, isMobile)}
       </nav>
 
-      {/* Theme toggle */}
+      {/* Theme toggle + version */}
       <div className={cn("flex-shrink-0 px-2 pb-3 pt-1", collapsed && "lg:px-1")}>
         <button
           onClick={cycleTheme}
@@ -418,6 +418,9 @@ const Sidebar = ({ isAdmin, isPrivileged, teamRole, appName, headerLogoUrl, head
             {theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'Auto'}
           </span>
         </button>
+        <p className={cn("text-[10px] text-sidebar-muted/50 px-2.5 mt-0.5 select-none", collapsed && "lg:hidden")}>
+          {__APP_VERSION__}
+        </p>
       </div>
     </>
   );

@@ -1,11 +1,23 @@
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+
+const appVersion = (() => {
+	try {
+		return execFileSync('git', ['describe', '--tags', '--always'], { encoding: 'utf-8' }).trim();
+	} catch {
+		return 'dev';
+	}
+})();
 
 export default defineConfig({
 	plugins: [
 		react(),
 	],
+	define: {
+		__APP_VERSION__: JSON.stringify(appVersion),
+	},
 	server: {
 		cors: true,
 		headers: {
